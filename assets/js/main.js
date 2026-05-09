@@ -42,83 +42,91 @@ export const appState = {
 };
 
 function navItemsForRole(role) {
+    const items = [];
+
     if (role === 'creator') {
-        return `
-            <a href="#" class="nav-item active" data-view="inicio">
-                <span class="nav-icon">📊</span><span>Inicio</span>
-            </a>
-            <a href="#" class="nav-item" data-view="normas">
-                <span class="nav-icon">📋</span><span>Normas</span>
-            </a>
-            <a href="#" class="nav-item" data-view="canales">
-                <span class="nav-icon">📢</span><span>Canales</span>
-            </a>
-            <a href="#" class="nav-item" data-view="perfil">
-                <span class="nav-icon">👤</span><span>Perfil</span>
-            </a>
-        `;
+        items.push({ view: 'inicio', icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'normas', icon: '📋', label: 'Normas' });
+        items.push({ view: 'canales', icon: '📢', label: 'Canales' });
+    } else if (role === 'admin') {
+        items.push({ view: 'inicio', icon: '📊', label: 'Panel Admin' });
+        items.push({ view: 'creadores', icon: '👥', label: 'Creadores' });
+    } else {
+        items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
-    if (role === 'admin') {
-        return `
-            <a href="#" class="nav-item active" data-view="inicio">
-                <span class="nav-icon">📊</span><span>Panel</span>
-            </a>
-            <a href="#" class="nav-item" data-view="creadores">
-                <span class="nav-icon">👥</span><span>Creadores</span>
-            </a>
-            <a href="#" class="nav-item" data-view="perfil">
-                <span class="nav-icon">👤</span><span>Perfil</span>
-            </a>
-        `;
-    }
-    return `
-        <a href="#" class="nav-item active" data-view="inicio">
-            <span class="nav-icon">📊</span><span>Panel</span>
+
+    items.push({ view: 'perfil', icon: '👤', label: 'Mi Perfil' });
+
+    return items.map(item => `
+        <a href="#" class="nav-item ${item.view === 'inicio' ? 'active' : ''}" data-view="${item.view}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
         </a>
-        <a href="#" class="nav-item" data-view="perfil">
-            <span class="nav-icon">👤</span><span>Perfil</span>
-        </a>
-    `;
+    `).join('');
 }
 
 
 function renderDashboardLayout(container, renderContentFn, role) {
     const user = store.getCurrentUser();
-    const initial = user.username.charAt(0).toUpperCase();
+    const navItems = navItemsForRole(role);
 
     container.innerHTML = `
         <div class="app-container animate-fade-in">
+            <!-- Sidebar (Desktop) -->
+            <aside class="sidebar">
+                <div class="sidebar-brand">
+                    <div class="sidebar-logo">⚡</div>
+                    <span class="sidebar-title">Interactik</span>
+                </div>
+                <nav class="sidebar-nav">
+                    ${navItems}
+                    <a href="#" class="sidebar-item nav-danger logout-btn" style="margin-top:2rem;">
+                        <span class="nav-icon">🚪</span><span>Cerrar sesión</span>
+                    </a>
+                </nav>
+                
+                <div style="margin-top: auto; padding: 1.2rem; background: rgba(255,255,255,0.03); border-radius: 16px; border: 1px solid var(--glass-border);">
+                    <div style="font-size: 0.85rem; font-weight: 700;">@${user.username}</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;">${role}</div>
+                </div>
+            </aside>
+
+            <!-- Topbar (Mobile) -->
             <header class="topbar">
                 <div class="topbar-brand">
                     <div class="topbar-logo">⚡</div>
-                    <span class="topbar-title">Interactik Agency <span style="opacity:0.4;font-weight:400;margin:0 0.2rem;">|</span> Creator Elevate</span>
+                    <span class="topbar-title">Interactik</span>
                 </div>
+                <div class="avatar">${user.username.charAt(0).toUpperCase()}</div>
             </header>
 
-
+            <!-- Main Content Area -->
             <main class="content-area" id="dashboard-content"></main>
 
+            <!-- Bottom Nav (Mobile) -->
             <nav class="bottom-nav">
-                ${navItemsForRole(role)}
-                <a href="#" class="nav-item nav-danger" id="logout-btn">
+                ${navItems}
+                <a href="#" class="nav-item nav-danger logout-btn">
                     <span class="nav-icon">🚪</span><span>Salir</span>
                 </a>
             </nav>
         </div>
     `;
 
-    document.getElementById('logout-btn').addEventListener('click', async (e) => {
-        e.preventDefault();
-        try {
-            if (isSupabaseConfigured) {
-                await auth.signOut();
-                await store.clear();
-            } else {
-                store.logoutDemo();
+    container.querySelectorAll('.logout-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                if (isSupabaseConfigured) {
+                    await auth.signOut();
+                    await store.clear();
+                } else {
+                    store.logoutDemo();
+                }
+            } finally {
+                appState.navigate('login');
             }
-        } finally {
-            appState.navigate('login');
-        }
+        });
     });
 
     const contentArea = document.getElementById('dashboard-content');
@@ -129,10 +137,13 @@ function renderDashboardLayout(container, renderContentFn, role) {
     container.querySelectorAll('.nav-item[data-view]').forEach(item => {
         item.addEventListener('click', async (e) => {
             e.preventDefault();
-            container.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            item.classList.add('active');
-
             const view = item.dataset.view;
+
+            // Sincronizar estado activo en ambos menús (sidebar y bottom)
+            container.querySelectorAll('.nav-item').forEach(n => {
+                n.classList.toggle('active', n.dataset.view === view);
+            });
+
             if (view === 'inicio') {
                 await renderContentFn(contentArea);
             } else if (view === 'normas') {
@@ -142,7 +153,6 @@ function renderDashboardLayout(container, renderContentFn, role) {
             } else if (view === 'creadores') {
                 await renderCreatorsList(contentArea);
             } else if (view === 'perfil') {
-
                 await renderProfile(contentArea);
             }
         });

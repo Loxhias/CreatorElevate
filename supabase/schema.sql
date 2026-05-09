@@ -64,18 +64,34 @@ create table if not exists public.report_periods (
 create table if not exists public.creator_metrics (
     id                    uuid primary key default gen_random_uuid(),
     period_id             uuid not null references public.report_periods(id) on delete cascade,
-    username              citext not null,                -- TikTok username (puede aún no tener cuenta)
+    username              citext not null,
+    
+    -- Métricas principales
     diamonds              numeric(14,0) not null default 0,
     diamonds_last_month   numeric(14,0) not null default 0,
-    live_duration         text,                           -- "55h 51min 41s"
+    live_duration         text,
     live_seconds          integer not null default 0,
     valid_days            integer not null default 0,
+    new_followers         integer not null default 0,
+    emisiones_live        integer not null default 0,
+    
+    -- Partidas y otros modos
     battles               integer not null default 0,
-    manager_name_legacy   text,                           -- texto opcional venido del Excel
+    battle_diamonds       numeric(14,0) not null default 0,
+    multi_guest_diamonds  numeric(14,0) not null default 0,
+    
+    -- Estado y clasificaciones
+    status_graduation     text,
+    status_rank           text,
+    status_active         text,
+    group_name            text,
+    manager_name_legacy   text,
+    
     created_at            timestamptz not null default now(),
     updated_at            timestamptz not null default now(),
     unique (period_id, username)
 );
+
 
 create index if not exists creator_metrics_username_idx on public.creator_metrics(username);
 create index if not exists creator_metrics_period_idx   on public.creator_metrics(period_id);
@@ -204,48 +220,53 @@ grant execute on function public.is_tiktok_username_available(text) to anon, aut
 --    parsear el Excel).  Crea/actualiza el período y hace upsert de filas.
 create or replace function public.admin_upsert_metrics(
     p_period date,
-    p_label  text,
-    p_rows   jsonb            -- array de objetos
+    p_label text,
+    p_rows jsonb
 )
 returns json language plpgsql security definer set search_path = public as $$
 declare
     v_period_id uuid;
-    v_inserted  int := 0;
-    v_updated   int := 0;
+    v_inserted integer := 0;
+    v_updated integer := 0;
 begin
-    if not public.is_admin() then
-        raise exception 'Solo el admin puede subir métricas';
-    end if;
+    if not public.is_admin() then raise exception 'Acceso denegado'; end if;
 
-    -- período (upsert)
     insert into public.report_periods (period, label, uploaded_by)
-    values (date_trunc('month', p_period)::date, p_label, auth.uid())
-    on conflict (period) do update
-        set label       = excluded.label,
-            uploaded_by = excluded.uploaded_by,
-            uploaded_at = now()
+    values (p_period, p_label, auth.uid())
+    on conflict (period) do update set label = excluded.label
     returning id into v_period_id;
 
-    -- métricas (upsert por (period_id, username))
     with payload as (
-        select
-            (r->>'username')::citext                  as username,
-            coalesce((r->>'diamonds')::numeric, 0)    as diamonds,
-            coalesce((r->>'diamondsLastMonth')::numeric, 0) as diamonds_last_month,
-            (r->>'liveDuration')                      as live_duration,
-            coalesce((r->>'liveSeconds')::int, 0)     as live_seconds,
-            coalesce((r->>'validDays')::int, 0)       as valid_days,
-            coalesce((r->>'battles')::int, 0)         as battles,
-            (r->>'managerName')                       as manager_name_legacy
+        select 
+            (r->>'username')::citext as username,
+            (r->>'diamonds')::numeric as diamonds,
+            (r->>'diamondsLastMonth')::numeric as diamonds_last_month,
+            (r->>'liveDuration')::text as live_duration,
+            (r->>'liveSeconds')::integer as live_seconds,
+            (r->>'validDays')::integer as valid_days,
+            (r->>'newFollowers')::integer as new_followers,
+            (r->>'emisionesLive')::integer as emisiones_live,
+            (r->>'battles')::integer as battles,
+            (r->>'battleDiamonds')::numeric as battle_diamonds,
+            (r->>'multiGuestDiamonds')::numeric as multi_guest_diamonds,
+            (r->>'statusGraduation')::text as status_graduation,
+            (r->>'statusRank')::text as status_rank,
+            (r->>'statusActive')::text as status_active,
+            (r->>'groupName')::text as group_name,
+            (r->>'manager')::text as manager_name_legacy
         from jsonb_array_elements(p_rows) as r
         where coalesce(trim(r->>'username'), '') <> ''
     ),
     upsert as (
         insert into public.creator_metrics
             (period_id, username, diamonds, diamonds_last_month,
-             live_duration, live_seconds, valid_days, battles, manager_name_legacy)
+             live_duration, live_seconds, valid_days, new_followers, 
+             emisiones_live, battles, battle_diamonds, multi_guest_diamonds,
+             status_graduation, status_rank, status_active, group_name, manager_name_legacy)
         select v_period_id, username, diamonds, diamonds_last_month,
-               live_duration, live_seconds, valid_days, battles, manager_name_legacy
+               live_duration, live_seconds, valid_days, new_followers,
+               emisiones_live, battles, battle_diamonds, multi_guest_diamonds,
+               status_graduation, status_rank, status_active, group_name, manager_name_legacy
           from payload
         on conflict (period_id, username) do update
            set diamonds            = excluded.diamonds,
@@ -253,23 +274,25 @@ begin
                live_duration       = excluded.live_duration,
                live_seconds        = excluded.live_seconds,
                valid_days          = excluded.valid_days,
+               new_followers       = excluded.new_followers,
+               emisiones_live      = excluded.emisiones_live,
                battles             = excluded.battles,
+               battle_diamonds     = excluded.battle_diamonds,
+               multi_guest_diamonds = excluded.multi_guest_diamonds,
+               status_graduation   = excluded.status_graduation,
+               status_rank         = excluded.status_rank,
+               status_active       = excluded.status_active,
+               group_name          = excluded.group_name,
                manager_name_legacy = coalesce(excluded.manager_name_legacy, creator_metrics.manager_name_legacy),
                updated_at          = now()
-        returning (xmax = 0) as inserted   -- true si fue INSERT
+        returning (xmax = 0) as inserted
     )
-    select
-        sum(case when inserted then 1 else 0 end),
-        sum(case when inserted then 0 else 1 end)
-      into v_inserted, v_updated
-      from upsert;
+    select sum(case when inserted then 1 else 0 end), sum(case when inserted then 0 else 1 end)
+      into v_inserted, v_updated from upsert;
 
-    return json_build_object(
-        'period_id', v_period_id,
-        'inserted',  coalesce(v_inserted, 0),
-        'updated',   coalesce(v_updated, 0)
-    );
+    return json_build_object('period_id', v_period_id, 'inserted', v_inserted, 'updated', v_updated);
 end $$;
+
 
 revoke all on function public.admin_upsert_metrics(date, text, jsonb) from public;
 grant execute on function public.admin_upsert_metrics(date, text, jsonb) to authenticated;

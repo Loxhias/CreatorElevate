@@ -127,14 +127,22 @@ export const auth = {
 function rowFromDb(r) {
     return {
         username:           r.username,
-        diamonds:           Number(r.diamonds),
-        diamondsLastMonth:  Number(r.diamonds_last_month),
+        diamonds:           Number(r.diamonds || 0),
+        diamondsLastMonth:  Number(r.diamonds_last_month || 0),
         liveDuration:       r.live_duration || '0s',
         liveSeconds:        Number(r.live_seconds || 0),
         validDays:          Number(r.valid_days || 0),
+        newFollowers:       Number(r.new_followers || 0),
+        emisionesLive:      Number(r.emisiones_live || 0),
         battles:            Number(r.battles || 0),
-        manager:            r.manager_name_legacy || null,    // string legacy
-        managerId:          r.manager_id || null,             // FK (cuando viene unido)
+        battleDiamonds:     Number(r.battle_diamonds || 0),
+        multiGuestDiamonds: Number(r.multi_guest_diamonds || 0),
+        statusGraduation:   r.status_graduation,
+        statusRank:         r.status_rank,
+        statusActive:       r.status_active,
+        groupName:          r.group_name,
+        manager:            r.manager_name_legacy || null,
+        managerId:          r.manager_id || null,
     };
 }
 
@@ -154,7 +162,10 @@ export const metrics = {
             .select('*')
             .order('diamonds', { ascending: false });
         if (error) throw error;
-        return { period, rows: data.map(rowFromDb) };
+
+        const rows = data.map(rowFromDb);
+        console.log('📥 API RECEIVE: Latest metrics from DB:', rows);
+        return { period, rows };
     },
 
     /** Lista de períodos disponibles (admin). */
@@ -188,9 +199,19 @@ export const metrics = {
             liveDuration:      r.liveDuration || '0s',
             liveSeconds:       Number(r.liveSeconds || 0),
             validDays:         Number(r.validDays || 0),
+            newFollowers:      Number(r.newFollowers || 0),
+            emisionesLive:     Number(r.emisionesLive || 0),
             battles:           Number(r.battles || 0),
-            managerName:       r.manager || r.managerName || null,
+            battleDiamonds:    Number(r.battleDiamonds || 0),
+            multiGuestDiamonds: Number(r.multiGuestDiamonds || 0),
+            statusGraduation:  r.statusGraduation || null,
+            statusRank:        r.statusRank || null,
+            statusActive:      r.statusActive || null,
+            groupName:         r.groupName || null,
+            manager:           r.manager || r.managerName || null,
         })).filter(r => r.username);
+
+        console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: payload.length, firstRow: payload[0] });
 
         const { data, error } = await supabase.rpc('admin_upsert_metrics', {
             p_period: periodDate,
@@ -198,6 +219,7 @@ export const metrics = {
             p_rows:   payload,
         });
         if (error) throw error;
+        console.log('✅ API SEND SUCCESS:', data);
         return data;
     },
 };

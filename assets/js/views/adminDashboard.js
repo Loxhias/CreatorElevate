@@ -52,13 +52,13 @@ function normalizeRow(row) {
 
     return {
         username,
-        diamonds:           Number(find(['diamonds', 'diamantes']) || 0),
-        diamondsLastMonth:  Number(find(['diamonds (last month)', 'diamantes en el último mes', 'diamantes en el ultimo mes', 'diamantes mes pasado']) || 0),
-        liveDuration:       String(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || '0s'),
-        liveSeconds:        parseLiveSeconds(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || 0),
-        validDays:          Number(find(['valid days', 'días válidos', 'dias validos', 'emisiones live']) || 0),
-        newFollowers:       Number(find(['nuevos seguidores']) || 0),
-        emisionesLive:      Number(find(['emisiones live', 'sesiones live']) || 0),
+        diamonds:           Number(find(['Diamonds', 'Diamantes']) || 0),
+        diamondsLastMonth:  Number(find(['Diamonds (last month)', 'Diamantes en el último mes', 'Diamantes mes pasado']) || 0),
+        liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Duración LIVE']) || '0s'),
+        liveSeconds:        parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Duración LIVE']) || 0),
+        validDays:          Number(find(['Días válidos de emisiones LIVE', 'Valid Days', 'Días válidos']) || 0),
+        newFollowers:       Number(find(['Nuevos seguidores', 'New Followers']) || 0),
+        emisionesLive:      Number(find(['Emisiones LIVE', 'Total LIVE Emissions', 'Sesiones LIVE']) || 0),
         battles:            Number(find(['battles', 'partidas', 'pks']) || 0),
         battleDiamonds:     Number(find(['diamantes de partidas']) || 0),
         multiGuestDiamonds: Number(find(['varios invitados']) || 0),
@@ -251,9 +251,18 @@ export async function renderAdminDashboard(container) {
             const buf = await file.arrayBuffer();
             const wb  = window.XLSX.read(buf, { type: 'array' });
             const sheet = wb.Sheets[wb.SheetNames[0]];
-            const json  = window.XLSX.utils.sheet_to_json(sheet, { defval: null });
+            const jsonData = window.XLSX.utils.sheet_to_json(sheet, { defval: null });
+            
+            // Log de depuración
+            console.group('📊 Excel Parsing Results');
+            console.log('Fila 0 (cruda):', jsonData[0]);
+            
+            parsedRows = jsonData.map(normalizeRow).filter(Boolean);
+            
+            console.log('Fila 0 (normalizada):', parsedRows[0]);
+            console.log('Total valid rows:', parsedRows.length);
+            console.groupEnd();
 
-            parsedRows = json.map(normalizeRow).filter(Boolean);
             if (!parsedRows.length) {
                 preview.innerHTML = `<span style="color:var(--danger);">⚠ No se encontraron filas válidas en el Excel.</span>`;
                 uploadBtn.disabled = true;
