@@ -45,8 +45,10 @@ function normalizeRow(row) {
         liveSeconds:        parseLiveSeconds(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || 0),
         validDays:          Number(find(['valid days', 'días válidos', 'dias validos', 'emisiones live']) || 0),
         battles:            Number(find(['battles', 'partidas', 'pks']) || 0),
+        emisionesLive:      Number(find(['emisiones live', 'sesiones live']) || 0),
         manager:            find(['manager', 'agente', 'manager asignado']) || null,
     };
+
 
 
 }
@@ -74,8 +76,9 @@ export async function renderAdminDashboard(container) {
     // Agregados globales
     const totalDiamonds  = data.reduce((s, c) => s + Number(c.diamonds || 0), 0);
     const totalCreators  = data.length;
-    const validCreators  = data.filter(c => c.validDays >= 15).length;
-    const goLiveRate     = totalCreators ? ((data.filter(c => c.validDays > 0).length / totalCreators) * 100).toFixed(1) : 0;
+    const validCreators  = data.filter(c => c.validDays > 0).length;
+    const totalLives     = data.reduce((s, c) => s + Number(c.battles || 0), 0); // O sesiones si las tuviéramos
+    const goLiveRate     = totalCreators ? ((validCreators / totalCreators) * 100).toFixed(1) : 0;
     const totalSecs      = data.reduce((s, c) => s + (c.liveSeconds || parseLiveSeconds(c.liveDuration)), 0);
     const avgHours       = totalCreators ? (totalSecs / totalCreators / 3600).toFixed(1) : 0;
 
@@ -101,14 +104,16 @@ export async function renderAdminDashboard(container) {
                 </span>
             </div>
             <div class="glass-panel metric-card">
-                <span class="metric-title">GoLive Rate</span>
-                <span class="metric-value">${goLiveRate}%</span>
+                <span class="metric-title">Emisiones LIVE (Total)</span>
+                <span class="metric-value">${fmt(data.reduce((s,c) => s + Number(c.emisionesLive || 0), 0))}</span>
             </div>
+
             <div class="glass-panel metric-card">
                 <span class="metric-title">Avg Horas / Creador</span>
                 <span class="metric-value">${avgHours} <span style="font-size:1rem;font-weight:400">hs</span></span>
             </div>
         </div>` : `
+
         <div class="glass-panel" style="padding:3rem;text-align:center;color:var(--text-muted);">
             <p>No hay datos cargados todavía.</p>
             <p style="font-size:0.82rem;margin-top:0.5rem;">Sube el reporte mensual de TikTok para empezar.</p>
