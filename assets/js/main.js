@@ -1,6 +1,6 @@
+import { env, isSupabaseConfigured } from './env.js';
 import { store } from './store.js';
-import { auth } from './api.js';
-import { isSupabaseConfigured } from './supabase.js';
+import { auth, push } from './api.js';
 import { renderLogin } from './views/login.js';
 import { renderAdminDashboard, renderCreatorsList } from './views/adminDashboard.js';
 import { renderManagerDashboard } from './views/managerDashboard.js';
@@ -144,6 +144,30 @@ async function boot() {
     const app = document.getElementById('app');
     app.innerHTML = '<div style="height:100vh; display:flex; align-items:center; justify-content:center;">Cargando...</div>';
     await store.init().catch(console.warn);
+
+    // Registro de Service Worker para Notificaciones
+    if ('serviceWorker' in navigator && isSupabaseConfigured) {
+        try {
+            const reg = await navigator.serviceWorker.register('/sw.js');
+            console.log('Service Worker registrado:', reg);
+            
+            // Si el usuario está logueado, pedir permiso/actualizar suscripción
+            const user = store.getCurrentUser();
+            if (user) {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    const sub = await reg.pushManager.getSubscription() || 
+                                await reg.pushManager.subscribe({
+                                    userVisibleOnly: true,
+                                    applicationServerKey: env.VAPID_PUBLIC_KEY 
+                                });
+                    await push.saveSubscription(sub);
+                }
+            }
+        } catch (e) {
+            console.warn('Fallo al registrar SW o suscripción:', e);
+        }
+    }
 
     auth.onAuthChange(async (session) => {
         if (!session) { await store.clear(); appState.navigate('login'); }
