@@ -169,11 +169,14 @@ declare
     v_tiktok       citext := nullif(trim(new.raw_user_meta_data->>'tiktok_username'), '');
     v_role         text   := coalesce(new.raw_user_meta_data->>'role', 'creator');
     v_display_name text   := coalesce(new.raw_user_meta_data->>'display_name', v_tiktok, split_part(new.email, '@', 1));
+    v_has_metrics  boolean;
 begin
     -- Para creators el tiktok_username es obligatorio.
     if v_role = 'creator' and (v_tiktok is null or length(v_tiktok) = 0) then
         raise exception 'tiktok_username es obligatorio para creators';
     end if;
+
+    select exists(select 1 from public.creator_metrics where username = v_tiktok) into v_has_metrics;
 
     insert into public.profiles (id, tiktok_username, email, role, is_admin, is_manager, is_creator, display_name)
     values (
@@ -183,7 +186,7 @@ begin
         v_role,
         (v_role = 'admin'),
         (v_role = 'manager'),
-        (v_role = 'creator'),
+        v_has_metrics,
         v_display_name
     );
     return new;
