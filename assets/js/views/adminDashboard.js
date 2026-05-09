@@ -3,6 +3,8 @@ import { appState } from '../main.js';
 import { metrics, profiles, push } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 
+window.CE_DEBUG = true;
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmt(n) { return Number(n).toLocaleString('es'); }
 
@@ -23,7 +25,9 @@ function parseLiveSeconds(str) {
  * Acepta varias variantes de nombres en español/inglés.
  */
 function normalizeRow(row) {
+    if (window.CE_DEBUG) console.log('Normalizing row headers:', Object.keys(row));
     const find = (keywords) => {
+
         const entries = Object.entries(row);
         // 1. Intento: Coincidencia exacta
         for (const kw of keywords) {
@@ -53,10 +57,18 @@ function normalizeRow(row) {
         liveDuration:       String(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || '0s'),
         liveSeconds:        parseLiveSeconds(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || 0),
         validDays:          Number(find(['valid days', 'días válidos', 'dias validos', 'emisiones live']) || 0),
-        battles:            Number(find(['battles', 'partidas', 'pks']) || 0),
+        newFollowers:       Number(find(['nuevos seguidores']) || 0),
         emisionesLive:      Number(find(['emisiones live', 'sesiones live']) || 0),
+        battles:            Number(find(['battles', 'partidas', 'pks']) || 0),
+        battleDiamonds:     Number(find(['diamantes de partidas']) || 0),
+        multiGuestDiamonds: Number(find(['varios invitados']) || 0),
+        statusGraduation:   find(['estado de graduación', 'graduación']) || null,
+        statusRank:         find(['estado del rango', 'rango']) || null,
+        statusActive:       find(['estado', 'status']) || null,
+        groupName:          find(['grupo', 'group']) || null,
         manager:            find(['manager', 'agente', 'manager asignado']) || null,
     };
+
 
 
 
