@@ -23,37 +23,31 @@ function parseLiveSeconds(str) {
  * Acepta varias variantes de nombres en español/inglés.
  */
 function normalizeRow(row) {
-    const get = (...keys) => {
-        for (const k of keys) {
-            for (const real of Object.keys(row)) {
-                if (real.toLowerCase().trim() === k.toLowerCase()) return row[real];
-            }
-        }
-        return undefined;
+    const find = (keywords) => {
+        const entry = Object.entries(row).find(([k]) => {
+            const key = k.toLowerCase().trim();
+            return keywords.some(kw => key.includes(kw.toLowerCase()));
+        });
+        return entry ? entry[1] : undefined;
     };
 
     const username = String(
-        get('Creator username', "Creator's username", 'Username', 'Usuario',
-            'Usuario del creador', 'Nombre de usuario del creador', 'Creator', 'Creador', 'TikTok username') || ''
+        find(['creator username', "creator's username", 'nombre de usuario', 'usuario del creador', 'tiktok username', 'username']) || ''
     ).trim().replace(/^@/, '').toLowerCase();
 
     if (!username) return null;
 
     return {
         username,
-        diamonds:           Number(get('Diamonds', 'Diamantes') || 0),
-        diamondsLastMonth:  Number(get('Diamonds (last month)', 'Diamonds last month',
-                                      'Diamantes (mes anterior)', 'Diamantes mes anterior',
-                                      'Diamantes en el último mes', 'Diamantes en el ultimo mes') || 0),
-        liveDuration:       String(get('LIVE Duration', 'Live duration', 'Duración LIVE', 'Duración de LIVE',
-                                       'Duracion LIVE', 'Duracion en vivo') || '0s'),
-        liveSeconds:        parseLiveSeconds(get('LIVE Duration', 'Live duration', 'Duración LIVE', 'Duración de LIVE',
-                                                 'Duracion LIVE', 'Duracion en vivo') || 0),
-        validDays:          Number(get('Valid days', 'Valid Days', 'Días válidos', 'Dias validos',
-                                       'Días válidos de emisiones LIVE', 'Dias validos de emisiones LIVE') || 0),
-        battles:            Number(get('Battles', 'Partidas', 'PKs', 'Pks') || 0),
-        manager:            get('Manager', 'Manager asignado', 'Manager Name') || null,
+        diamonds:           Number(find(['diamonds', 'diamantes']) || 0),
+        diamondsLastMonth:  Number(find(['diamonds (last month)', 'diamantes en el último mes', 'diamantes en el ultimo mes', 'diamantes mes pasado']) || 0),
+        liveDuration:       String(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || '0s'),
+        liveSeconds:        parseLiveSeconds(find(['live duration', 'duración de live', 'duracion de live', 'duración live']) || 0),
+        validDays:          Number(find(['valid days', 'días válidos', 'dias validos', 'emisiones live']) || 0),
+        battles:            Number(find(['battles', 'partidas', 'pks']) || 0),
+        manager:            find(['manager', 'agente', 'manager asignado']) || null,
     };
+
 
 }
 
