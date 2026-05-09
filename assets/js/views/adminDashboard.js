@@ -35,10 +35,15 @@ function normalizeRow(row) {
 
 // ── VISTA PRINCIPAL (ADMIN) ────────────────────────────────────────────────
 export async function renderAdminDashboard(container) {
-    container.innerHTML = `<div style="padding:2rem; text-align:center;">Cargando Panel de Control...</div>`;
+    // Si ya hay datos en el store, no los volvemos a pedir (evita lentitud)
+    const currentProfs = store.getProfiles();
+    const currentMetrics = store.getMetricsData();
     
-    if (isSupabaseConfigured) {
-        await Promise.all([store.refreshAdminLists(), store.refreshMetrics()]).catch(console.warn);
+    if (!currentProfs || !currentProfs.length || !currentMetrics || !currentMetrics.length) {
+        container.innerHTML = `<div style="padding:2rem; text-align:center;">Cargando datos por primera vez...</div>`;
+        if (isSupabaseConfigured) {
+            await Promise.all([store.refreshAdminLists(), store.refreshMetrics()]).catch(console.warn);
+        }
     }
 
     const data = store.getMetricsData() || [];
@@ -365,8 +370,11 @@ function bindAddBtns(el, managerId, rootContainer) {
 
 // ── VISTA: CREADORES ────────────────────────────────────────────────────────
 export async function renderCreatorsList(container) {
-    container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando Creadores...</div>';
-    if (isSupabaseConfigured) await store.refreshMetrics().catch(console.warn);
+    const currentMetrics = store.getMetricsData();
+    if (!currentMetrics || !currentMetrics.length) {
+        container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando listado...</div>';
+        if (isSupabaseConfigured) await store.refreshMetrics().catch(console.warn);
+    }
     const data = store.getMetricsData() || [];
 
     const renderItems = (list) => {
