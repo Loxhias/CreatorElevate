@@ -7,18 +7,29 @@ import { renderManagerDashboard } from './views/managerDashboard.js';
 import { renderCreatorDashboard } from './views/creatorDashboard.js';
 import { renderProfile } from './views/profile.js';
 
-
+/**
+ * APP STATE & NAVIGATION
+ * Centralized logic with Sequential Thinking
+ */
 export const appState = {
     navigate: (route) => {
         const app = document.getElementById('app');
-        app.innerHTML = '';
-        switch (route) {
-            case 'login':   renderLogin(app); break;
-            case 'admin':   renderDashboardLayout(app, renderAdminDashboard, 'admin'); break;
-            case 'manager': renderDashboardLayout(app, renderManagerDashboard, 'manager'); break;
-            case 'creator': renderDashboardLayout(app, renderCreatorDashboard, 'creator'); break;
-            default:        renderLogin(app);
-        }
+        app.style.opacity = '0';
+        app.style.transform = 'scale(0.98)';
+        
+        setTimeout(() => {
+            app.innerHTML = '';
+            switch (route) {
+                case 'login':   renderLogin(app); break;
+                case 'admin':   renderDashboardLayout(app, renderAdminDashboard, 'admin'); break;
+                case 'manager': renderDashboardLayout(app, renderManagerDashboard, 'manager'); break;
+                case 'creator': renderDashboardLayout(app, renderCreatorDashboard, 'creator'); break;
+                default:        renderLogin(app);
+            }
+            app.style.transition = 'all var(--duration-md) var(--ease-out)';
+            app.style.opacity = '1';
+            app.style.transform = 'scale(1)';
+        }, 150);
     },
 
     showToast: (message, type = 'success') => {
@@ -29,411 +40,225 @@ export const appState = {
             document.body.appendChild(container);
         }
         const toast = document.createElement('div');
-        toast.className = `toast${type === 'error' ? ' error' : ''}`;
-        toast.innerHTML = `<span>${message}</span>`;
+        toast.className = `glass-panel toast-premium ${type}`;
+        toast.innerHTML = `
+            <div style="display:flex; align-items:center; gap:0.8rem;">
+                <span class="toast-icon">${type === 'success' ? '✨' : '⚠️'}</span>
+                <span style="font-weight:600; font-size:0.9rem;">${message}</span>
+            </div>
+        `;
         container.appendChild(toast);
+        
+        // Auto-remove with animation
         setTimeout(() => {
             toast.style.opacity = '0';
-            toast.style.transform = 'translateY(8px)';
-            toast.style.transition = 'all 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }, 3000);
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 400);
+        }, 3500);
     }
 };
 
-function navItemsForRole(role) {
+/**
+ * DYNAMIC NAVIGATION GENERATOR
+ */
+function getNavItems(role) {
     const items = [];
-
-    if (role === 'creator') {
+    if (role === 'admin') {
         items.push({ view: 'inicio', icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'normas', icon: '📋', label: 'Normas' });
-        items.push({ view: 'canales', icon: '📢', label: 'Canales' });
-    } else if (role === 'admin') {
-        items.push({ view: 'inicio', icon: '📊', label: 'Panel Admin' });
-        items.push({ view: 'creadores', icon: '👥', label: 'Creadores' });
+        items.push({ view: 'creadores', icon: '👥', label: 'Directorio' });
+    } else if (role === 'creator') {
+        items.push({ view: 'inicio', icon: '📊', label: 'Premios' });
+        items.push({ view: 'normas', icon: '📜', label: 'Reglas' });
+        items.push({ view: 'canales', icon: '📢', label: 'Links' });
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
-
-    items.push({ view: 'perfil', icon: '👤', label: 'Mi Perfil' });
-
-    return items.map(item => `
-        <a href="#" class="nav-item ${item.view === 'inicio' ? 'active' : ''}" data-view="${item.view}">
-            <span class="nav-icon">${item.icon}</span>
-            <span>${item.label}</span>
-        </a>
-    `).join('');
+    items.push({ view: 'perfil', icon: '👤', label: 'Perfil' });
+    return items;
 }
 
-
+/**
+ * MASTER LAYOUT (System 3.0)
+ */
 function renderDashboardLayout(container, renderContentFn, role) {
     const user = store.getCurrentUser();
-    const navItems = navItemsForRole(role);
+    const navData = getNavItems(role);
+
+    const navHtml = navData.map(item => `
+        <a href="#" class="nav-item ${item.view === 'inicio' ? 'active' : ''}" data-view="${item.view}">
+            <span class="nav-icon">${item.icon}</span>
+            <span class="nav-label">${item.label}</span>
+        </a>
+    `).join('');
 
     container.innerHTML = `
-        <div class="app-container animate-fade-in">
+        <div class="app-shell" style="display:flex; min-height:100vh;">
             <!-- Sidebar (Desktop) -->
-            <aside class="sidebar">
-                <div class="sidebar-brand">
-                    <div class="sidebar-logo">⚡</div>
-                    <span class="sidebar-title">Interactik</span>
+            <aside class="sidebar glass-panel" style="width:280px; margin:1rem; border-radius:var(--radius-lg); position:fixed; height:calc(100vh - 2rem); display:none; flex-direction:column; padding:2rem; z-index:1000;">
+                <div style="display:flex; align-items:center; gap:1rem; margin-bottom:3rem;">
+                    <div style="width:40px; height:40px; background:var(--primary-gradient); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:white; font-weight:900;">E</div>
+                    <h2 style="font-size:1.4rem; letter-spacing:-0.04em;">Elevate</h2>
                 </div>
-                <nav class="sidebar-nav">
-                    ${navItems}
-                    <a href="#" class="sidebar-item nav-danger logout-btn" style="margin-top:2rem;">
-                        <span class="nav-icon">🚪</span><span>Cerrar sesión</span>
-                    </a>
-                </nav>
                 
-                <div style="margin-top: auto; padding: 1.2rem; background: rgba(255,255,255,0.03); border-radius: 16px; border: 1px solid var(--glass-border);">
-                    <div style="font-size: 0.85rem; font-weight: 700;">@${user.username}</div>
-                    <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;">${role}</div>
+                <nav style="display:flex; flex-direction:column; gap:0.5rem; flex:1;">
+                    ${navHtml}
+                </nav>
+
+                <div style="padding-top:2rem; border-top:1px solid var(--glass-border);">
+                    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1.5rem;">
+                        <div style="width:36px; height:36px; border-radius:50%; background:var(--glass-bg); display:flex; align-items:center; justify-content:center; font-weight:800;">${user.username.charAt(0).toUpperCase()}</div>
+                        <div style="min-width:0;">
+                            <div style="font-weight:700; font-size:0.9rem; overflow:hidden; text-overflow:ellipsis;">@${user.username}</div>
+                            <div style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase;">${role}</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-sm btn-ghost logout-btn" style="width:100%;">Cerrar Sesión</button>
                 </div>
             </aside>
 
-            <!-- Topbar (Mobile) -->
-            <header class="topbar">
-                <div class="topbar-brand">
-                    <div class="topbar-logo">⚡</div>
-                    <span class="topbar-title">Interactik</span>
-                </div>
-                <div class="avatar">${user.username.charAt(0).toUpperCase()}</div>
-            </header>
+            <!-- Main Content Container -->
+            <main id="dashboard-content" style="flex:1; padding:2rem; transition: padding 0.3s ease;">
+                <!-- Content will be injected here -->
+            </main>
 
-            <!-- Main Content Area -->
-            <main class="content-area" id="dashboard-content"></main>
-
-            <!-- Bottom Nav (Mobile) -->
+            <!-- Floating Bottom Nav (Mobile) -->
             <nav class="bottom-nav">
-                ${navItems}
-                <a href="#" class="nav-item nav-danger logout-btn">
-                    <span class="nav-icon">🚪</span><span>Salir</span>
-                </a>
+                ${navHtml}
             </nav>
         </div>
     `;
 
-    container.querySelectorAll('.logout-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            try {
-                if (isSupabaseConfigured) {
-                    await auth.signOut();
-                    await store.clear();
-                } else {
-                    store.logoutDemo();
-                }
-            } finally {
-                appState.navigate('login');
-            }
-        });
-    });
+    // Handle Responsive Sidebar
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const main = container.querySelector('#dashboard-content');
+    const sidebar = container.querySelector('.sidebar');
+    
+    const handleDesktop = (e) => {
+        if (e.matches) {
+            sidebar.style.display = 'flex';
+            main.style.paddingLeft = '320px';
+        } else {
+            sidebar.style.display = 'none';
+            main.style.paddingLeft = '2rem';
+        }
+    };
+    mediaQuery.addListener(handleDesktop);
+    handleDesktop(mediaQuery);
 
-    const contentArea = document.getElementById('dashboard-content');
-
-    // Wire up bottom nav
+    // Wire up events
+    const contentArea = container.querySelector('#dashboard-content');
     renderContentFn(contentArea);
 
-    container.querySelectorAll('.nav-item[data-view]').forEach(item => {
-        item.addEventListener('click', async (e) => {
+    container.querySelectorAll('.nav-item').forEach(item => {
+        item.onclick = async (e) => {
             e.preventDefault();
             const view = item.dataset.view;
-
-            // Sincronizar estado activo en ambos menús (sidebar y bottom)
-            container.querySelectorAll('.nav-item').forEach(n => {
-                n.classList.toggle('active', n.dataset.view === view);
-            });
-
-            if (view === 'inicio') {
-                await renderContentFn(contentArea);
-            } else if (view === 'normas') {
-                await renderNormas(contentArea);
-            } else if (view === 'canales') {
-                await renderCanales(contentArea);
-            } else if (view === 'creadores') {
-                await renderCreatorsList(contentArea);
-            } else if (view === 'perfil') {
-                await renderProfile(contentArea);
-            }
-        });
+            
+            container.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
+            
+            contentArea.style.opacity = '0';
+            setTimeout(async () => {
+                if (view === 'inicio') await renderContentFn(contentArea);
+                else if (view === 'normas') renderNormas(contentArea);
+                else if (view === 'canales') renderCanales(contentArea);
+                else if (view === 'creadores') renderCreatorsList(contentArea);
+                else if (view === 'perfil') renderProfile(contentArea);
+                
+                contentArea.style.transition = 'opacity 0.3s var(--ease-out)';
+                contentArea.style.opacity = '1';
+            }, 200);
+        };
     });
 
+    container.querySelectorAll('.logout-btn').forEach(btn => {
+        btn.onclick = async () => {
+            if (isSupabaseConfigured) { await auth.signOut(); await store.clear(); }
+            else { store.logoutDemo(); }
+            appState.navigate('login');
+        };
+    });
 }
 
-// ── Normas ──────────────────────────────────────────────────────────────────
+/**
+ * VIEW: RULES & CONDUCT
+ */
 function renderNormas(container) {
     const rules = [
-        {
-            cat: 'Comunidad y Respeto',
-            icon: '🤝',
-            color: 'rgba(0,217,166,0.12)',
-            border: 'rgba(0,217,166,0.25)',
-            items: [
-                'Tratar a todos los espectadores con respeto y amabilidad en todo momento.',
-                'No permitir ni fomentar el acoso, bullying o discriminación por ningún motivo.',
-                'Mantener un ambiente inclusivo: prohibido el odio por raza, género, religión u orientación sexual.',
-                'No revelar información personal de otros usuarios sin su consentimiento.'
-            ]
-        },
-        {
-            cat: 'Contenido Permitido',
-            icon: '✅',
-            color: 'rgba(124,110,247,0.10)',
-            border: 'rgba(124,110,247,0.25)',
-            items: [
-                'Entretenimiento en vivo: música, arte, cocina, deportes, humor y charlas.',
-                'Contenido educativo o informativo apto para todo público.',
-                'Colaboraciones y partidas (PKs) con otros creadores siempre dentro de las normas.',
-                'Promoción de productos o servicios legales, siempre identificando claramente la publicidad.'
-            ]
-        },
-        {
-            cat: 'Contenido Prohibido',
-            icon: '🚫',
-            color: 'rgba(255,85,105,0.08)',
-            border: 'rgba(255,85,105,0.25)',
-            items: [
-                'Desnudez, contenido sexual explícito o sugerente de cualquier tipo.',
-                'Violencia real, automutilación o contenido que glorifique el daño a personas o animales.',
-                'Actividades ilegales: venta de drogas, armas, fraudes o cualquier actividad criminal.',
-                'Discurso de odio, contenido extremista o propaganda de organizaciones peligrosas.',
-                'Spam, estafas o engaños a la audiencia para obtener beneficios económicos.'
-            ]
-        },
-        {
-            cat: 'Menores de Edad',
-            icon: '👶',
-            color: 'rgba(255,181,71,0.10)',
-            border: 'rgba(255,181,71,0.25)',
-            items: [
-                'Ningún menor de 18 años puede aparecer en los streams sin supervisión de un adulto responsable.',
-                'Nunca solicitar información personal a menores de edad.',
-                'Está prohibido cualquier contenido que pueda ser inapropiado para audiencias jóvenes.',
-                'Los creadores deben reportar cualquier comportamiento sospechoso hacia menores.'
-            ]
-        },
-        {
-            cat: 'Propiedad Intelectual',
-            icon: '©️',
-            color: 'rgba(244,113,181,0.08)',
-            border: 'rgba(244,113,181,0.25)',
-            items: [
-                'No usar música con derechos de autor sin licencia durante los streams.',
-                'No reproducir películas, series, deportes u otro contenido protegido por copyright.',
-                'Respetar las marcas registradas y no usar logos de terceros sin autorización.',
-                'Acreditar siempre el trabajo original de otros creadores.'
-            ]
-        },
-        {
-            cat: 'Normas de la Agencia',
-            icon: '🏢',
-            color: 'rgba(255,209,102,0.10)',
-            border: 'rgba(255,209,102,0.3)',
-            items: [
-                'Mantener una frecuencia mínima de LIVE consistente con los objetivos acordados.',
-                'Comunicar con anticipación cualquier ausencia o baja de actividad a tu Manager.',
-                'No firmar contratos con otras agencias sin notificarlo previamente a Interactik.',
-                'Respetar los acuerdos de confidencialidad sobre comisiones, bonos y datos internos.',
-                'Reportar cualquier problema técnico o situación de acoso dentro de la plataforma.'
-            ]
-        }
+        { cat: 'Comunidad', icon: '🤝', items: ['Respeto absoluto a la audiencia.', 'Cero tolerancia al acoso.', 'Inclusión y diversidad.'] },
+        { cat: 'Contenido', icon: '🎥', items: ['Entretenimiento apto para todo público.', 'Prohibido contenido sexual o violento.', 'No actividades ilegales.'] },
+        { cat: 'Agencia', icon: '🏢', items: ['Cumplir con las horas acordadas.', 'Comunicación constante con tu Manager.', 'Exclusividad durante el contrato.'] }
     ];
 
     container.innerHTML = `
-        <div class="page-header animate-fade-in">
-            <h1>📋 Normas y Conducta</h1>
-            <p>Directrices para una comunidad sana y segura</p>
-        </div>
-
-        <div class="glass-panel" style="padding:1rem 1.2rem;margin-bottom:1.25rem;background:linear-gradient(135deg,rgba(124,110,247,0.1),rgba(244,113,181,0.06));border-color:rgba(124,110,247,0.25);">
-            <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.4rem;">
-                <span style="font-size:1rem;">⚠️</span>
-                <span style="font-weight:700;font-size:0.88rem;color:var(--primary-light);">Importante</span>
+        <div style="animation: fadeIn var(--duration-md) var(--ease-out);">
+            <h1 style="font-size:3rem; margin-bottom:1rem;">Normas</h1>
+            <p style="color:var(--text-secondary); margin-bottom:3rem;">Manual de conducta oficial de Interactik Agency.</p>
+            
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:1.5rem;">
+                ${rules.map(r => `
+                    <div class="glass-panel" style="padding:2rem;">
+                        <div style="font-size:2rem; margin-bottom:1rem;">${r.icon}</div>
+                        <h3 style="margin-bottom:1.5rem;">${r.cat}</h3>
+                        <ul style="list-style:none; display:flex; flex-direction:column; gap:1rem;">
+                            ${r.items.map(i => `<li style="font-size:0.9rem; color:var(--text-secondary); display:flex; gap:0.8rem;"><span style="color:var(--primary);">•</span> ${i}</li>`).join('')}
+                        </ul>
+                    </div>
+                `).join('')}
             </div>
-            <p class="text-sm" style="color:var(--text-secondary);line-height:1.6;">
-                El incumplimiento de estas normas puede resultar en suspensión temporal, eliminación de beneficios o baja de la agencia. Ante cualquier duda, consulta a tu Manager.
-            </p>
-        </div>
-
-        <div class="stagger">
-            ${rules.map(r => `
-                <div class="glass-panel" style="padding:1.2rem 1.3rem;margin-bottom:0.85rem;background:${r.color};border-color:${r.border};">
-                    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.9rem;">
-                        <span style="font-size:1.2rem;">${r.icon}</span>
-                        <h3 style="font-size:0.92rem;">${r.cat}</h3>
-                    </div>
-                    <ul style="list-style:none;display:flex;flex-direction:column;gap:0.55rem;">
-                        ${r.items.map(item => `
-                            <li style="display:flex;align-items:flex-start;gap:0.6rem;font-size:0.82rem;color:var(--text-secondary);line-height:1.55;">
-                                <span style="color:${r.border.replace('0.25','0.9')};flex-shrink:0;margin-top:2px;">•</span>
-                                ${item}
-                            </li>`).join('')}
-                    </ul>
-                </div>`).join('')}
-        </div>
-
-        <div style="text-align:center;padding:1.5rem 0 0.5rem;">
-            <p class="text-xs text-muted">Última actualización: Mayo 2026 · Interactik Agency</p>
         </div>
     `;
 }
 
-// ── Canales ─────────────────────────────────────────────────────────────────
-async function renderCanales(container) {
-    const user = store.getCurrentUser();
-    let managerPhone = null;
-
-    if (isSupabaseConfigured && user?.managerId) {
-        try {
-            const mProfile = await auth.getProfile(user.managerId);
-            managerPhone = mProfile?.phone || null;
-        } catch (e) { console.warn('Error fetching manager profile:', e); }
-    }
-
+/**
+ * VIEW: CHANNELS & LINKS
+ */
+function renderCanales(container) {
     const channels = [
-        {
-            section: 'Grupos de WhatsApp',
-            icon: '💬',
-            links: [
-                { name: 'Grupo Principal de Creadores', desc: 'Canal oficial para todos los creadores activos', emoji: '👥', url: 'https://wa.me/', color: '#25D366' },
-                { name: 'Novedades y Anuncios', desc: 'Comunicados oficiales de la agencia', emoji: '📣', url: 'https://wa.me/', color: '#25D366' },
-                { name: 'Soporte y Ayuda', desc: 'Consultas técnicas y administrativas', emoji: '🆘', url: 'https://wa.me/', color: '#25D366' },
-            ]
-        },
-        {
-            section: 'Canales de TikTok',
-            icon: '🎵',
-            links: [
-                { name: 'Interactik Agency Oficial', desc: 'Cuenta principal de la agencia en TikTok', emoji: '⚡', url: 'https://www.tiktok.com/@interactik', color: '#fe2c55' },
-                { name: 'Creadores Destacados', desc: 'Contenido de los mejores creadores del mes', emoji: '🏆', url: 'https://www.tiktok.com/', color: '#fe2c55' },
-            ]
-        },
-        {
-            section: 'Recursos y Documentos',
-            icon: '📁',
-            links: [
-                { name: 'Manual del Creador', desc: 'Guía completa de inicio y mejores prácticas', emoji: '📖', url: '#', color: 'var(--primary-light)' },
-                { name: 'Calendario de Eventos', desc: 'Fechas de PKs, torneos y eventos especiales', emoji: '📅', url: '#', color: 'var(--primary-light)' },
-                { name: 'Formulario de Soporte', desc: 'Reportar problemas o enviar sugerencias', emoji: '📝', url: '#', color: 'var(--primary-light)' },
-            ]
-        },
-        {
-            section: 'Contacto Directo',
-            icon: '📞',
-            links: [
-                { 
-                    name: 'Mi Manager', 
-                    desc: managerPhone ? 'Chat directo por WhatsApp' : 'Contacta directamente a tu manager asignado', 
-                    emoji: '👤', 
-                    url: managerPhone ? `https://wa.me/${managerPhone.replace(/\D/g, '')}` : 'https://wa.me/', 
-                    color: 'var(--accent)' 
-                },
-                { name: 'Administración Interactik', desc: 'Para consultas sobre pagos y contratos', emoji: '🏢', url: 'https://wa.me/', color: 'var(--accent)' },
-            ]
-        }
+        { name: 'WhatsApp VIP', emoji: '💬', color: '#25D366', url: '#' },
+        { name: 'TikTok Oficial', emoji: '🎵', color: '#fe2c55', url: '#' },
+        { name: 'Soporte 24/7', emoji: '🆘', color: 'var(--primary)', url: '#' }
     ];
 
     container.innerHTML = `
-        <div class="page-header animate-fade-in">
-            <h1>📢 Canales Oficiales</h1>
-            <p>Todos los grupos y recursos de Interactik</p>
-        </div>
-
-        <div class="stagger">
-            ${channels.map(section => `
-                <div style="margin-bottom:1.5rem;">
-                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;padding:0 0.2rem;">
-                        <span style="font-size:1rem;">${section.icon}</span>
-                        <span class="label-caps" style="color:var(--text-secondary);">${section.section}</span>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:0.6rem;">
-                        ${section.links.map(link => `
-                            <a href="${link.url}" target="_blank" rel="noopener noreferrer"
-                               style="text-decoration:none;display:flex;align-items:center;gap:0.9rem;padding:1rem 1.1rem;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-md);transition:all 0.22s ease;cursor:pointer;"
-                               onmouseover="this.style.borderColor='${link.color}33';this.style.background='rgba(255,255,255,0.06)'"
-                               onmouseout="this.style.borderColor='var(--glass-border)';this.style.background='var(--glass-bg)'">
-                                <div style="width:42px;height:42px;border-radius:var(--radius-sm);background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">${link.emoji}</div>
-                                <div style="flex:1;min-width:0;">
-                                    <div style="font-weight:700;font-size:0.88rem;color:var(--text-primary);margin-bottom:0.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${link.name}</div>
-                                    <div style="font-size:0.75rem;color:var(--text-muted);">${link.desc}</div>
-                                </div>
-                                <div style="font-size:0.75rem;color:${link.color};font-weight:700;flex-shrink:0;">→</div>
-                            </a>`).join('')}
-                    </div>
-                </div>`).join('')}
-        </div>
-
-        <div style="text-align:center;padding:1rem 0 0.5rem;">
-            <p class="text-xs text-muted">¿Falta un canal? Notifica a tu Manager.</p>
+        <div style="animation: fadeIn var(--duration-md) var(--ease-out);">
+            <h1 style="font-size:3rem; margin-bottom:1rem;">Canales</h1>
+            <p style="color:var(--text-secondary); margin-bottom:3rem;">Enlaces oficiales y grupos de comunicación.</p>
+            
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:1.5rem;">
+                ${channels.map(c => `
+                    <a href="${c.url}" class="glass-panel nav-card" style="text-decoration:none; padding:1.5rem;">
+                        <div style="font-size:2rem;">${c.emoji}</div>
+                        <div>
+                            <h4 style="margin:0;">${c.name}</h4>
+                            <p style="font-size:0.75rem; color:var(--text-muted); margin:0.2rem 0 0 0;">Acceso directo</p>
+                        </div>
+                    </a>
+                `).join('')}
+            </div>
         </div>
     `;
 }
 
-// ── Bootstrap ──────────────────────────────────────────────────────────────
-
+/**
+ * BOOTSTRAP
+ */
 async function boot() {
     const app = document.getElementById('app');
+    app.innerHTML = `<div style="height:100vh; display:flex; align-items:center; justify-content:center;"><div class="loading-dots">Elevating…</div></div>`;
 
-    // Splash mientras carga
-    app.innerHTML = `
-        <div class="login-page animate-fade-in" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
-            <div style="text-align:center;">
-                <div style="font-size:3rem;margin-bottom:1rem;animation:pulse 1.5s ease-in-out infinite;">⚡</div>
-                <p style="color:var(--text-muted);font-size:0.85rem;">Cargando…</p>
-            </div>
-        </div>`;
+    await store.init().catch(console.warn);
 
-    try {
-        await store.init();
-    } catch (e) {
-        console.warn('Store init failed (offline or config issue):', e);
-    }
-
-
-    // Reactividad: si la sesión cambia (logout en otra pestaña, etc.)
     auth.onAuthChange(async (session) => {
-        if (!session) {
-            await store.clear();
-            appState.navigate('login');
-        } else {
+        if (!session) { await store.clear(); appState.navigate('login'); }
+        else {
             await store.refreshProfile();
             const u = store.getCurrentUser();
-            if (u) {
-                appState.navigate(u.role);
-                tryEnablePush();
-            }
+            if (u) appState.navigate(u.role);
         }
     });
 
     const user = store.getCurrentUser();
     appState.navigate(user ? user.role : 'login');
-    if (user) tryEnablePush();
 }
 
-async function tryEnablePush() {
-    try {
-        const { ensurePushSubscription } = await import('./push.js');
-        const res = await ensurePushSubscription();
-        if (!res.ok && res.reason && res.reason !== 'no_vapid' && res.reason !== 'denied') {
-            console.info('Push no habilitado:', res.reason);
-        }
-    } catch (e) {
-        console.warn('Push setup error:', e);
-    }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => { boot(); });
-} else {
-    boot();
-}
-
-
-// ── Service Worker (PWA + Push) ────────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => {
-            console.warn('SW registration failed:', err);
-        });
-    });
-}
+boot();
