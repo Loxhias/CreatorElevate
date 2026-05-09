@@ -58,7 +58,7 @@ function normalizeRow(row) {
         liveSeconds:        parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Duración LIVE']) || 0),
         validDays:          Number(find(['Días válidos de emisiones LIVE', 'Valid Days', 'Días válidos']) || 0),
         newFollowers:       Number(find(['Nuevos seguidores', 'New Followers']) || 0),
-        emisionesLive:      Number(find(['Emisiones LIVE', 'Total LIVE Emissions', 'Sesiones LIVE']) || 0),
+        emisionesLive:      Number(find(['Emisiones LIVE', 'Total LIVE Emissions', 'Sesiones LIVE', 'Días válidos de emisiones LIVE']) || 0),
         battles:            Number(find(['battles', 'partidas', 'pks']) || 0),
         battleDiamonds:     Number(find(['diamantes de partidas']) || 0),
         multiGuestDiamonds: Number(find(['varios invitados']) || 0),
@@ -284,9 +284,11 @@ export async function renderAdminDashboard(container) {
     uploadBtn?.addEventListener('click', async () => {
         if (!parsedRows) return;
         const monthStr = periodInput.value || new Date().toISOString().slice(0,7);
+        const [year, month] = monthStr.split('-');
         const periodDate = `${monthStr}-01`;
-        const dt = new Date(periodDate);
-        const label = dt.toLocaleString('es', { month: 'long', year: 'numeric' })
+        // Usar UTC para evitar que el desfase horario cambie el mes
+        const dt = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1));
+        const label = dt.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' })
                         .replace(/^./, c => c.toUpperCase());
 
         uploadBtn.disabled = true;
