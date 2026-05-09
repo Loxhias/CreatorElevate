@@ -256,12 +256,37 @@ function renderUploadView(container, mainContainer) {
 }
 
 // ── VISTA: EDITOR DE GRUPO ────────────────────────────────────────────────
+// Usa los creadores de las MÉTRICAS (Excel cargado), no solo los perfiles registrados.
 async function renderGroupEditor(container, managerId) {
     container.innerHTML = '<div style="padding:2rem;">Sincronizando equipo...</div>';
-    const [allP, metricsD] = await Promise.all([ profiles.searchProfiles(''), store.getMetricsData() || [] ]);
-    const manager = allP.find(p => p.id === managerId) || { display_name: 'Manager' };
-    const myGroup = allP.filter(p => p.manager_id === managerId);
-    const free = allP.filter(p => p.is_creator && !p.manager_id && p.id !== managerId);
+    
+    // Obtener datos del manager desde perfiles
+    const allProfs = await profiles.searchProfiles('');
+    const manager = allProfs.find(p => p.id === managerId) || { display_name: 'Manager' };
+    
+    // Obtener TODOS los creadores desde las métricas (Excel)
+    const metricsData = store.getMetricsData() || [];
+    
+    // Creadores ya asignados a ESTE manager (por profiles con manager_id)
+    const assignedProfs = allProfs.filter(p => p.manager_id === managerId);
+    const assignedUsernames = assignedProfs.map(p => (p.tiktok_username || '').toLowerCase());
+    
+    // Creadores ya asignados a CUALQUIER manager
+    const allAssignedUsernames = allProfs
+        .filter(p => p.manager_id)
+        .map(p => (p.tiktok_username || '').toLowerCase());
+    
+    // Creadores del Excel que NO están asignados a ningún manager
+    const freeFromMetrics = metricsData.filter(c => {
+        const uname = (c.username || '').toLowerCase();
+        return uname && !allAssignedUsernames.includes(uname);
+    });
+    
+    // Creadores del Excel que SÍ están asignados a este manager
+    const myGroupFromMetrics = metricsData.filter(c => {
+        const uname = (c.username || '').toLowerCase();
+        return assignedUsernames.includes(uname);
+    });
 
     container.innerHTML = `
         <div class="animate-fadeIn">
@@ -271,42 +296,86 @@ async function renderGroupEditor(container, managerId) {
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
                 <div class="glass-panel">
-                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">MIEMBROS ACTUALES</h5>
+                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">MIEMBROS ACTUALES (${myGroupFromMetrics.length})</h5>
                     <div style="display:flex; flex-direction:column; gap:0.5rem;">
-                        ${myGroup.map(c => `
+                        ${myGroupFromMetrics.map(c => {
+                            const prof = assignedProfs.find(p => (p.tiktok_username || '').toLowerCase() === c.username.toLowerCase());
+                            return `
                             <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-size:0.85rem;">@${c.tiktok_username || c.email}</span>
-                                <button class="rem-c" data-cid="${c.id}" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700;">Quitar</button>
-                            </div>
-                        `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Sin miembros.</p>'}
+                                <div>
+                                    <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                                    <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎</div>
+                                </div>
+                                ${prof ? `<button class="rem-c" data-cid="${prof.id}" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Quitar</button>` : ''}
+                            </div>`;
+                        }).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Sin miembros asignados.</p>'}
                     </div>
                 </div>
                 <div class="glass-panel">
-                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">CREADORES DISPONIBLES</h5>
-                    <div style="display:flex; flex-direction:column; gap:0.5rem; max-height:400px; overflow-y:auto;">
-                        ${free.map(c => `
-                            <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
-                                <span style="font-size:0.85rem;">@${c.tiktok_username || c.email}</span>
-                                <button class="add-c" data-cid="${c.id}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:700;">Añadir</button>
-                            </div>
-                        `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">No hay libres.</p>'}
+                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">CREADORES DISPONIBLES (${freeFromMetrics.length})</h5>
+                    
+                    <div style="margin-bottom:0.8rem;">
+                        <input type="text" id="grp-filter" class="input-control" placeholder="Filtrar creadores..." style="padding:0.5rem 0.8rem; font-size:0.8rem;">
+                    </div>
+                    
+                    <div id="grp-available-list" style="display:flex; flex-direction:column; gap:0.5rem; max-height:400px; overflow-y:auto;">
+                        ${renderAvailableList(freeFromMetrics, allProfs)}
                     </div>
                 </div>
             </div>
+            <p style="margin-top:1.5rem; font-size:0.75rem; color:var(--text-secondary); text-align:center;">
+                Los creadores aparecen según los datos cargados en el reporte. No necesitan tener cuenta.
+            </p>
         </div>
     `;
 
+    // Filtro de búsqueda
+    const filterInput = container.querySelector('#grp-filter');
+    const listContainer = container.querySelector('#grp-available-list');
+    filterInput.addEventListener('input', () => {
+        const q = filterInput.value.toLowerCase().trim();
+        const filtered = freeFromMetrics.filter(c => c.username.toLowerCase().includes(q));
+        listContainer.innerHTML = renderAvailableList(filtered, allProfs);
+        bindAddButtons(listContainer, managerId, container);
+    });
+
     container.querySelector('#close-grp').onclick = () => renderAdminDashboard(container.parentElement.parentElement);
 
-    container.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
-        await profiles.assignManager(b.dataset.cid, managerId);
-        appState.showToast('Creador añadido', 'success');
-        renderGroupEditor(container, managerId);
-    });
+    // Vincular botones de quitar
     container.querySelectorAll('.rem-c').forEach(b => b.onclick = async () => {
         await profiles.assignManager(b.dataset.cid, null);
-        appState.showToast('Creador quitado', 'info');
+        appState.showToast('Creador desvinculado', 'info');
         renderGroupEditor(container, managerId);
+    });
+    
+    // Vincular botones de añadir
+    bindAddButtons(container, managerId, container);
+}
+
+function renderAvailableList(creatorsList, allProfs) {
+    if (!creatorsList.length) return '<p style="font-size:0.8rem; color:var(--text-muted);">No hay creadores disponibles.</p>';
+    return creatorsList.map(c => {
+        // Buscar si tiene perfil registrado (para poder usar assignManager)
+        const prof = allProfs.find(p => (p.tiktok_username || '').toLowerCase() === c.username.toLowerCase());
+        return `
+            <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                    <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎 · ${c.validDays}d</div>
+                </div>
+                ${prof 
+                    ? `<button class="add-c" data-cid="${prof.id}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:700; font-size:0.8rem;">Añadir</button>`
+                    : `<span style="font-size:0.65rem; color:var(--text-secondary);">Sin cuenta</span>`
+                }
+            </div>`;
+    }).join('');
+}
+
+function bindAddButtons(container, managerId, rootContainer) {
+    container.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
+        await profiles.assignManager(b.dataset.cid, managerId);
+        appState.showToast('Creador asignado al equipo', 'success');
+        renderGroupEditor(rootContainer, managerId);
     });
 }
 
