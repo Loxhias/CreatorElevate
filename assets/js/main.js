@@ -2,10 +2,11 @@ import { store } from './store.js';
 import { auth } from './api.js';
 import { isSupabaseConfigured } from './supabase.js';
 import { renderLogin } from './views/login.js';
-import { renderAdminDashboard } from './views/adminDashboard.js';
+import { renderAdminDashboard, renderCreatorsList } from './views/adminDashboard.js';
 import { renderManagerDashboard } from './views/managerDashboard.js';
 import { renderCreatorDashboard } from './views/creatorDashboard.js';
 import { renderProfile } from './views/profile.js';
+
 
 export const appState = {
     navigate: (route) => {
@@ -139,10 +140,9 @@ function renderDashboardLayout(container, renderContentFn, role) {
             } else if (view === 'canales') {
                 await renderCanales(contentArea);
             } else if (view === 'creadores') {
-                // For admin: show creators list (we could move this to a separate view if needed)
-                // For now, let's keep it simple or implement a quick list.
-                contentArea.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-muted);">Próximamente: Lista detallada de creadores</div>`;
+                await renderCreatorsList(contentArea);
             } else if (view === 'perfil') {
+
                 await renderProfile(contentArea);
             }
         });

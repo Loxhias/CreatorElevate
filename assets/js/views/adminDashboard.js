@@ -316,3 +316,60 @@ export async function renderAdminDashboard(container) {
         }
     });
 }
+
+// ── Lista de Creadores ──────────────────────────────────────────────────────
+export function renderCreatorsList(container) {
+    const data = store.getMetricsData() || [];
+    
+    const renderList = (filtered) => {
+        if (filtered.length === 0) {
+            return `<div style="padding:3rem;text-align:center;color:var(--text-muted);">No se encontraron creadores.</div>`;
+        }
+        return `
+            <div style="display:flex;flex-direction:column;gap:0.8rem;">
+                ${filtered.map(c => `
+                    <div class="glass-panel" style="padding:1rem;display:flex;align-items:center;gap:1rem;transition:transform 0.2s ease;">
+                        <div style="width:40px;height:40px;border-radius:50%;background:var(--primary-gradient);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.9rem;color:white;flex-shrink:0;">
+                            ${c.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;color:var(--text-primary);font-size:0.9rem;margin-bottom:0.15rem;">@${c.username}</div>
+                            <div style="font-size:0.75rem;color:var(--text-muted);">Manager: ${c.manager || 'No asignado'}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-weight:800;color:var(--primary-light);font-size:0.9rem;">${fmt(c.diamonds)} 💎</div>
+                            <div style="font-size:0.7rem;color:var(--text-muted);">${c.validDays} días · ${(c.liveSeconds/3600).toFixed(1)}h</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    };
+
+    container.innerHTML = `
+        <div style="margin-bottom:1.5rem;">
+            <h2 style="font-size:1.5rem;margin-bottom:0.4rem;">Creadores (${data.length})</h2>
+            <p style="color:var(--text-secondary);font-size:0.88rem;">Listado detallado del período actual</p>
+        </div>
+
+        <div class="glass-panel" style="padding:0.8rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:0.8rem;">
+            <span style="font-size:1.2rem;">🔍</span>
+            <input type="text" id="creator-search" placeholder="Buscar por username..." 
+                   style="background:transparent;border:none;color:var(--text-primary);width:100%;outline:none;font-size:0.95rem;">
+        </div>
+
+        <div id="creators-items-container">
+            ${renderList(data)}
+        </div>
+    `;
+
+    const searchInput = container.querySelector('#creator-search');
+    const itemsContainer = container.querySelector('#creators-items-container');
+
+    searchInput.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase().trim();
+        const filtered = data.filter(c => c.username.toLowerCase().includes(val));
+        itemsContainer.innerHTML = renderList(filtered);
+    });
+}
+
