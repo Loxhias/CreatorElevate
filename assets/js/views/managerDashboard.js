@@ -103,16 +103,20 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
         </div>
     `;
 
-    // Manejar botones de ver creador
-    container.querySelectorAll('.view-creator').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const username = e.target.dataset.username;
-            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
-        });
-    });
+    // Manejar botones de ver creador (Delegación)
+    container.addEventListener('click', (e) => {
+        const btnCreator = e.target.closest('.view-creator');
+        const btnAdmin   = e.target.closest('#back-to-admin');
 
-    // Manejar botón de volver
-    container.querySelector('#back-to-admin')?.addEventListener('click', () => {
-        import('../main.js').then(m => m.appState.navigate('admin'));
+        if (btnCreator) {
+            const username = btnCreator.dataset.username;
+            if (username) {
+                import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+            }
+        }
+
+        if (btnAdmin) {
+            import('../main.js').then(m => m.appState.navigate('admin'));
+        }
     });
 }

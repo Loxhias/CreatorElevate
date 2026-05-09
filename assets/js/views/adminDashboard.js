@@ -380,24 +380,25 @@ export async function renderAdminDashboard(container) {
         }
     });
 
-    // ── Wire up: Ver Dashboard Creador/Manager ─────────────────────────────
-    container.querySelectorAll('.view-creator').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const username = e.target.dataset.username;
-            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
-        });
-    });
+    // ── Wire up: Ver Dashboard Creador/Manager (Delegación de eventos) ────
+    container.addEventListener('click', (e) => {
+        const btnCreator = e.target.closest('.view-creator');
+        const btnManager = e.target.closest('.view-manager');
 
-    container.querySelectorAll('.view-manager').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const id = e.target.dataset.id;
-            import('./managerDashboard.js').then(m => m.renderManagerDashboard(container, id));
-        });
-    });
+        if (btnCreator) {
+            const username = btnCreator.dataset.username;
+            if (username) {
+                import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+            }
+        }
 
-    // Añadir botón "Ver" en la lista de managers (si existe en el HTML)
-    // Nota: Como la lista de managers se genera dinámicamente en algún punto, 
-    // lo ideal es añadir el botón en el loop de managers.
+        if (btnManager) {
+            const id = btnManager.dataset.id;
+            if (id) {
+                import('./managerDashboard.js').then(m => m.renderManagerDashboard(container, id));
+            }
+        }
+    });
 }
 
 // ── Lista de Creadores ──────────────────────────────────────────────────────
