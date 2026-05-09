@@ -390,7 +390,10 @@ export async function renderCreatorsList(container) {
                     <div style="font-weight:700;">@${c.username}</div>
                     <div style="font-size:0.75rem; color:var(--text-secondary);">${c.validDays} días válidos</div>
                 </div>
-                <div style="font-weight:800; color:var(--accent);">${fmt(c.diamonds)} 💎</div>
+                <div style="text-align:right;">
+                    <div style="font-weight:800; color:var(--accent);">${fmt(c.diamonds)} 💎</div>
+                    <button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="margin-top:0.4rem; font-size:0.65rem;">Ver Dashboard</button>
+                </div>
             </div>
         `).join('');
     };
@@ -413,5 +416,16 @@ export async function renderCreatorsList(container) {
         const q = input.value.toLowerCase().trim();
         results.innerHTML = renderItems(data.filter(c => c.username.toLowerCase().includes(q)));
     };
+
+    // Escuchar clics en botones de dashboard
+    container.addEventListener('click', (e) => {
+        const btn = e.target.closest('.v-c-dash');
+        if (btn) {
+            const username = btn.dataset.username;
+            container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando Dashboard del Creador...</div>';
+            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+        }
+    });
 }
+
 
