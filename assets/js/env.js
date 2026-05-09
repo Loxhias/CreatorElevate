@@ -21,9 +21,9 @@
  */
 
 export const env = {
-    SUPABASE_URL:     'REEMPLAZA_SUPABASE_URL',
-    SUPABASE_ANON_KEY: 'REEMPLAZA_SUPABASE_ANON_KEY',
-    VAPID_PUBLIC_KEY:  'REEMPLAZA_VAPID_PUBLIC_KEY',
+    SUPABASE_URL: 'https://kvrkrlvjfrdwxfolcbon.supabase.co',
+    SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2cmtybHZqZnJkd3hmb2xjYm9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyOTI4MTUsImV4cCI6MjA5Mzg2ODgxNX0.RSCrNDYVa45cMNA4n2zOypG1Jo3by6Wi3piLXM6EmPo',
+    VAPID_PUBLIC_KEY: 'BCs0Kjc2k6b5HKsSCZP5tD8kR7Fjo6TK5MPtEaZ8YP1jP2aUdsSidnLLCGunM3Y3QvlhX7wIdJ_UhksbH_rPVUk',
 
     // Dominio sintético usado cuando el usuario inicia sesión con su tiktok_username
     // (sirve como "fallback" si en el futuro decides loguear sin email).
