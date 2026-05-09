@@ -334,3 +334,68 @@ function renderGroupEditor(container, managerId, allCreators) {
         }
     };
 }
+
+// ── VISTA: LISTA DE CREADORES (PÚBLICA PARA ADMIN) ──────────────────────────
+export async function renderCreatorsList(container) {
+    container.innerHTML = `<div style="padding:2rem;text-align:center;">Cargando lista de creadores…</div>`;
+    
+    if (isSupabaseConfigured) await store.refreshMetrics().catch(e => console.warn(e));
+    const data = store.getMetricsData() || [];
+
+    const renderItems = (filtered) => {
+        if (!filtered.length) return `<p style="padding:2rem; text-align:center; color:var(--text-muted);">No se encontraron creadores.</p>`;
+        return filtered.map(c => `
+            <div class="glass-panel" style="padding:1.2rem; display:flex; align-items:center; gap:1.2rem; margin-bottom:0.8rem; transition:transform 0.2s ease;">
+                <div style="width:45px; height:45px; border-radius:50%; background:var(--primary-gradient); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; font-size:1.1rem; flex-shrink:0;">
+                    ${c.username.charAt(0).toUpperCase()}
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; font-size:1rem; color:var(--text-primary);">@${c.username}</div>
+                    <div style="font-size:0.75rem; color:var(--text-muted);">Actividad: ${c.validDays} días</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-weight:800; color:var(--accent); font-size:1.1rem;">${fmt(c.diamonds)} 💎</div>
+                    <button class="btn btn-sm view-c-dash" data-username="${c.username}" style="margin-top:0.5rem; font-size:0.65rem; background:rgba(255,255,255,0.05);">👁️ Dashboard</button>
+                </div>
+            </div>
+        `).join('');
+    };
+
+    container.innerHTML = `
+        <div style="animation:fadeIn 0.3s ease;">
+            <div style="margin-bottom:2rem;">
+                <h2 style="font-size:1.8rem; font-weight:800; margin-bottom:0.3rem;">Directorio de Creadores</h2>
+                <p style="color:var(--text-secondary); font-size:0.9rem;">Explora el rendimiento individual de toda la red.</p>
+            </div>
+
+            <div class="glass-panel" style="padding:0.8rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:0.8rem;">
+                <span style="font-size:1.2rem;">🔍</span>
+                <input type="text" id="c-search-input" placeholder="Buscar por username..." 
+                       style="background:transparent; border:none; color:var(--text-primary); width:100%; outline:none; font-size:0.95rem;">
+            </div>
+
+            <div id="c-list-results">
+                ${renderItems(data)}
+            </div>
+        </div>
+    `;
+
+    const input = container.querySelector('#c-search-input');
+    const results = container.querySelector('#c-list-results');
+
+    if (input) {
+        input.oninput = (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            const filtered = data.filter(c => c.username.toLowerCase().includes(val));
+            results.innerHTML = renderItems(filtered);
+        };
+    }
+
+    container.onclick = (e) => {
+        const btn = e.target.closest('.view-c-dash');
+        if (btn) {
+            const username = btn.dataset.username;
+            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+        }
+    };
+}
