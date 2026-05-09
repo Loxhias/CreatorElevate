@@ -34,7 +34,7 @@ function normalizeRow(row) {
 
     const username = String(
         get('Creator username', "Creator's username", 'Username', 'Usuario',
-            'Usuario del creador', 'Creator', 'Creador', 'TikTok username') || ''
+            'Usuario del creador', 'Nombre de usuario del creador', 'Creator', 'Creador', 'TikTok username') || ''
     ).trim().replace(/^@/, '').toLowerCase();
 
     if (!username) return null;
@@ -43,15 +43,18 @@ function normalizeRow(row) {
         username,
         diamonds:           Number(get('Diamonds', 'Diamantes') || 0),
         diamondsLastMonth:  Number(get('Diamonds (last month)', 'Diamonds last month',
-                                      'Diamantes (mes anterior)', 'Diamantes mes anterior') || 0),
-        liveDuration:       String(get('LIVE Duration', 'Live duration', 'Duración LIVE',
+                                      'Diamantes (mes anterior)', 'Diamantes mes anterior',
+                                      'Diamantes en el último mes', 'Diamantes en el ultimo mes') || 0),
+        liveDuration:       String(get('LIVE Duration', 'Live duration', 'Duración LIVE', 'Duración de LIVE',
                                        'Duracion LIVE', 'Duracion en vivo') || '0s'),
-        liveSeconds:        parseLiveSeconds(get('LIVE Duration', 'Live duration', 'Duración LIVE',
+        liveSeconds:        parseLiveSeconds(get('LIVE Duration', 'Live duration', 'Duración LIVE', 'Duración de LIVE',
                                                  'Duracion LIVE', 'Duracion en vivo') || 0),
-        validDays:          Number(get('Valid days', 'Valid Days', 'Días válidos', 'Dias validos') || 0),
+        validDays:          Number(get('Valid days', 'Valid Days', 'Días válidos', 'Dias validos',
+                                       'Días válidos de emisiones LIVE', 'Dias validos de emisiones LIVE') || 0),
         battles:            Number(get('Battles', 'Partidas', 'PKs', 'Pks') || 0),
         manager:            get('Manager', 'Manager asignado', 'Manager Name') || null,
     };
+
 }
 
 // ── Render principal ──────────────────────────────────────────────────────
