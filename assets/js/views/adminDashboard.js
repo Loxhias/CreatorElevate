@@ -24,12 +24,20 @@ function parseLiveSeconds(str) {
  */
 function normalizeRow(row) {
     const find = (keywords) => {
-        const entry = Object.entries(row).find(([k]) => {
+        const entries = Object.entries(row);
+        // 1. Intento: Coincidencia exacta
+        for (const kw of keywords) {
+            const found = entries.find(([k]) => k.toLowerCase().trim() === kw.toLowerCase());
+            if (found) return found[1];
+        }
+        // 2. Intento: Coincidencia parcial (más flexible)
+        const entry = entries.find(([k]) => {
             const key = k.toLowerCase().trim();
             return keywords.some(kw => key.includes(kw.toLowerCase()));
         });
         return entry ? entry[1] : undefined;
     };
+
 
     const username = String(
         find(['creator username', "creator's username", 'nombre de usuario', 'usuario del creador', 'tiktok username', 'username']) || ''
