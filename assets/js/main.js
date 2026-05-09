@@ -148,24 +148,9 @@ async function boot() {
     // Registro de Service Worker para Notificaciones
     if ('serviceWorker' in navigator && isSupabaseConfigured) {
         try {
-            const reg = await navigator.serviceWorker.register('/sw.js');
-            console.log('Service Worker registrado:', reg);
-            
-            // Si el usuario está logueado, pedir permiso/actualizar suscripción
-            const user = store.getCurrentUser();
-            if (user) {
-                const permission = await Notification.requestPermission();
-                if (permission === 'granted') {
-                    const sub = await reg.pushManager.getSubscription() || 
-                                await reg.pushManager.subscribe({
-                                    userVisibleOnly: true,
-                                    applicationServerKey: env.VAPID_PUBLIC_KEY 
-                                });
-                    await push.saveSubscription(sub);
-                }
-            }
+            await navigator.serviceWorker.register('/sw.js');
         } catch (e) {
-            console.warn('Fallo al registrar SW o suscripción:', e);
+            console.warn('Fallo al registrar SW:', e);
         }
     }
 
