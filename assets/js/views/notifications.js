@@ -9,6 +9,7 @@ export async function renderNotificationsView(container) {
     const allProfiles = await profiles.listAll();
     const metricsData = store.getMetricsData() || [];
     const admins = allProfiles.filter(p => p.role === 'admin');
+    const managers = allProfiles.filter(p => p.role === 'manager');
     
     // Calcular Segmentos de Creadores
     const segments = calculateSegments(metricsData, allProfiles);
@@ -29,13 +30,17 @@ export async function renderNotificationsView(container) {
                                 <option value="all-admins">Todos los Administradores</option>
                                 ${admins.map(a => `<option value="user:${a.id}">${a.display_name || a.email}</option>`).join('')}
                             </optgroup>
+                            <optgroup label="Managers">
+                                <option value="all-managers">Todos los Managers</option>
+                                ${managers.map(m => `<option value="user:${m.id}">${m.display_name || m.email}</option>`).join('')}
+                            </optgroup>
                             <optgroup label="Segmentos de Creadores">
                                 <option value="all-creators">Todos los Creadores</option>
-                                <option value="segment:top">Creadores Top (Diamantes altos)</option>
-                                <option value="segment:potential">Con Potencial (Horas altas, pocos diamantes)</option>
-                                <option value="segment:risk">En Riesgo (Baja actividad)</option>
-                                <option value="segment:novice">Novatos (Nivel 1 / Sin nivel)</option>
-                                <option value="segment:new">Nuevos (Recién ingresados)</option>
+                                <option value="segment:top">Creadores Top</option>
+                                <option value="segment:potential">Con Potencial</option>
+                                <option value="segment:risk">En Riesgo</option>
+                                <option value="segment:novice">Novatos</option>
+                                <option value="segment:new">Nuevos</option>
                             </optgroup>
                         </select>
                         <p id="target-count" style="font-size:0.75rem; color:var(--accent); margin-top:0.4rem;"></p>
@@ -85,8 +90,9 @@ export async function renderNotificationsView(container) {
         const val = targetSelect.value;
         let count = 0;
         if (val === 'all-admins') count = admins.length;
-        else if (val.startsWith('user:')) count = 1;
+        else if (val === 'all-managers') count = managers.length;
         else if (val === 'all-creators') count = allProfiles.filter(p => p.role === 'creator').length;
+        else if (val.startsWith('user:')) count = 1;
         else if (val.startsWith('segment:')) {
             const seg = val.split(':')[1];
             count = segments[seg === 'new' ? 'newOnes' : seg].length;
@@ -109,10 +115,11 @@ export async function renderNotificationsView(container) {
         sendBtn.innerText = 'Enviando...';
 
         try {
-            // Preparamos los destinatarios reales basados en el segmento
+            // Preparamos los destinatarios reales basados en el objetivo
             let finalTarget = { type: 'all', value: null };
             
             if (target === 'all-admins') finalTarget = { type: 'role', value: 'admin' };
+            else if (target === 'all-managers') finalTarget = { type: 'role', value: 'manager' };
             else if (target === 'all-creators') finalTarget = { type: 'role', value: 'creator' };
             else if (target.startsWith('user:')) finalTarget = { type: 'user', value: target.split(':')[1] };
             else if (target.startsWith('segment:')) {
