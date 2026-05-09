@@ -335,8 +335,17 @@ export const profiles = {
             .select('username')
             .eq('manager_id', managerId);
         if (error) throw error;
-        // Devolver usernames únicos
         return [...new Set((data || []).map(r => r.username.toLowerCase()))];
+    },
+
+    async getAllAssignedUsernames() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('creator_metrics')
+            .select('username')
+            .not('manager_id', 'is', null);
+        if (error) throw error;
+        return (data || []).map(r => r.username.toLowerCase());
     },
 };
 

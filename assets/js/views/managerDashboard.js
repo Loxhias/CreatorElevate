@@ -29,18 +29,20 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
     }
 
     // Determinar qué creators manejo:
-    //  • En modo Supabase: leemos de profiles los creators con manager_id = mi id.
-    //  • En modo demo: filtramos por la columna manager_legacy = "Manager N" tal como antes.
     let myCreatorUsernames = new Set();
-    let labelManager = 'Mi Grupo';
+    let labelManager = activeManagerName;
 
     if (isSupabaseConfigured && activeManagerId) {
         try {
+            // 1) Obtener por username desde creator_metrics (Asignación manual/Excel)
+            const usernames = await profiles.getCreatorsByManager(activeManagerId);
+            usernames.forEach(u => myCreatorUsernames.add(u.toLowerCase()));
+            
+            // 2) Obtener por profile ID (Asignación tradicional/cuentas registradas)
             const list = await profiles.listCreatorsForManager(activeManagerId);
             list.forEach(c => c.tiktok_username && myCreatorUsernames.add(c.tiktok_username.toLowerCase()));
-            labelManager = activeManagerName;
-        } catch (e) { console.warn(e); }
-    } else {
+        } catch (e) { console.warn('Error fetching group:', e); }
+    } else if (!isSupabaseConfigured) {
         // Modo demo legacy
         const numMatch = (activeManagerName || '').match(/\d+/);
         const target = numMatch ? `Manager ${numMatch[0]}` : 'Manager 1';

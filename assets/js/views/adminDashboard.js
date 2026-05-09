@@ -110,9 +110,17 @@ function renderAuditView(container, managers, creators, metricsData) {
             <h2 style="margin-bottom:1.5rem;">Auditoría de Managers</h2>
             <div class="metrics-grid">
                 ${managers.map(m => {
-                    const myCreators = creators.filter(c => c.manager_id === m.id);
-                    const usernames = myCreators.map(c => (c.tiktok_username || '').toLowerCase());
-                    const groupMetrics = metricsData.filter(d => usernames.includes((d.username || '').toLowerCase()));
+                    // Creadores asignados por cuenta (profiles)
+                    const assignedProfs = creators.filter(c => c.manager_id === m.id);
+                    const usernamesFromProfs = assignedProfs.map(c => (c.tiktok_username || '').toLowerCase());
+                    
+                    // Creadores asignados por métricas (Excel/Username)
+                    const groupMetrics = metricsData.filter(d => {
+                        const isAssignedByMetric = d.manager_id === m.id;
+                        const isAssignedByProf = usernamesFromProfs.includes((d.username || '').toLowerCase());
+                        return isAssignedByMetric || isAssignedByProf;
+                    });
+
                     const groupDiamonds = groupMetrics.reduce((s, d) => s + Number(d.diamonds || 0), 0);
 
                     return `
@@ -121,6 +129,7 @@ function renderAuditView(container, managers, creators, metricsData) {
                         <div style="background:rgba(255,255,255,0.02); padding:1rem; border-radius:8px;">
                             <div style="font-size:0.65rem; color:var(--text-secondary);">RENDIMIENTO GRUPO</div>
                             <div style="font-size:1.4rem; font-weight:800; color:var(--accent);">${fmt(groupDiamonds)} 💎</div>
+                            <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:0.4rem;">${groupMetrics.length} CREADORES</div>
                         </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
                             <button class="btn btn-ghost v-m-dash" data-id="${m.id}" style="font-size:0.7rem;">Dashboard</button>
@@ -274,13 +283,8 @@ async function renderGroupEditor(container, managerId) {
     // Todos los creadores del Excel
     const metricsData = store.getMetricsData() || [];
     
-    // Obtener TODOS los usernames asignados a CUALQUIER manager
-    const allManagerIds = allProfs.filter(p => p.is_manager).map(p => p.id);
-    let allTakenUsernames = [];
-    for (const mid of allManagerIds) {
-        const unames = await profiles.getCreatorsByManager(mid);
-        allTakenUsernames = allTakenUsernames.concat(unames);
-    }
+    // Obtener TODOS los usernames asignados a CUALQUIER manager (Optimizado)
+    const allTakenUsernames = await profiles.getAllAssignedUsernames();
     
     // Miembros de este manager
     const myGroup = metricsData.filter(c => assignedUsernames.includes(c.username.toLowerCase()));
