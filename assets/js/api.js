@@ -247,6 +247,40 @@ export const profiles = {
         return data;
     },
 
+    async updateRoles(userId, roles) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({
+                is_admin: roles.isAdmin ?? false,
+                is_manager: roles.isManager ?? false,
+                is_creator: roles.isCreator ?? true,
+                role: roles.isAdmin ? 'admin' : (roles.isManager ? 'manager' : 'creator')
+            })
+            .eq('id', userId)
+            .select();
+        if (error) throw error;
+        return data[0];
+    },
+
+    async searchProfiles(query) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .or(`email.ilike.%${query}%,display_name.ilike.%${query}%,tiktok_username.ilike.%${query}%`)
+            .limit(10);
+        if (error) throw error;
+        return data;
+    },
+
+    async listManagers() {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('is_manager', true);
+        if (error) throw error;
+        return data;
+    },
+
     async listCreatorsForManager(managerId) {
         if (!isSupabaseConfigured) return [];
         const { data, error } = await supabase

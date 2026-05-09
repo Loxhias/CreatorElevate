@@ -90,8 +90,8 @@ export async function renderAdminDashboard(container) {
     const data    = store.getMetricsData() || [];
     const period  = store.getPeriod();
     const profs   = store.getProfiles() || [];
-    const managers = store.getManagers() || [];
-    const creators = profs.filter(p => p.role === 'creator');
+    const managers = profs.filter(p => p.is_manager);
+    const creators = profs.filter(p => p.is_creator);
     const hasData  = data.length > 0;
 
     // Agregados globales
@@ -165,9 +165,20 @@ export async function renderAdminDashboard(container) {
             </div>
         </div>
 
-        <!-- ── Resumen de Managers ────────────────────────────────────────── -->
+        <!-- ── Gestión de Managers y Roles ──────────────────────────────── -->
         <div style="margin-top:2rem;">
-            <h3 style="margin-bottom:1rem;">💼 Gestión de Managers</h3>
+            <h3 style="margin-bottom:1rem;">💼 Gestión de Managers y Roles</h3>
+            
+            <!-- Buscador para añadir/cambiar roles -->
+            <div class="glass-panel" style="padding:1.5rem; margin-bottom:1.5rem;">
+                <label style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:0.5rem; display:block;">Promover usuario o buscar Manager:</label>
+                <div style="display:flex; gap:0.5rem;">
+                    <input type="text" id="role-user-search" class="input-control" placeholder="Email o nombre del usuario...">
+                    <button id="role-search-btn" class="btn btn-primary" style="padding:0.7rem 1.2rem;">Buscar</button>
+                </div>
+                <div id="role-search-results" style="margin-top:1rem; display:flex; flex-direction:column; gap:0.5rem;"></div>
+            </div>
+
             <div class="metrics-grid">
                 ${managers.map(m => {
                     const group = creators.filter(c => c.manager_id === m.id);
@@ -175,21 +186,26 @@ export async function renderAdminDashboard(container) {
                     const groupMetrics = data.filter(c => groupUsernames.includes((c.username || '').toLowerCase()));
                     const groupDiamonds = groupMetrics.reduce((s, c) => s + Number(c.diamonds || 0), 0);
                     return `
-                    <div class="glass-panel metric-card" style="padding:1rem;">
+                    <div class="glass-panel metric-card" style="padding:1rem; border-left:4px solid var(--primary);">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                            <div>
-                                <div style="font-weight:700;font-size:0.9rem;">${m.display_name || m.tiktok_username || m.email}</div>
-                                <div class="text-xs text-muted">${group.length} creadores a cargo</div>
+                            <div style="min-width:0;flex:1;">
+                                <div style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.display_name || m.tiktok_username || m.email}</div>
+                                <div class="text-xs text-muted">${group.length} creadores asignados</div>
                             </div>
-                            <button class="btn btn-sm view-manager" data-id="${m.id}" style="padding:0.3rem 0.6rem;font-size:0.7rem;background:rgba(124,110,247,0.1);">👁️ Auditar</button>
+                            <div style="display:flex; gap:0.4rem; flex-shrink:0;">
+                                <button class="btn btn-sm view-manager" data-id="${m.id}" style="padding:0.3rem 0.5rem;font-size:0.65rem;background:rgba(124,110,247,0.1);">👁️ Auditar</button>
+                            </div>
                         </div>
-                        <div style="margin-top:1rem;">
-                            <div class="text-xs text-muted">Diamantes del Grupo</div>
-                            <div style="font-weight:800;color:var(--primary-light);font-size:1.1rem;">${fmt(groupDiamonds)}</div>
+                        <div style="margin-top:1rem; display:flex; justify-content:space-between; align-items:flex-end;">
+                            <div>
+                                <div class="text-xs text-muted">Total Grupo</div>
+                                <div style="font-weight:800;color:var(--primary-light);font-size:1.1rem;">${fmt(groupDiamonds)} 💎</div>
+                            </div>
+                            ${m.is_creator ? '<span class="badge badge-pill" style="font-size:0.6rem; background:rgba(236,72,153,0.1); color:var(--accent);">Es Creador</span>' : ''}
                         </div>
                     </div>`;
                 }).join('')}
-                ${managers.length === 0 ? '<div class="glass-panel" style="grid-column:1/-1;padding:1.5rem;text-align:center;color:var(--text-muted);">No hay managers registrados.</div>' : ''}
+                ${managers.length === 0 ? '<div class="glass-panel" style="grid-column:1/-1;padding:1.5rem;text-align:center;color:var(--text-muted);">No hay managers activos. Busca un usuario arriba para darle el rol.</div>' : ''}
             </div>
         </div>
 
@@ -354,6 +370,72 @@ export async function renderAdminDashboard(container) {
                 appState.showToast(`Error: ${err.message}`, 'error');
             }
         });
+    });
+
+    // ── Wire up: Roles & Management ──────────────────────────────────────
+    const roleSearchInput = container.querySelector('#role-user-search');
+    const roleSearchBtn   = container.querySelector('#role-search-btn');
+    const roleResults     = container.querySelector('#role-search-results');
+
+    const doRoleSearch = async () => {
+        const query = roleSearchInput.value.trim();
+        if (query.length < 3) { appState.showToast('Mínimo 3 letras', 'info'); return; }
+        roleSearchBtn.disabled = true;
+        try {
+            const found = await profiles.searchProfiles(query);
+            roleResults.innerHTML = found.map(p => `
+                <div class="glass-panel" style="padding:0.8rem; display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-weight:600; font-size:0.85rem;">${p.display_name || p.email}</div>
+                        <div style="font-size:0.7rem; color:var(--text-muted);">${p.email}</div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <label style="font-size:0.7rem; display:flex; align-items:center; gap:0.3rem;">
+                            <input type="checkbox" class="role-toggle" data-uid="${p.id}" data-role="isManager" ${p.is_manager ? 'checked' : ''}> Manager
+                        </label>
+                        <label style="font-size:0.7rem; display:flex; align-items:center; gap:0.3rem;">
+                            <input type="checkbox" class="role-toggle" data-uid="${p.id}" data-role="isCreator" ${p.is_creator ? 'checked' : ''}> Creador
+                        </label>
+                    </div>
+                </div>
+            `).join('') || '<div style="font-size:0.8rem; color:var(--text-muted);">No se encontraron usuarios.</div>';
+        } catch (e) {
+            appState.showToast('Error buscando usuarios', 'error');
+        } finally {
+            roleSearchBtn.disabled = false;
+        }
+    };
+
+    roleSearchBtn?.addEventListener('click', doRoleSearch);
+    roleSearchInput?.addEventListener('keypress', (e) => e.key === 'Enter' && doRoleSearch());
+
+    // Delegación para toggles de roles
+    roleResults?.addEventListener('change', async (e) => {
+        if (e.target.classList.contains('role-toggle')) {
+            const uid = e.target.dataset.uid;
+            const roleKey = e.target.dataset.role;
+            const status = e.target.checked;
+            
+            // Buscar el perfil actual para no sobreescribir otros roles
+            const currentProfs = store.getProfiles();
+            const p = currentProfs.find(x => x.id === uid);
+            
+            const newRoles = {
+                isAdmin: p.is_admin,
+                isManager: roleKey === 'isManager' ? status : p.is_manager,
+                isCreator: roleKey === 'isCreator' ? status : p.is_creator
+            };
+
+            try {
+                await profiles.updateRoles(uid, newRoles);
+                appState.showToast('Rol actualizado correctamente');
+                await store.refreshAdminLists();
+                renderAdminDashboard(container); // Refrescar para ver cambios en la lista de managers
+            } catch (err) {
+                appState.showToast('Error actualizando rol', 'error');
+                e.target.checked = !status; // Revertir UI
+            }
+        }
     });
 
     // ── Wire up: push ──────────────────────────────────────────────────────

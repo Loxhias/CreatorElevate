@@ -24,6 +24,9 @@ create table if not exists public.profiles (
     tiktok_username   citext unique,            -- "heyprive" — null para admin/manager si aún no asigna
     email             citext unique,            -- replicado desde auth.users para queries
     role              text not null default 'creator' check (role in ('admin','manager','creator')),
+    is_admin          boolean not null default false,
+    is_manager        boolean not null default false,
+    is_creator        boolean not null default true,
     manager_id        uuid references public.profiles(id) on delete set null,  -- creators → su manager
     display_name      text,
     phone             text,                      -- contacto del manager (a llenar después)
@@ -172,12 +175,15 @@ begin
         raise exception 'tiktok_username es obligatorio para creators';
     end if;
 
-    insert into public.profiles (id, tiktok_username, email, role, display_name)
+    insert into public.profiles (id, tiktok_username, email, role, is_admin, is_manager, is_creator, display_name)
     values (
         new.id,
         v_tiktok,
         new.email::citext,
         v_role,
+        (v_role = 'admin'),
+        (v_role = 'manager'),
+        (v_role = 'creator'),
         v_display_name
     );
     return new;
