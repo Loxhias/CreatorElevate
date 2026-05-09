@@ -1,6 +1,7 @@
 import { store } from '../store.js';
-import { auth } from '../api.js';
+import { auth, push } from '../api.js';
 import { appState } from '../main.js';
+import { env } from '../env.js';
 
 export async function renderProfile(container) {
     const profile = store.getProfile();
@@ -42,6 +43,16 @@ export async function renderProfile(container) {
             </form>
         </div>
 
+        <div class="glass-panel" style="padding:1.5rem;margin-bottom:1.5rem;">
+            <h3 style="margin-top:0; font-size:1rem;">🔔 Notificaciones</h3>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1.5rem;">Recibe alertas sobre métricas, bonos y mensajes de la agencia en tu dispositivo.</p>
+            
+            <div id="push-status" style="margin-bottom:1rem; font-size:0.85rem;"></div>
+            <button id="enable-push" class="btn" style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); width:100%;">
+                Configurar Notificaciones
+            </button>
+        </div>
+
         <div class="glass-panel" style="padding:1.2rem;border-color:rgba(255,85,105,0.15);">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
@@ -54,6 +65,58 @@ export async function renderProfile(container) {
             </div>
         </div>
     `;
+
+    // Lógica de Notificaciones
+    const btnPush = container.querySelector('#enable-push');
+    const statusPush = container.querySelector('#push-status');
+
+    const updatePushStatus = async () => {
+        if (!('serviceWorker' in navigator)) {
+            if (statusPush) statusPush.innerText = '⚠️ Tu navegador no soporta notificaciones.';
+            return;
+        }
+        
+        const permission = Notification.permission;
+        if (permission === 'denied') {
+            statusPush.innerHTML = '<span style="color:var(--danger)">❌ Bloqueadas.</span> Cámbialo en los ajustes de tu navegador.';
+            if (btnPush) btnPush.disabled = true;
+        } else if (permission === 'granted') {
+            statusPush.innerHTML = '<span style="color:var(--accent)">✅ Activadas en este navegador.</span>';
+            if (btnPush) btnPush.innerText = 'Actualizar Registro';
+        } else {
+            statusPush.innerText = '⚪ Pendientes de configurar.';
+        }
+    };
+
+    if (btnPush) {
+        btnPush.onclick = async () => {
+            btnPush.disabled = true;
+            btnPush.innerText = 'Configurando...';
+            
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') throw new Error('Permiso denegado.');
+
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription() || 
+                            await reg.pushManager.subscribe({
+                                userVisibleOnly: true,
+                                applicationServerKey: env.VAPID_PUBLIC_KEY
+                            });
+                
+                await push.saveSubscription(sub);
+                appState.showToast('¡Notificaciones activadas!', 'success');
+            } catch (e) {
+                console.error(e);
+                appState.showToast('Error: ' + e.message, 'danger');
+            } finally {
+                updatePushStatus();
+                btnPush.disabled = false;
+            }
+        };
+    }
+
+    updatePushStatus();
 
     container.querySelector('#profile-form').addEventListener('submit', async (e) => {
         e.preventDefault();
