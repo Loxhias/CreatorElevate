@@ -40,8 +40,9 @@ function normalizeRow(row) {
 
 
     const username = String(
-        find(['creator username', "creator's username", 'nombre de usuario', 'usuario del creador', 'tiktok username', 'username']) || ''
+        find(['Nombre de usuario del creador', 'creator username', "creator's username", 'nombre de usuario', 'usuario del creador', 'tiktok username', 'username']) || ''
     ).trim().replace(/^@/, '').toLowerCase();
+
 
     if (!username) return null;
 
