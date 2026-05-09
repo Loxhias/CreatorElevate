@@ -373,7 +373,12 @@ async function boot() {
             </div>
         </div>`;
 
-    await store.init();
+    try {
+        await store.init();
+    } catch (e) {
+        console.warn('Store init failed (offline or config issue):', e);
+    }
+
 
     // Reactividad: si la sesión cambia (logout en otra pestaña, etc.)
     auth.onAuthChange(async (session) => {
@@ -407,7 +412,12 @@ async function tryEnablePush() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => { boot(); });
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => { boot(); });
+} else {
+    boot();
+}
+
 
 // ── Service Worker (PWA + Push) ────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
