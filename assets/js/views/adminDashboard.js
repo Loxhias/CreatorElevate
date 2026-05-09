@@ -165,6 +165,34 @@ export async function renderAdminDashboard(container) {
             </div>
         </div>
 
+        <!-- ── Resumen de Managers ────────────────────────────────────────── -->
+        <div style="margin-top:2rem;">
+            <h3 style="margin-bottom:1rem;">💼 Gestión de Managers</h3>
+            <div class="metrics-grid">
+                ${managers.map(m => {
+                    const group = creators.filter(c => c.manager_id === m.id);
+                    const groupUsernames = group.map(c => (c.tiktok_username || '').toLowerCase());
+                    const groupMetrics = data.filter(c => groupUsernames.includes((c.username || '').toLowerCase()));
+                    const groupDiamonds = groupMetrics.reduce((s, c) => s + Number(c.diamonds || 0), 0);
+                    return `
+                    <div class="glass-panel metric-card" style="padding:1rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <div>
+                                <div style="font-weight:700;font-size:0.9rem;">${m.display_name || m.tiktok_username || m.email}</div>
+                                <div class="text-xs text-muted">${group.length} creadores a cargo</div>
+                            </div>
+                            <button class="btn btn-sm view-manager" data-id="${m.id}" style="padding:0.3rem 0.6rem;font-size:0.7rem;background:rgba(124,110,247,0.1);">👁️ Auditar</button>
+                        </div>
+                        <div style="margin-top:1rem;">
+                            <div class="text-xs text-muted">Diamantes del Grupo</div>
+                            <div style="font-weight:800;color:var(--primary-light);font-size:1.1rem;">${fmt(groupDiamonds)}</div>
+                        </div>
+                    </div>`;
+                }).join('')}
+                ${managers.length === 0 ? '<div class="glass-panel" style="grid-column:1/-1;padding:1.5rem;text-align:center;color:var(--text-muted);">No hay managers registrados.</div>' : ''}
+            </div>
+        </div>
+
         <!-- ── Asignación Manager ↔ Creador ────────────────────────────── -->
         <div style="margin-top:2rem;">
             <h3 style="margin-bottom:1rem;">👥 Asignación de Managers</h3>
@@ -195,6 +223,10 @@ export async function renderAdminDashboard(container) {
                                                 <option value="${m.id}" ${m.id === c.manager_id ? 'selected' : ''}>${m.display_name || m.tiktok_username || m.email}</option>
                                             `).join('')}
                                         </select>
+                                    </td>
+                                    <td>${c.validDays || 0}</td>
+                                    <td>
+                                        <button class="btn btn-sm view-creator" data-username="${c.tiktok_username || c.id}" style="padding:0.3rem 0.6rem; font-size:0.75rem;">👁️ Ver</button>
                                     </td>
                                 </tr>`).join('')}
                         </tbody>
@@ -347,6 +379,25 @@ export async function renderAdminDashboard(container) {
             appState.showToast(`Error: ${err.message}`, 'error');
         }
     });
+
+    // ── Wire up: Ver Dashboard Creador/Manager ─────────────────────────────
+    container.querySelectorAll('.view-creator').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const username = e.target.dataset.username;
+            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+        });
+    });
+
+    container.querySelectorAll('.view-manager').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const id = e.target.dataset.id;
+            import('./managerDashboard.js').then(m => m.renderManagerDashboard(container, id));
+        });
+    });
+
+    // Añadir botón "Ver" en la lista de managers (si existe en el HTML)
+    // Nota: Como la lista de managers se genera dinámicamente en algún punto, 
+    // lo ideal es añadir el botón en el loop de managers.
 }
 
 // ── Lista de Creadores ──────────────────────────────────────────────────────
@@ -368,9 +419,12 @@ export function renderCreatorsList(container) {
                             <div style="font-weight:700;color:var(--text-primary);font-size:0.9rem;margin-bottom:0.15rem;">@${c.username}</div>
                             <div style="font-size:0.75rem;color:var(--text-muted);">Manager: ${c.manager || 'No asignado'}</div>
                         </div>
-                        <div style="text-align:right;flex-shrink:0;">
-                            <div style="font-weight:800;color:var(--primary-light);font-size:0.9rem;">${fmt(c.diamonds)} 💎</div>
-                            <div style="font-size:0.7rem;color:var(--text-muted);">${c.validDays} días · ${(c.liveSeconds/3600).toFixed(1)}h</div>
+                        <div style="text-align:right;flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:0.5rem;">
+                            <div>
+                                <div style="font-weight:800;color:var(--primary-light);font-size:0.9rem;">${fmt(c.diamonds)} 💎</div>
+                                <div style="font-size:0.7rem;color:var(--text-muted);">${c.validDays} días · ${(c.liveSeconds/3600).toFixed(1)}h</div>
+                            </div>
+                            <button class="btn btn-sm view-creator" data-username="${c.username}" style="padding:0.3rem 0.6rem; font-size:0.7rem; background:rgba(255,255,255,0.05);">👁️ Dashboard</button>
                         </div>
                     </div>
                 `).join('')}

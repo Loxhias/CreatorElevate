@@ -546,23 +546,24 @@ function tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, tr
 
 // ── Main render ────────────────────────────────────────────────────────────
 
-export async function renderCreatorDashboard(container) {
+export async function renderCreatorDashboard(container, targetUsername = null) {
     container.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-muted);">Cargando…</div>`;
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && !targetUsername) {
         await store.refreshMetrics().catch(() => {});
     }
 
     const data = store.getMetricsData();
     const user = store.getCurrentUser();
-    // Si el profile tiene tiktok_username (Supabase), úsalo; sino el username plano (demo)
-    const profile = store.getProfile?.();
-    const myUsername = (profile?.tiktok_username || user?.username || '').toLowerCase();
+    
+    // Si hay targetUsername, estamos en "Modo Auditoría"
+    const isAuditing = !!targetUsername;
+    const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || user?.username || '').toLowerCase();
 
     if (!data?.length) { container.innerHTML = emptyState('Sin datos', 'Aún no se cargó el reporte del mes.'); return; }
 
     const me = data.find(c => (c.username || '').toLowerCase() === myUsername);
-    if (!me) { container.innerHTML = emptyState(`No se encontraron métricas para @${myUsername}`, 'El admin todavía no incluyó tu usuario en el reporte mensual.'); return; }
+    if (!me) { container.innerHTML = emptyState(`No se encontraron métricas para @${myUsername}`, 'El usuario no está en el reporte actual.'); return; }
 
     // Calculations
     const h  = parseHours(me.liveDuration);
@@ -636,9 +637,10 @@ export async function renderCreatorDashboard(container) {
 
     // Inject shell with tab nav
     container.innerHTML = `
-        <!-- Brand line -->
+        <!-- Brand line / Back Button -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
             <span style="font-size:0.72rem;font-weight:700;letter-spacing:0.08em;color:var(--text-muted);text-transform:uppercase;">Interactik Agency · Creator Elevate</span>
+            ${isAuditing ? `<button id="back-to-list" class="btn btn-sm" style="padding:0.4rem 0.8rem;font-size:0.7rem;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);">← Volver al Listado</button>` : ''}
         </div>
 
         <!-- Creator Profile -->
@@ -765,6 +767,15 @@ export async function renderCreatorDashboard(container) {
     });
 
     renderTab('metrics');
+
+    // Manejar botón de volver
+    container.querySelector('#back-to-list')?.addEventListener('click', () => {
+        // Al recargar el dashboard principal se restaura la vista admin/manager
+        import('../main.js').then(m => {
+            const role = store.getCurrentUser().role;
+            m.appState.navigate(role);
+        });
+    });
 }
 
 function emptyState(title, sub) {

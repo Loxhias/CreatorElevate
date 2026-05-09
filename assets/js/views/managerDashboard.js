@@ -4,15 +4,20 @@ import { profiles } from '../api.js';
 
 function fmt(n) { return Number(n).toLocaleString('es'); }
 
-export async function renderManagerDashboard(container) {
+export async function renderManagerDashboard(container, targetManagerId = null) {
     container.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-muted);">Cargando…</div>`;
 
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && !targetManagerId) {
         await store.refreshMetrics().catch(() => {});
     }
 
     const data = store.getMetricsData() || [];
-    const me   = store.getCurrentUser();
+    const currentUser = store.getCurrentUser();
+    
+    // Si hay targetManagerId, estamos auditando
+    const isAuditing = !!targetManagerId;
+    const activeManagerId = targetManagerId || currentUser.id;
+    const activeManagerName = targetManagerId ? 'Auditoría de Manager' : (currentUser.username || 'Mi Grupo');
 
     if (!data.length) {
         container.innerHTML = `
@@ -29,15 +34,15 @@ export async function renderManagerDashboard(container) {
     let myCreatorUsernames = new Set();
     let labelManager = 'Mi Grupo';
 
-    if (isSupabaseConfigured && me?.id) {
+    if (isSupabaseConfigured && activeManagerId) {
         try {
-            const list = await profiles.listCreatorsForManager(me.id);
+            const list = await profiles.listCreatorsForManager(activeManagerId);
             list.forEach(c => c.tiktok_username && myCreatorUsernames.add(c.tiktok_username.toLowerCase()));
-            labelManager = me.username || 'Mi Grupo';
+            labelManager = activeManagerName;
         } catch (e) { console.warn(e); }
     } else {
         // Modo demo legacy
-        const numMatch = (me?.username || '').match(/\d+/);
+        const numMatch = (activeManagerName || '').match(/\d+/);
         const target = numMatch ? `Manager ${numMatch[0]}` : 'Manager 1';
         labelManager = target;
         data.filter(c => (c.manager || '').toLowerCase() === target.toLowerCase())
@@ -54,15 +59,21 @@ export async function renderManagerDashboard(container) {
                 <td style="color:var(--accent);font-weight:600;">${fmt(c.diamonds)}</td>
                 <td>${c.validDays}</td>
                 <td>${c.battles}</td>
+                <td>
+                    <button class="btn btn-sm view-creator" data-username="${c.username}" style="padding:0.3rem 0.6rem; font-size:0.75rem;">👁️ Ver</button>
+                </td>
             </tr>`).join('')
         : `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:1.5rem;">
             No tienes creadores asignados todavía. Pídele al Admin que te asigne creadores.
            </td></tr>`;
 
     container.innerHTML = `
-        <div style="margin-bottom:2rem;">
-            <h1 style="font-size:1.8rem;margin-bottom:0.5rem;">Panel de Supervisión</h1>
-            <p style="color:var(--text-secondary);">Manager: <strong style="color:var(--text-primary);">${labelManager}</strong></p>
+        <div style="margin-bottom:2rem; display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+                <h1 style="font-size:1.8rem;margin-bottom:0.5rem;">Panel de Supervisión</h1>
+                <p style="color:var(--text-secondary);">Manager: <strong style="color:var(--text-primary);">${labelManager}</strong></p>
+            </div>
+            ${isAuditing ? `<button id="back-to-admin" class="btn btn-sm" style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border);">← Volver a Admin</button>` : ''}
         </div>
 
         <div class="metrics-grid">
@@ -91,4 +102,17 @@ export async function renderManagerDashboard(container) {
             </table>
         </div>
     `;
+
+    // Manejar botones de ver creador
+    container.querySelectorAll('.view-creator').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const username = e.target.dataset.username;
+            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+        });
+    });
+
+    // Manejar botón de volver
+    container.querySelector('#back-to-admin')?.addEventListener('click', () => {
+        import('../main.js').then(m => m.appState.navigate('admin'));
+    });
 }
