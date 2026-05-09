@@ -1,0 +1,187 @@
+import { store } from '../store.js';
+import { profiles, push } from '../api.js';
+import { appState } from '../main.js';
+
+export async function renderNotificationsView(container) {
+    container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando Centro de Notificaciones...</div>';
+    
+    // Cargar datos necesarios
+    const allProfiles = await profiles.listAll();
+    const metricsData = store.getMetricsData() || [];
+    const admins = allProfiles.filter(p => p.role === 'admin');
+    
+    // Calcular Segmentos de Creadores
+    const segments = calculateSegments(metricsData, allProfiles);
+
+    container.innerHTML = `
+        <div class="animate-fadeIn">
+            <h1 style="margin-bottom:1.5rem;">Centro de Mensajes</h1>
+            
+            <div style="display:grid; grid-template-columns: 1fr 350px; gap:2rem; align-items: start;">
+                <!-- Formulario de Envío -->
+                <div class="glass-panel" style="padding:2rem;">
+                    <h3 style="margin-top:0;">Nuevo Mensaje</h3>
+                    
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">DESTINATARIOS</label>
+                        <select id="msg-target" class="input-control">
+                            <optgroup label="Administradores">
+                                <option value="all-admins">Todos los Administradores</option>
+                                ${admins.map(a => `<option value="user:${a.id}">${a.display_name || a.email}</option>`).join('')}
+                            </optgroup>
+                            <optgroup label="Segmentos de Creadores">
+                                <option value="all-creators">Todos los Creadores</option>
+                                <option value="segment:top">Creadores Top (Diamantes altos)</option>
+                                <option value="segment:potential">Con Potencial (Horas altas, pocos diamantes)</option>
+                                <option value="segment:risk">En Riesgo (Baja actividad)</option>
+                                <option value="segment:novice">Novatos (Nivel 1 / Sin nivel)</option>
+                                <option value="segment:new">Nuevos (Recién ingresados)</option>
+                            </optgroup>
+                        </select>
+                        <p id="target-count" style="font-size:0.75rem; color:var(--accent); margin-top:0.4rem;"></p>
+                    </div>
+
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">TÍTULO DEL MENSAJE</label>
+                        <input type="text" id="msg-title" class="input-control" placeholder="Ej: Nueva actualización de normas">
+                    </div>
+
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">CUERPO DEL MENSAJE</label>
+                        <textarea id="msg-body" class="input-control" style="height:120px; resize:none;" placeholder="Escribe aquí el contenido del mensaje..."></textarea>
+                    </div>
+
+                    <div style="margin-bottom:1.5rem;">
+                        <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">URL DE ACCIÓN (OPCIONAL)</label>
+                        <input type="text" id="msg-url" class="input-control" placeholder="https://creatorelevate.pages.dev/normas">
+                    </div>
+
+                    <button id="send-btn" class="btn" style="width:100%; padding:1rem; font-weight:700;">Enviar Notificación</button>
+                </div>
+
+                <!-- Resumen de Segmentos -->
+                <div style="display:flex; flex-direction:column; gap:1.5rem;">
+                    <div class="glass-panel" style="padding:1.5rem;">
+                        <h4 style="margin-top:0; font-size:0.85rem; color:var(--text-secondary);">ESTADÍSTICAS DE SEGMENTOS</h4>
+                        <div style="display:flex; flex-direction:column; gap:0.8rem; margin-top:1rem;">
+                            ${renderSegmentStat('TOP', segments.top.length, 'var(--accent)')}
+                            ${renderSegmentStat('POTENCIAL', segments.potential.length, '#6366f1')}
+                            ${renderSegmentStat('RIESGO', segments.risk.length, 'var(--danger)')}
+                            ${renderSegmentStat('NOVATOS', segments.novice.length, 'var(--text-secondary)')}
+                            ${renderSegmentStat('NUEVOS', segments.newOnes.length, 'var(--primary)')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Lógica de UI
+    const targetSelect = container.querySelector('#msg-target');
+    const targetCount = container.querySelector('#target-count');
+    const sendBtn = container.querySelector('#send-btn');
+
+    const updateCount = () => {
+        const val = targetSelect.value;
+        let count = 0;
+        if (val === 'all-admins') count = admins.length;
+        else if (val.startsWith('user:')) count = 1;
+        else if (val === 'all-creators') count = allProfiles.filter(p => p.role === 'creator').length;
+        else if (val.startsWith('segment:')) {
+            const seg = val.split(':')[1];
+            count = segments[seg === 'new' ? 'newOnes' : seg].length;
+        }
+        targetCount.innerText = `Se enviará a aproximadamente ${count} personas.`;
+    };
+
+    targetSelect.onchange = updateCount;
+    updateCount();
+
+    sendBtn.onclick = async () => {
+        const title = container.querySelector('#msg-title').value.trim();
+        const body = container.querySelector('#msg-body').value.trim();
+        const url = container.querySelector('#msg-url').value.trim();
+        const target = targetSelect.value;
+
+        if (!title || !body) return appState.showToast('El título y el mensaje son obligatorios', 'warning');
+
+        sendBtn.disabled = true;
+        sendBtn.innerText = 'Enviando...';
+
+        try {
+            // Preparamos los destinatarios reales basados en el segmento
+            let finalTarget = { type: 'all', value: null };
+            
+            if (target === 'all-admins') finalTarget = { type: 'role', value: 'admin' };
+            else if (target === 'all-creators') finalTarget = { type: 'role', value: 'creator' };
+            else if (target.startsWith('user:')) finalTarget = { type: 'user', value: target.split(':')[1] };
+            else if (target.startsWith('segment:')) {
+                const segKey = target.split(':')[1];
+                const list = segments[segKey === 'new' ? 'newOnes' : segKey];
+                // Obtenemos los IDs de perfil de esos creadores
+                const targetIds = list.map(c => {
+                    const p = allProfiles.find(ap => ap.tiktok_username?.toLowerCase() === c.username.toLowerCase());
+                    return p ? p.id : null;
+                }).filter(id => id !== null);
+                
+                finalTarget = { type: 'users', value: targetIds };
+            }
+
+            await push.send({ title, body, url, target: finalTarget });
+            appState.showToast('Notificación enviada con éxito', 'success');
+            
+            // Limpiar
+            container.querySelector('#msg-title').value = '';
+            container.querySelector('#msg-body').value = '';
+        } catch (e) {
+            console.error(e);
+            appState.showToast('Error al enviar: ' + e.message, 'danger');
+        } finally {
+            sendBtn.disabled = false;
+            sendBtn.innerText = 'Enviar Notificación';
+        }
+    };
+}
+
+function renderSegmentStat(label, count, color) {
+    return `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:0.7rem; font-weight:700; color:var(--text-secondary);">${label}</span>
+            <span style="font-size:0.9rem; font-weight:800; color:${color};">${count}</span>
+        </div>
+    `;
+}
+
+function calculateSegments(metrics, profiles) {
+    if (!metrics.length) return { top: [], potential: [], risk: [], novice: [], newOnes: [] };
+
+    // 1. TOP: El 10% con más diamantes
+    const sortedByDiamonds = [...metrics].sort((a, b) => b.diamonds - a.diamonds);
+    const topCount = Math.ceil(metrics.length * 0.1);
+    const top = sortedByDiamonds.slice(0, topCount);
+
+    // 2. POTENCIAL: Muchas horas (top 25% de duración) pero diamantes medios/bajos (bajo el promedio)
+    const avgDiamonds = metrics.reduce((s, c) => s + Number(c.diamonds), 0) / metrics.length;
+    const sortedByDuration = [...metrics].sort((a, b) => b.live_seconds - a.live_seconds);
+    const highHours = sortedByDuration.slice(0, Math.ceil(metrics.length * 0.25));
+    const potential = highHours.filter(c => c.diamonds < avgDiamonds);
+
+    // 3. RIESGO: Pocos días válidos (< 5) y pocos diamantes
+    const risk = metrics.filter(c => c.valid_days < 5 && c.diamonds < (avgDiamonds * 0.5));
+
+    // 4. NOVATOS: Nivel 1 o sin nivel en status_rank
+    const novice = metrics.filter(c => {
+        const r = (c.status_rank || '').toLowerCase();
+        return r.includes('nivel 1') || r === '' || r.includes('sin nivel');
+    });
+
+    // 5. NUEVOS: Ingresaron en los últimos 7 días (basado en created_at de profiles)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const newOnes = metrics.filter(m => {
+        const p = profiles.find(ap => ap.tiktok_username?.toLowerCase() === m.username.toLowerCase());
+        return p && new Date(p.created_at) > sevenDaysAgo;
+    });
+
+    return { top, potential, risk, novice, newOnes };
+}

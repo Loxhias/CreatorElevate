@@ -16,6 +16,7 @@ export const appState = {
             case 'admin':   renderDashboardLayout(app, renderAdminDashboard, 'admin'); break;
             case 'manager': renderDashboardLayout(app, renderManagerDashboard, 'manager'); break;
             case 'creator': renderDashboardLayout(app, renderCreatorDashboard, 'creator'); break;
+            case 'notifications': renderDashboardLayout(app, renderNotificationsView, 'admin'); break;
             default:        renderLogin(app);
         }
     },
@@ -43,6 +44,7 @@ function getNavItems(role) {
     if (role === 'admin') {
         items.push({ view: 'inicio', icon: '📊', label: 'Admin Dashboard' });
         items.push({ view: 'creadores', icon: '👥', label: 'Creadores' });
+        items.push({ view: 'notificaciones', icon: '🔔', label: 'Notificaciones' });
     } else if (role === 'creator') {
         items.push({ view: 'inicio', icon: '📊', label: 'Dashboard' });
         items.push({ view: 'normas', icon: '📋', label: 'Normas' });
@@ -113,6 +115,9 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'normas') renderNormas(contentArea);
             else if (view === 'canales') renderCanales(contentArea);
             else if (view === 'creadores') renderCreatorsList(contentArea);
+            else if (view === 'notificaciones') {
+                import('./views/notifications.js').then(m => m.renderNotificationsView(contentArea));
+            }
             else if (view === 'perfil') renderProfile(contentArea);
         };
     });
