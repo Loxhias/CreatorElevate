@@ -309,6 +309,35 @@ export const profiles = {
             .eq('id', userId);
         if (error) throw error;
     },
+
+    async assignManagerByUsername(username, managerId) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('creator_metrics')
+            .update({ manager_id: managerId })
+            .ilike('username', username);
+        if (error) throw error;
+    },
+
+    async unassignManagerByUsername(username) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('creator_metrics')
+            .update({ manager_id: null })
+            .ilike('username', username);
+        if (error) throw error;
+    },
+
+    async getCreatorsByManager(managerId) {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('creator_metrics')
+            .select('username')
+            .eq('manager_id', managerId);
+        if (error) throw error;
+        // Devolver usernames únicos
+        return [...new Set((data || []).map(r => r.username.toLowerCase()))];
+    },
 };
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -42,7 +42,7 @@ function getNavItems(role) {
     const items = [];
     if (role === 'admin') {
         items.push({ view: 'inicio', icon: '📊', label: 'Admin Dashboard' });
-        items.push({ view: 'creadores', icon: '👥', label: 'Directorio' });
+        items.push({ view: 'creadores', icon: '👥', label: 'Creadores' });
     } else if (role === 'creator') {
         items.push({ view: 'inicio', icon: '📊', label: 'Dashboard' });
         items.push({ view: 'normas', icon: '📋', label: 'Normas' });

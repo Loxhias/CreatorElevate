@@ -256,36 +256,33 @@ function renderUploadView(container, mainContainer) {
 }
 
 // ── VISTA: EDITOR DE GRUPO ────────────────────────────────────────────────
-// Usa los creadores de las MÉTRICAS (Excel cargado), no solo los perfiles registrados.
+// Asignación por USERNAME directo en creator_metrics. No requiere cuenta.
 async function renderGroupEditor(container, managerId) {
     container.innerHTML = '<div style="padding:2rem;">Sincronizando equipo...</div>';
     
-    // Obtener datos del manager desde perfiles
     const allProfs = await profiles.searchProfiles('');
     const manager = allProfs.find(p => p.id === managerId) || { display_name: 'Manager' };
     
-    // Obtener TODOS los creadores desde las métricas (Excel)
+    // Obtener creadores asignados a este manager desde creator_metrics
+    const assignedUsernames = await profiles.getCreatorsByManager(managerId);
+    
+    // Todos los creadores del Excel
     const metricsData = store.getMetricsData() || [];
     
-    // Creadores ya asignados a ESTE manager (por profiles con manager_id)
-    const assignedProfs = allProfs.filter(p => p.manager_id === managerId);
-    const assignedUsernames = assignedProfs.map(p => (p.tiktok_username || '').toLowerCase());
+    // Obtener TODOS los usernames asignados a CUALQUIER manager
+    const allManagerIds = allProfs.filter(p => p.is_manager).map(p => p.id);
+    let allTakenUsernames = [];
+    for (const mid of allManagerIds) {
+        const unames = await profiles.getCreatorsByManager(mid);
+        allTakenUsernames = allTakenUsernames.concat(unames);
+    }
     
-    // Creadores ya asignados a CUALQUIER manager
-    const allAssignedUsernames = allProfs
-        .filter(p => p.manager_id)
-        .map(p => (p.tiktok_username || '').toLowerCase());
+    // Miembros de este manager
+    const myGroup = metricsData.filter(c => assignedUsernames.includes(c.username.toLowerCase()));
     
-    // Creadores del Excel que NO están asignados a ningún manager
-    const freeFromMetrics = metricsData.filter(c => {
-        const uname = (c.username || '').toLowerCase();
-        return uname && !allAssignedUsernames.includes(uname);
-    });
-    
-    // Creadores del Excel que SÍ están asignados a este manager
-    const myGroupFromMetrics = metricsData.filter(c => {
-        const uname = (c.username || '').toLowerCase();
-        return assignedUsernames.includes(uname);
+    // Disponibles: no asignados a ningún manager
+    const freeCreators = metricsData.filter(c => {
+        return c.username && !allTakenUsernames.includes(c.username.toLowerCase());
     });
 
     container.innerHTML = `
@@ -296,137 +293,113 @@ async function renderGroupEditor(container, managerId) {
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
                 <div class="glass-panel">
-                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">MIEMBROS ACTUALES (${myGroupFromMetrics.length})</h5>
+                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">MIEMBROS ACTUALES (${myGroup.length})</h5>
                     <div style="display:flex; flex-direction:column; gap:0.5rem;">
-                        ${myGroupFromMetrics.map(c => {
-                            const prof = assignedProfs.find(p => (p.tiktok_username || '').toLowerCase() === c.username.toLowerCase());
-                            return `
+                        ${myGroup.map(c => `
                             <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
                                     <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎</div>
                                 </div>
-                                ${prof ? `<button class="rem-c" data-cid="${prof.id}" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Quitar</button>` : ''}
-                            </div>`;
-                        }).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Sin miembros asignados.</p>'}
+                                <button class="rem-c" data-username="${c.username}" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Quitar</button>
+                            </div>
+                        `).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Sin miembros asignados.</p>'}
                     </div>
                 </div>
                 <div class="glass-panel">
-                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">CREADORES DISPONIBLES (${freeFromMetrics.length})</h5>
-                    
+                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">CREADORES DISPONIBLES (${freeCreators.length})</h5>
                     <div style="margin-bottom:0.8rem;">
                         <input type="text" id="grp-filter" class="input-control" placeholder="Filtrar creadores..." style="padding:0.5rem 0.8rem; font-size:0.8rem;">
                     </div>
-                    
                     <div id="grp-available-list" style="display:flex; flex-direction:column; gap:0.5rem; max-height:400px; overflow-y:auto;">
-                        ${renderAvailableList(freeFromMetrics, allProfs)}
+                        ${renderAvailableCreators(freeCreators)}
                     </div>
                 </div>
             </div>
-            <p style="margin-top:1.5rem; font-size:0.75rem; color:var(--text-secondary); text-align:center;">
-                Los creadores aparecen según los datos cargados en el reporte. No necesitan tener cuenta.
-            </p>
         </div>
     `;
 
-    // Filtro de búsqueda
+    // Filtro
     const filterInput = container.querySelector('#grp-filter');
-    const listContainer = container.querySelector('#grp-available-list');
+    const listEl = container.querySelector('#grp-available-list');
     filterInput.addEventListener('input', () => {
         const q = filterInput.value.toLowerCase().trim();
-        const filtered = freeFromMetrics.filter(c => c.username.toLowerCase().includes(q));
-        listContainer.innerHTML = renderAvailableList(filtered, allProfs);
-        bindAddButtons(listContainer, managerId, container);
+        const filtered = freeCreators.filter(c => c.username.toLowerCase().includes(q));
+        listEl.innerHTML = renderAvailableCreators(filtered);
+        bindAddBtns(listEl, managerId, container);
     });
 
     container.querySelector('#close-grp').onclick = () => renderAdminDashboard(container.parentElement.parentElement);
 
-    // Vincular botones de quitar
+    // Quitar: por username
     container.querySelectorAll('.rem-c').forEach(b => b.onclick = async () => {
-        await profiles.assignManager(b.dataset.cid, null);
+        await profiles.unassignManagerByUsername(b.dataset.username);
         appState.showToast('Creador desvinculado', 'info');
         renderGroupEditor(container, managerId);
     });
     
-    // Vincular botones de añadir
-    bindAddButtons(container, managerId, container);
+    // Añadir: por username
+    bindAddBtns(container, managerId, container);
 }
 
-function renderAvailableList(creatorsList, allProfs) {
-    if (!creatorsList.length) return '<p style="font-size:0.8rem; color:var(--text-muted);">No hay creadores disponibles.</p>';
-    return creatorsList.map(c => {
-        // Buscar si tiene perfil registrado (para poder usar assignManager)
-        const prof = allProfs.find(p => (p.tiktok_username || '').toLowerCase() === c.username.toLowerCase());
-        return `
-            <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
-                    <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎 · ${c.validDays}d</div>
-                </div>
-                ${prof 
-                    ? `<button class="add-c" data-cid="${prof.id}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:700; font-size:0.8rem;">Añadir</button>`
-                    : `<span style="font-size:0.65rem; color:var(--text-secondary);">Sin cuenta</span>`
-                }
-            </div>`;
-    }).join('');
+function renderAvailableCreators(list) {
+    if (!list.length) return '<p style="font-size:0.8rem; color:var(--text-muted);">No hay creadores disponibles.</p>';
+    return list.map(c => `
+        <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎 · ${c.validDays}d</div>
+            </div>
+            <button class="add-c" data-username="${c.username}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:700; font-size:0.8rem;">Añadir</button>
+        </div>
+    `).join('');
 }
 
-function bindAddButtons(container, managerId, rootContainer) {
-    container.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
-        await profiles.assignManager(b.dataset.cid, managerId);
-        appState.showToast('Creador asignado al equipo', 'success');
+function bindAddBtns(el, managerId, rootContainer) {
+    el.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
+        await profiles.assignManagerByUsername(b.dataset.username, managerId);
+        appState.showToast('Creador asignado', 'success');
         renderGroupEditor(rootContainer, managerId);
     });
 }
 
-// ── VISTA: DIRECTORIO DE CREADORES ──────────────────────────────────────────
+// ── VISTA: CREADORES ────────────────────────────────────────────────────────
 export async function renderCreatorsList(container) {
-    container.innerHTML = `<div style="padding:2rem; text-align:center;">Cargando Directorio...</div>`;
+    container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando Creadores...</div>';
     if (isSupabaseConfigured) await store.refreshMetrics().catch(console.warn);
     const data = store.getMetricsData() || [];
 
     const renderItems = (list) => {
-        if (!list.length) return `<p style="padding:2rem; text-align:center;">No se encontraron creadores.</p>`;
+        if (!list.length) return '<p style="padding:2rem; text-align:center;">No hay creadores cargados en este período.</p>';
         return list.map(c => `
-            <div class="glass-panel" style="padding:1.2rem; display:flex; align-items:center; gap:1.2rem; margin-bottom:0.8rem;">
-                <div style="width:45px; height:45px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-weight:800;">${c.username.charAt(0).toUpperCase()}</div>
+            <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.8rem;">
+                <div style="width:40px; height:40px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-weight:800;">${c.username.charAt(0).toUpperCase()}</div>
                 <div style="flex:1;">
                     <div style="font-weight:700;">@${c.username}</div>
-                    <div style="font-size:0.75rem; color:var(--text-secondary);">Días Válidos: ${c.validDays}</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary);">${c.validDays} días válidos</div>
                 </div>
-                <div style="text-align:right;">
-                    <div style="font-weight:800; color:var(--accent);">${fmt(c.diamonds)} 💎</div>
-                    <button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="margin-top:0.4rem; font-size:0.65rem;">Dashboard</button>
-                </div>
+                <div style="font-weight:800; color:var(--accent);">${fmt(c.diamonds)} 💎</div>
             </div>
         `).join('');
     };
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <h1 style="margin-bottom:1.5rem;">Directorio de Creadores</h1>
+            <h2 style="margin-bottom:1.5rem;">Creadores</h2>
+            <p style="color:var(--text-secondary); margin-bottom:1.5rem; font-size:0.9rem;">Todos los creadores cargados en el último reporte de métricas.</p>
             <div class="glass-panel" style="padding:0.8rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:0.8rem;">
                 <span>🔍</span>
-                <input type="text" id="dir-search" placeholder="Buscar por usuario..." class="input-control" style="background:none; border:none; padding:0;">
+                <input type="text" id="cr-search" placeholder="Buscar creador..." class="input-control" style="background:none; border:none; padding:0;">
             </div>
-            <div id="dir-results">${renderItems(data)}</div>
+            <div id="cr-results">${renderItems(data)}</div>
         </div>
     `;
 
-    const input = container.querySelector('#dir-search');
-    const results = container.querySelector('#dir-results');
-
-    input.oninput = (e) => {
-        const val = e.target.value.toLowerCase().trim();
-        results.innerHTML = renderItems(data.filter(c => c.username.toLowerCase().includes(val)));
-    };
-
-    container.onclick = (e) => {
-        const btn = e.target.closest('.v-c-dash');
-        if (btn) {
-            const username = btn.dataset.username;
-            container.innerHTML = 'Cargando...';
-            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
-        }
+    const input = container.querySelector('#cr-search');
+    const results = container.querySelector('#cr-results');
+    input.oninput = () => {
+        const q = input.value.toLowerCase().trim();
+        results.innerHTML = renderItems(data.filter(c => c.username.toLowerCase().includes(q)));
     };
 }
+
