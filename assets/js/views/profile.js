@@ -94,9 +94,9 @@ export async function renderProfile(container) {
             btnPush.innerText = 'Configurando...';
             
             try {
-                // Vincular con OneSignal de forma profesional
-                if (window.OneSignal) {
-                    await OneSignal.push(async function() {
+                // Vincular con OneSignal (Versión moderna)
+                if (window.OneSignalDeferred) {
+                    OneSignalDeferred.push(async function(OneSignal) {
                         await OneSignal.login(user.id);
                         await OneSignal.User.addTag("role", user.role);
                         await OneSignal.Notifications.requestPermission();
