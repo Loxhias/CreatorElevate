@@ -13,7 +13,6 @@ export async function onRequestPost(context) {
       url: url || undefined,
     };
 
-    // Lógica de destinatarios
     if (target.type === 'role') {
       notificationBody.filters = [{ field: "tag", key: "role", relation: "=", value: target.value }];
     } else if (target.type === 'user') {
@@ -24,12 +23,15 @@ export async function onRequestPost(context) {
       notificationBody.included_segments = ["Subscribed Users"];
     }
 
-    // Formato oficial OneSignal REST API v2
+    // El estándar "Basic Auth" para APIs suele ser Base64(Usuario:Contraseña)
+    // En OneSignal, el Usuario es la Key y la Contraseña va vacía.
+    const authHeader = `Basic ${btoa(ONESIGNAL_API_KEY + ":")}`;
+
     const response = await fetch("https://api.onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Basic ${ONESIGNAL_API_KEY}`
+        "Authorization": authHeader
       },
       body: JSON.stringify(notificationBody)
     });
