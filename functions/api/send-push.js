@@ -1,6 +1,6 @@
 export async function onRequestPost(context) {
   const ONESIGNAL_APP_ID = "fd362054-cfe2-4b90-97cb-a2374f48c5c0";
-  const ONESIGNAL_API_KEY = "ji2nmapmwewhfzvd3jhlbzpe6";
+  const ONESIGNAL_API_KEY = "os_v2_app_7u3cavgp4jfzbf6lui3u6sgfyakwallgra2uyafi3fhdccsk5g6s55pzai4etkr2a673z2vtfpaagqdkm54wgrrvpbsgya7dcgaghua";
 
   try {
     const payload = await context.request.json();
@@ -13,8 +13,11 @@ export async function onRequestPost(context) {
       url: url || undefined,
     };
 
+    // Lógica de Destinatarios
     if (target.type === 'role') {
-      notificationBody.filters = [{ field: "tag", key: "role", relation: "=", value: target.value }];
+      notificationBody.filters = [
+        { field: "tag", key: "role", relation: "=", value: target.value }
+      ];
     } else if (target.type === 'user') {
       notificationBody.include_external_user_ids = [target.value];
     } else if (target.type === 'users') {
@@ -34,10 +37,11 @@ export async function onRequestPost(context) {
 
     const result = await response.json();
 
-    // Devolvemos el resultado real de OneSignal a la App para ver el error
-    return new Response(JSON.stringify(result), {
-      headers: { "Content-Type": "application/json" },
-      status: response.ok ? 200 : 400
+    return new Response(JSON.stringify({ 
+      success: response.ok, 
+      result: result 
+    }), {
+      headers: { "Content-Type": "application/json" }
     });
 
   } catch (err) {
