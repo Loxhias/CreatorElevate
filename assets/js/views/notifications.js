@@ -5,15 +5,31 @@ import { appState } from '../main.js';
 export async function renderNotificationsView(container) {
     container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando Centro de Notificaciones...</div>';
     
-    // Cargar datos necesarios
-    const allProfiles = await profiles.listAll();
-    const metricsData = store.getMetricsData() || [];
-    const admins = allProfiles.filter(p => p.role === 'admin');
-    const managers = allProfiles.filter(p => p.role === 'manager');
-    
-    // Calcular Segmentos de Creadores
-    const segments = calculateSegments(metricsData, allProfiles);
+    try {
+        // Cargar datos necesarios
+        const allProfiles = await profiles.listAll() || [];
+        const metricsData = store.getMetricsData() || [];
+        const admins = allProfiles.filter(p => p.role === 'admin');
+        const managers = allProfiles.filter(p => p.role === 'manager');
+        
+        // Calcular Segmentos de Creadores
+        const segments = calculateSegments(metricsData, allProfiles);
 
+        // Renderizar contenido real
+        renderContent(container, allProfiles, admins, managers, segments);
+        
+    } catch (error) {
+        console.error("Error al cargar notificaciones:", error);
+        container.innerHTML = `
+            <div style="padding:2rem; text-align:center;">
+                <p style="color:var(--danger); margin-bottom:1rem;">Error al cargar los datos del centro de mensajes.</p>
+                <button class="btn btn-primary" onclick="location.reload()">Reintentar</button>
+            </div>
+        `;
+    }
+}
+
+function renderContent(container, allProfiles, admins, managers, segments) {
     container.innerHTML = `
         <div class="animate-fadeIn">
             <h1 style="margin-bottom:1.5rem;">Centro de Mensajes</h1>
@@ -115,7 +131,6 @@ export async function renderNotificationsView(container) {
         sendBtn.innerText = 'Enviando...';
 
         try {
-            // Preparamos los destinatarios reales basados en el objetivo
             let finalTarget = { type: 'all', value: null };
             
             if (target === 'all-admins') finalTarget = { type: 'role', value: 'admin' };
@@ -125,7 +140,6 @@ export async function renderNotificationsView(container) {
             else if (target.startsWith('segment:')) {
                 const segKey = target.split(':')[1];
                 const list = segments[segKey === 'new' ? 'newOnes' : segKey];
-                // Obtenemos los IDs de perfil de esos creadores
                 const targetIds = list.map(c => {
                     const p = allProfiles.find(ap => ap.tiktok_username?.toLowerCase() === c.username.toLowerCase());
                     return p ? p.id : null;
@@ -137,7 +151,6 @@ export async function renderNotificationsView(container) {
             await push.send({ title, body, url, target: finalTarget });
             appState.showToast('Notificación enviada con éxito', 'success');
             
-            // Limpiar
             container.querySelector('#msg-title').value = '';
             container.querySelector('#msg-body').value = '';
         } catch (e) {
@@ -160,35 +173,25 @@ function renderSegmentStat(label, count, color) {
 }
 
 function calculateSegments(metrics, profiles) {
-    if (!metrics.length) return { top: [], potential: [], risk: [], novice: [], newOnes: [] };
+    if (!metrics || !metrics.length) return { top: [], potential: [], risk: [], novice: [], newOnes: [] };
 
-    // 1. TOP: El 10% con más diamantes
     const sortedByDiamonds = [...metrics].sort((a, b) => b.diamonds - a.diamonds);
     const topCount = Math.ceil(metrics.length * 0.1);
     const top = sortedByDiamonds.slice(0, topCount);
 
-    // 2. POTENCIAL: Muchas horas (top 25% de duración) pero diamantes medios/bajos (bajo el promedio)
     const avgDiamonds = metrics.reduce((s, c) => s + Number(c.diamonds), 0) / metrics.length;
     const sortedByDuration = [...metrics].sort((a, b) => b.live_seconds - a.live_seconds);
     const highHours = sortedByDuration.slice(0, Math.ceil(metrics.length * 0.25));
     const potential = highHours.filter(c => c.diamonds < avgDiamonds);
 
-    // 3. RIESGO: Pocos días válidos (< 5) y pocos diamantes
     const risk = metrics.filter(c => c.valid_days < 5 && c.diamonds < (avgDiamonds * 0.5));
 
-    // 4. NOVATOS: Nivel 1 o sin nivel en status_rank
     const novice = metrics.filter(c => {
         const r = (c.status_rank || '').toLowerCase();
         return r.includes('nivel 1') || r === '' || r.includes('sin nivel');
     });
 
-    // 5. NUEVOS: Ingresaron en los últimos 7 días (basado en created_at de profiles)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const newOnes = metrics.filter(m => {
-        const p = profiles.find(ap => ap.tiktok_username?.toLowerCase() === m.username.toLowerCase());
-        return p && new Date(p.created_at) > sevenDaysAgo;
-    });
+    const newOnes = metrics.filter(c => c.is_new === true || c.is_new === 'true');
 
     return { top, potential, risk, novice, newOnes };
 }
