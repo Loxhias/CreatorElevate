@@ -148,24 +148,14 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                 finalTarget = { type: 'users', value: targetIds };
             }
 
-            const res = await push.send({ title, body, url, target: finalTarget });
-            
-            // Mostramos los logs del servidor en tu consola F12
-            if (res.server_logs) {
-                console.group("🚀 REGISTROS DE ENVÍO (SERVIDOR)");
-                res.server_logs.forEach(l => console.log(l));
-                console.groupEnd();
-            }
+            // api.push.send() ya vuelca los server_logs y arroja con un mensaje claro si falla.
+            await push.send({ title, body, url, target: finalTarget });
 
-            if (res.result && res.result.errors) {
-                appState.showToast('OneSignal: ' + res.result.errors[0], 'warning');
-            } else {
-                appState.showToast('¡Notificación enviada!', 'success');
-                container.querySelector('#msg-title').value = '';
-                container.querySelector('#msg-body').value = '';
-            }
+            appState.showToast('¡Notificación enviada!', 'success');
+            container.querySelector('#msg-title').value = '';
+            container.querySelector('#msg-body').value = '';
         } catch (e) {
-            console.error(e);
+            console.error('[send-push] error:', e);
             appState.showToast('Error al enviar: ' + e.message, 'danger');
         } finally {
             sendBtn.disabled = false;

@@ -378,19 +378,42 @@ export const push = {
     },
 
     /**
-     * Envía un broadcast a través de la Edge Function "send-push".
-     * target = { type: 'all' | 'manager_group' | 'user', value: string|null }
+     * Envía un broadcast a través de la Pages Function "send-push".
+     * target = { type: 'all' | 'role' | 'user' | 'users', value: string|string[]|null }
      */
     async send({ title, body, url, target }) {
         const response = await fetch('/api/send-push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, body, url, target })
+            body: JSON.stringify({ title, body, url, target }),
         });
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Fallo en la conexión con Cloudflare');
+
+        let payload = null;
+        try { payload = await response.json(); } catch { /* respuesta no-JSON */ }
+
+        // Volcamos siempre los logs del servidor (incluso en error) para poder diagnosticar.
+        if (payload && Array.isArray(payload.server_logs) && payload.server_logs.length) {
+            console.group(`🚀 REGISTROS DE ENVÍO (SERVIDOR) — HTTP ${response.status}`);
+            payload.server_logs.forEach(l => console.log(l));
+            if (payload.result) console.log('Respuesta OneSignal:', payload.result);
+            console.groupEnd();
         }
-        return await response.json();
+
+        if (!response.ok || (payload && payload.success === false)) {
+            const oneSignalErr =
+                payload?.result?.errors
+                && (Array.isArray(payload.result.errors)
+                    ? payload.result.errors[0]
+                    : (payload.result.errors.invalid_external_user_ids
+                        || payload.result.errors.invalid_aliases
+                        || JSON.stringify(payload.result.errors)));
+            const msg =
+                oneSignalErr ||
+                payload?.error ||
+                `El servidor devolvió HTTP ${response.status}`;
+            throw new Error(msg);
+        }
+
+        return payload;
     },
 };

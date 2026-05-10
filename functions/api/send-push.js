@@ -48,6 +48,11 @@ export async function onRequestPost(context) {
             }, 500);
         }
 
+        // Diagnóstico: confirmamos que estamos usando la key correcta sin filtrarla en logs.
+        const keyPreview = `${ONESIGNAL_API_KEY.slice(0, 14)}…(${ONESIGNAL_API_KEY.length} chars)`;
+        const fromEnv    = !!context.env?.ONESIGNAL_API_KEY;
+        log('Auth → header "Key"', { key_preview: keyPreview, from_env: fromEnv, app_id: ONESIGNAL_APP_ID });
+
         const payload = await context.request.json().catch(() => null);
         if (!payload) {
             return jsonResponse({ success: false, error: 'JSON inválido en el body.', server_logs: logs }, 400);
@@ -121,9 +126,16 @@ export async function onRequestPost(context) {
         try { result = raw ? JSON.parse(raw) : {}; } catch { result = { raw }; }
 
         log(`Respuesta OneSignal HTTP ${response.status}:`, result);
+        if (response.status === 401 || response.status === 403) {
+            log('Pista: 401/403 suele significar que la REST API Key no corresponde al App ID, ' +
+                'o que estás usando la "User Auth Key" de la cuenta en lugar de la "REST API Key" del app.');
+        }
 
-        const oneSignalErrors = Array.isArray(result?.errors) ? result.errors : null;
-        const success         = response.ok && !oneSignalErrors;
+        const hasErrors = result && (
+            (Array.isArray(result.errors) && result.errors.length) ||
+            (result.errors && typeof result.errors === 'object' && Object.keys(result.errors).length)
+        );
+        const success = response.ok && !hasErrors;
 
         return jsonResponse({
             success,
