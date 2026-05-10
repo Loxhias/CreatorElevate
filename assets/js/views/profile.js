@@ -94,17 +94,15 @@ export async function renderProfile(container) {
             btnPush.innerText = 'Configurando...';
             
             try {
-                const permission = await Notification.requestPermission();
-                if (permission !== 'granted') throw new Error('Permiso denegado.');
-
-                const reg = await navigator.serviceWorker.ready;
-                const sub = await reg.pushManager.getSubscription() || 
-                            await reg.pushManager.subscribe({
-                                userVisibleOnly: true,
-                                applicationServerKey: env.VAPID_PUBLIC_KEY
-                            });
+                // Vincular con OneSignal de forma profesional
+                if (window.OneSignal) {
+                    await OneSignal.push(async function() {
+                        await OneSignal.login(user.id);
+                        await OneSignal.User.addTag("role", user.role);
+                        await OneSignal.Notifications.requestPermission();
+                    });
+                }
                 
-                await push.saveSubscription(sub);
                 appState.showToast('¡Notificaciones activadas!', 'success');
             } catch (e) {
                 console.error(e);

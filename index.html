@@ -16,6 +16,19 @@
     <meta name="apple-mobile-web-app-title" content="Creator Elevate">
     <meta name="mobile-web-app-capable" content="yes">
 
+    <!-- OneSignal SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignal.js" async=""></script>
+    <script>
+      window.OneSignal = window.OneSignal || [];
+      OneSignal.push(function() {
+        OneSignal.init({
+          appId: "fd362054-cfe2-4b90-97cb-a2374f48c5c0",
+          notifyButton: { enable: false },
+          allowLocalhostAsSecureOrigin: true
+        });
+      });
+    </script>
+
     <!-- Google Fonts: Plus Jakarta Sans + Space Grotesk -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
