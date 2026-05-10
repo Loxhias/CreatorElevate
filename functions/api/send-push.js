@@ -1,6 +1,6 @@
 export async function onRequestPost(context) {
   const ONESIGNAL_APP_ID = "fd362054-cfe2-4b90-97cb-a2374f48c5c0";
-  const ONESIGNAL_API_KEY = "os_v2_app_7u3cavgp4jfzbf6lui3u6sgfyakwallgra2uyafi3fhdccsk5g6s55pzai4etkr2a673z2vtfpaagqdkm54wgrrvpbsgya7dcgaghua";
+  const ONESIGNAL_API_KEY = "os_v2_app_7u3cavgp4jfzbf6lui3u6sgfyaonoeqblv4e4pmaiznj7bcioncsvflfq7q55e6we7utsrmrnrns6r537jrcwvx2mz5qxjjj53b5o6q";
 
   try {
     const payload = await context.request.json();
