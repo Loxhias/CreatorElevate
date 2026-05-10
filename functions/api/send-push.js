@@ -51,7 +51,7 @@ export async function onRequestPost(context) {
         // Diagnóstico: confirmamos que estamos usando la key correcta sin filtrarla en logs.
         const keyPreview = `${ONESIGNAL_API_KEY.slice(0, 14)}…(${ONESIGNAL_API_KEY.length} chars)`;
         const fromEnv    = !!context.env?.ONESIGNAL_API_KEY;
-        log('Auth → header "Key"', { key_preview: keyPreview, from_env: fromEnv, app_id: ONESIGNAL_APP_ID });
+        log('Auth → header "Basic"', { key_preview: keyPreview, from_env: fromEnv, app_id: ONESIGNAL_APP_ID });
 
         const payload = await context.request.json().catch(() => null);
         if (!payload) {
@@ -108,15 +108,15 @@ export async function onRequestPost(context) {
 
         log('Enviando a OneSignal:', notificationBody);
 
-        // ⚠️ La REST API de OneSignal NO usa Basic Auth con Base64.
-        //     El header correcto es:   Authorization: Key <REST_API_KEY>
-        //     (V2 también acepta:      Authorization: Basic <REST_API_KEY>  literal, sin codificar)
-        const response = await fetch("https://api.onesignal.com/notifications?c=push", {
+        // ⚠️ La REST API de OneSignal usa el esquema "Basic" pero SIN codificar en Base64
+        //     (no es HTTP Basic estándar). El valor es literalmente la REST API Key.
+        //     El esquema "Key" de la doc nueva NO es aceptado por el endpoint /notifications.
+        const response = await fetch("https://api.onesignal.com/notifications", {
             method: "POST",
             headers: {
                 "Content-Type":  "application/json; charset=utf-8",
                 "Accept":        "application/json",
-                "Authorization": `Key ${ONESIGNAL_API_KEY}`,
+                "Authorization": `Basic ${ONESIGNAL_API_KEY}`,
             },
             body: JSON.stringify(notificationBody),
         });
