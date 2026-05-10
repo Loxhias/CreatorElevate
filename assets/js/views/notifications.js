@@ -150,8 +150,12 @@ function renderContent(container, allProfiles, admins, managers, segments) {
 
             const res = await push.send({ title, body, url, target: finalTarget });
             
-            // Alerta de depuración para ver el resultado real
-            alert("Respuesta de OneSignal: " + JSON.stringify(res.result));
+            // Mostramos los logs del servidor en tu consola F12
+            if (res.server_logs) {
+                console.group("🚀 REGISTROS DE ENVÍO (SERVIDOR)");
+                res.server_logs.forEach(l => console.log(l));
+                console.groupEnd();
+            }
 
             if (res.result && res.result.errors) {
                 appState.showToast('OneSignal: ' + res.result.errors[0], 'warning');
