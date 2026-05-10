@@ -11,33 +11,39 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  console.log("📥 Petición recibida");
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { title, body, url, target } = await req.json()
+    const payload = await req.json()
+    console.log("📦 Payload:", JSON.stringify(payload));
 
-    // 1. Obtener destinatarios
-    let query = supabase.from('push_subscriptions').select('*')
+    const { title, body, url, target } = payload
+
+    // 1. Buscar suscripciones
+    console.log("🔍 Buscando suscripciones para:", target.type);
+    let query = supabase.from('push_subscriptions').select('user_id')
 
     if (target.type === 'role') {
       const { data: users } = await supabase.from('profiles').select('id').eq('role', target.value)
-      const ids = (users || []).map(u => u.id)
-      query = query.in('user_id', ids)
+      query = query.in('user_id', (users || []).map(u => u.id))
     } else if (target.type === 'user') {
       query = query.eq('user_id', target.value)
-    } else if (target.type === 'segment') {
-      // Por ahora enviamos a todos si es segmento, 
-      // o podrías filtrar aquí por los IDs que pasamos
+    } else if (target.type === 'users') {
+      query = query.in('user_id', target.value)
     }
 
     const { data: subs, error: subError } = await query
-    if (subError) throw subError
+    if (subError) throw new Error("Error en suscripciones: " + subError.message)
 
-    // 2. Log de la notificación
-    await supabase.from('notifications').insert({
+    console.log(`✅ Suscripciones encontradas: ${subs?.length || 0}`);
+
+    // 2. Registrar la notificación
+    const { error: logError } = await supabase.from('notifications').insert({
       title,
       body,
       url,
@@ -46,15 +52,19 @@ Deno.serve(async (req) => {
       delivered: subs?.length || 0
     })
 
-    // Aquí iría el envío a FCM/WebPush real si tuvieras las claves puestas en Supabase.
-    // Por ahora, el éxito significa que el sistema lo procesó y registró.
+    if (logError) console.error("❌ Error al loguear:", logError.message);
 
     return new Response(
-      JSON.stringify({ success: true, sent: subs?.length || 0 }),
+      JSON.stringify({ 
+        success: true, 
+        message: `Procesado. Destinatarios: ${subs?.length || 0}`,
+        subs_found: subs?.length || 0
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
   } catch (error) {
+    console.error("💥 Error fatal:", error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -382,11 +382,15 @@ export const push = {
      * target = { type: 'all' | 'manager_group' | 'user', value: string|null }
      */
     async send({ title, body, url, target }) {
-        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
-        const { data, error } = await supabase.functions.invoke('send-push', {
-            body: { title, body, url, target },
+        const response = await fetch('/api/send-push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, body, url, target })
         });
-        if (error) throw error;
-        return data;
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.error || 'Fallo en la conexión con Cloudflare');
+        }
+        return await response.json();
     },
 };
