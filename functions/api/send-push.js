@@ -23,12 +23,12 @@ export async function onRequestPost(context) {
       notificationBody.included_segments = ["Subscribed Users"];
     }
 
-    // He cambiado 'Basic' por 'Key' y simplificado los headers
-    const response = await fetch("https://onesignal.com/api/v1/notifications", {
+    // Siguiendo documentación: URL nueva y prefijo 'key'
+    const response = await fetch("https://api.onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Key ${ONESIGNAL_API_KEY}`
+        "Authorization": `key ${ONESIGNAL_API_KEY}`
       },
       body: JSON.stringify(notificationBody)
     });
