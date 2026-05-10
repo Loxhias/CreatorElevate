@@ -23,11 +23,12 @@ export async function onRequestPost(context) {
       notificationBody.included_segments = ["Subscribed Users"];
     }
 
-    // Siguiendo documentación: URL nueva y prefijo 'key'
+    // Intentamos con el formato que dice la documentación (key)
+    // Pero si falla, el error lo veremos en el alert del navegador
     const response = await fetch("https://api.onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
         "Authorization": `key ${ONESIGNAL_API_KEY}`
       },
       body: JSON.stringify(notificationBody)
@@ -37,7 +38,9 @@ export async function onRequestPost(context) {
 
     return new Response(JSON.stringify({ 
       success: response.ok, 
-      result: result 
+      result: result,
+      debug_used_url: "https://api.onesignal.com/api/v1/notifications",
+      debug_used_auth: "key"
     }), {
       headers: { "Content-Type": "application/json" }
     });
