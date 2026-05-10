@@ -1,6 +1,6 @@
 export async function onRequestPost(context) {
   const ONESIGNAL_APP_ID = "fd362054-cfe2-4b90-97cb-a2374f48c5c0";
-  const ONESIGNAL_API_KEY = "ji2nmapmwewhfzvd3jhlbzpe6"; // Nota: Si falla, revisa que sea la REST API KEY
+  const ONESIGNAL_API_KEY = "ji2nmapmwewhfzvd3jhlbzpe6";
 
   try {
     const payload = await context.request.json();
@@ -13,24 +13,20 @@ export async function onRequestPost(context) {
       url: url || undefined,
     };
 
-    // Lógica de Destinatarios
     if (target.type === 'role') {
-      // Usamos filtros por tags (los pondremos en el frontend ahora)
-      notificationBody.filters = [
-        { field: "tag", key: "role", relation: "=", value: target.value }
-      ];
+      notificationBody.filters = [{ field: "tag", key: "role", relation: "=", value: target.value }];
     } else if (target.type === 'user') {
       notificationBody.include_external_user_ids = [target.value];
     } else if (target.type === 'users') {
       notificationBody.include_external_user_ids = target.value;
     } else {
-      notificationBody.included_segments = ["All"];
+      notificationBody.included_segments = ["Subscribed Users"];
     }
 
     const response = await fetch("https://onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
         "Authorization": `Basic ${ONESIGNAL_API_KEY}`
       },
       body: JSON.stringify(notificationBody)
@@ -38,11 +34,10 @@ export async function onRequestPost(context) {
 
     const result = await response.json();
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      onesignal: result 
-    }), {
-      headers: { "Content-Type": "application/json" }
+    // Devolvemos el resultado real de OneSignal a la App para ver el error
+    return new Response(JSON.stringify(result), {
+      headers: { "Content-Type": "application/json" },
+      status: response.ok ? 200 : 400
     });
 
   } catch (err) {
