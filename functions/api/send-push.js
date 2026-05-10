@@ -3,12 +3,10 @@ export async function onRequestPost(context) {
   const ONESIGNAL_API_KEY = "os_v2_app_7u3cavgp4jfzbf6lui3u6sgfyaonoeqblv4e4pmaiznj7bcioncsvflfq7q55e6we7utsrmrnrns6r537jrcwvx2mz5qxjjj53b5o6q";
 
   const logs = [];
-  logs.push("--- Inicio de petición en Cloudflare ---");
+  logs.push("--- Inicio de intento con Base64 ---");
 
   try {
     const payload = await context.request.json();
-    logs.push("Payload recibido en Cloudflare: " + JSON.stringify(payload));
-
     const { title, body, url, target } = payload;
 
     let notificationBody = {
@@ -28,24 +26,22 @@ export async function onRequestPost(context) {
       notificationBody.included_segments = ["Subscribed Users"];
     }
 
-    const apiUrl = "https://api.onesignal.com/api/v1/notifications";
-    const authHeader = `key ${ONESIGNAL_API_KEY}`;
+    // Probamos el formato Basic con la Key (muchas APIs de OneSignal v2 lo requieren así)
+    const authHeader = `Basic ${ONESIGNAL_API_KEY}`;
     
-    logs.push(`Llamando a OneSignal URL: ${apiUrl}`);
-    logs.push(`Usando Header Authorization: ${authHeader.substring(0, 15)}... (oculto por seguridad)`);
-    logs.push(`Cuerpo enviado a OneSignal: ${JSON.stringify(notificationBody)}`);
+    logs.push(`Probando con Header: ${authHeader.substring(0, 20)}...`);
 
-    const response = await fetch(apiUrl, {
+    const response = await fetch("https://api.onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json; charset=utf-8",
         "Authorization": authHeader
       },
       body: JSON.stringify(notificationBody)
     });
 
     const result = await response.json();
-    logs.push(`Respuesta de OneSignal (Status ${response.status}): ${JSON.stringify(result)}`);
+    logs.push(`Respuesta OneSignal: ${JSON.stringify(result)}`);
 
     return new Response(JSON.stringify({ 
       success: response.ok, 
@@ -56,7 +52,6 @@ export async function onRequestPost(context) {
     });
 
   } catch (err) {
-    logs.push("Error fatal en Cloudflare: " + err.message);
     return new Response(JSON.stringify({ error: err.message, server_logs: logs }), { 
       status: 500,
       headers: { "Content-Type": "application/json" }
