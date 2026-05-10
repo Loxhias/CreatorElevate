@@ -13,11 +13,8 @@ export async function onRequestPost(context) {
       url: url || undefined,
     };
 
-    // Lógica de Destinatarios
     if (target.type === 'role') {
-      notificationBody.filters = [
-        { field: "tag", key: "role", relation: "=", value: target.value }
-      ];
+      notificationBody.filters = [{ field: "tag", key: "role", relation: "=", value: target.value }];
     } else if (target.type === 'user') {
       notificationBody.include_external_user_ids = [target.value];
     } else if (target.type === 'users') {
@@ -26,11 +23,12 @@ export async function onRequestPost(context) {
       notificationBody.included_segments = ["Subscribed Users"];
     }
 
+    // He cambiado 'Basic' por 'Key' y simplificado los headers
     const response = await fetch("https://onesignal.com/api/v1/notifications", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Authorization": `Basic ${ONESIGNAL_API_KEY}`
+        "Content-Type": "application/json",
+        "Authorization": `Key ${ONESIGNAL_API_KEY}`
       },
       body: JSON.stringify(notificationBody)
     });
