@@ -3,7 +3,6 @@ export async function onRequestPost(context) {
   const ONESIGNAL_API_KEY = "os_v2_app_7u3cavgp4jfzbf6lui3u6sgfyaonoeqblv4e4pmaiznj7bcioncsvflfq7q55e6we7utsrmrnrns6r537jrcwvx2mz5qxjjj53b5o6q";
 
   const logs = [];
-  logs.push("--- Inicio de intento con Base64 ---");
 
   try {
     const payload = await context.request.json();
@@ -26,10 +25,11 @@ export async function onRequestPost(context) {
       notificationBody.included_segments = ["Subscribed Users"];
     }
 
-    // Probamos el formato Basic con la Key (muchas APIs de OneSignal v2 lo requieren así)
-    const authHeader = `Basic ${ONESIGNAL_API_KEY}`;
+    // Formato Estándar: Basic [Base64(Key)]
+    // Nota: btoa es la función para convertir a Base64
+    const authHeader = `Basic ${btoa(ONESIGNAL_API_KEY)}`;
     
-    logs.push(`Probando con Header: ${authHeader.substring(0, 20)}...`);
+    logs.push("Intentando con Base64 Auth...");
 
     const response = await fetch("https://api.onesignal.com/api/v1/notifications", {
       method: "POST",
