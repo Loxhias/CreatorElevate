@@ -19,12 +19,25 @@
     <!-- OneSignal SDK -->
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script>
+      // Exponemos una promesa global para que el resto del JS espere a que el SDK esté listo
+      // antes de llamar a login()/addTag(). Sin esto, el SDK puede no estar disponible cuando
+      // el usuario inicia sesión y los tags/external_id nunca se aplican.
       window.OneSignalDeferred = window.OneSignalDeferred || [];
-      OneSignalDeferred.push(async function(OneSignal) {
-        await OneSignal.init({
-          appId: "fd362054-cfe2-4b90-97cb-a2374f48c5c0",
-          serviceWorkerPath: "OneSignalSDKWorker.js",
-          serviceWorkerParam: { scope: "/" }
+      window.OneSignalReady = new Promise((resolve) => {
+        OneSignalDeferred.push(async function (OneSignal) {
+          try {
+            await OneSignal.init({
+              appId: "fd362054-cfe2-4b90-97cb-a2374f48c5c0",
+              serviceWorkerPath: "/OneSignalSDKWorker.js",
+              serviceWorkerParam: { scope: "/" },
+              allowLocalhostAsSecureOrigin: true,
+              notifyButton: { enable: false },
+            });
+            resolve(OneSignal);
+          } catch (err) {
+            console.error('[OneSignal] init falló:', err);
+            resolve(null);
+          }
         });
       });
     </script>

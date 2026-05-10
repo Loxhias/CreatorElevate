@@ -140,31 +140,81 @@ function renderCanales(container) {
     container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2><div class="glass-panel">Contenido de canales cargando...</div>`;
 }
 
+/**
+ * Identifica al usuario en OneSignal para que los envíos por external_id
+ * y los filtros por tag (role) lleguen al dispositivo correcto.
+ */
+async function identifyOneSignalUser(profile) {
+    if (!profile || !window.OneSignalReady) return;
+    try {
+        const OneSignal = await window.OneSignalReady;
+        if (!OneSignal) return;
+
+        await OneSignal.login(String(profile.id));
+
+        if (profile.role)             OneSignal.User.addTag('role', String(profile.role));
+        if (profile.tiktok_username)  OneSignal.User.addTag('tiktok_username', String(profile.tiktok_username));
+        if (profile.manager_id)       OneSignal.User.addTag('manager_id', String(profile.manager_id));
+
+        // Pedimos permiso solo si aún no se ha decidido (evita prompt repetido al usuario).
+        if (OneSignal.Notifications && OneSignal.Notifications.permission === false) {
+            try { await OneSignal.Notifications.requestPermission(); } catch {}
+        }
+    } catch (err) {
+        console.warn('[OneSignal] identify falló:', err);
+    }
+}
+
+async function logoutOneSignalUser() {
+    if (!window.OneSignalReady) return;
+    try {
+        const OneSignal = await window.OneSignalReady;
+        if (OneSignal && typeof OneSignal.logout === 'function') await OneSignal.logout();
+    } catch (err) {
+        console.warn('[OneSignal] logout falló:', err);
+    }
+}
+
 async function boot() {
     const app = document.getElementById('app');
     app.innerHTML = '<div style="height:100vh; display:flex; align-items:center; justify-content:center;">Cargando...</div>';
 
-    // Limpieza de Service Workers antiguos para evitar bucles de error y lentitud
+    // Limpiamos Service Workers antiguos PERO conservamos el de OneSignal:
+    // desregistrarlo en cada arranque rompe la suscripción push y deja errores en bucle.
     if ('serviceWorker' in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (let registration of registrations) {
-            await registration.unregister();
-            console.log('SW antiguo eliminado para mejorar velocidad');
-        }
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (const registration of registrations) {
+                const scriptURL =
+                    registration.active?.scriptURL    ||
+                    registration.installing?.scriptURL ||
+                    registration.waiting?.scriptURL    || '';
+                if (scriptURL.includes('OneSignalSDKWorker')) continue;
+                await registration.unregister();
+                console.log('SW antiguo eliminado:', scriptURL);
+            }
+        } catch (e) { console.warn('Limpieza de SW falló:', e); }
     }
 
     await store.init().catch(console.warn);
 
-    // OneSignal se encarga de su propio Service Worker, eliminamos el manual para evitar conflictos
-
     auth.onAuthChange(async (session) => {
-        if (!session) { await store.clear(); appState.navigate('login'); }
-        else {
-            await store.refreshProfile();
-            const u = store.getCurrentUser();
-            if (u) appState.navigate(u.role);
+        if (!session) {
+            await store.clear();
+            await logoutOneSignalUser();
+            appState.navigate('login');
+            return;
         }
+        await store.refreshProfile();
+        const profile = store.getProfile();
+        const u = store.getCurrentUser();
+        if (profile) identifyOneSignalUser(profile);
+        if (u)        appState.navigate(u.role);
     });
+
+    // Si ya había sesión cargada en store.init(), identificamos también al boot.
+    const profile = store.getProfile();
+    if (profile) identifyOneSignalUser(profile);
 
     const user = store.getCurrentUser();
     appState.navigate(user ? user.role : 'login');
