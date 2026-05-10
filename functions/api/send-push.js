@@ -3,16 +3,14 @@
  *
  * Envía una notificación a través de la REST API de OneSignal (v2).
  *
- * Variables de entorno (Cloudflare → Pages → Settings → Environment Variables):
- *   - ONESIGNAL_APP_ID    (Production + Preview)
- *   - ONESIGNAL_API_KEY   (Production + Preview, marcada como SECRET)
+ * REQUISITO: definir las variables de entorno en
+ *   Cloudflare → Pages → Settings → Environment Variables (Production + Preview):
+ *     - ONESIGNAL_APP_ID
+ *     - ONESIGNAL_API_KEY   (marcala como "Encrypt"/Secret)
  *
- * Si no están definidas, cae a los valores hardcodeados como fallback,
- * pero lo correcto es eliminarlos del código y usar siempre las env vars.
+ * NUNCA comprometas la REST API Key en el código fuente: GitHub Secret Scanning
+ * la detectará y OneSignal la revocará automáticamente.
  */
-
-const FALLBACK_APP_ID  = "fd362054-cfe2-4b90-97cb-a2374f48c5c0";
-const FALLBACK_API_KEY = "os_v2_app_7u3cavgp4jfzbf6lui3u6sgfycjon3tu3haew35wov652nnp4utmnrfrexrrk5lducfgfunukx6326fiuku7geltpmqcft3l4rk55ca";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
@@ -27,8 +25,8 @@ export async function onRequestOptions() {
 }
 
 export async function onRequestPost(context) {
-    const ONESIGNAL_APP_ID  = context.env?.ONESIGNAL_APP_ID  || FALLBACK_APP_ID;
-    const ONESIGNAL_API_KEY = context.env?.ONESIGNAL_API_KEY || FALLBACK_API_KEY;
+    const ONESIGNAL_APP_ID  = context.env?.ONESIGNAL_APP_ID  || '';
+    const ONESIGNAL_API_KEY = context.env?.ONESIGNAL_API_KEY || '';
 
     const logs = [];
     const log  = (msg, extra) => {
@@ -43,7 +41,7 @@ export async function onRequestPost(context) {
         if (!ONESIGNAL_APP_ID || !ONESIGNAL_API_KEY) {
             return jsonResponse({
                 success: false,
-                error: 'Faltan ONESIGNAL_APP_ID / ONESIGNAL_API_KEY en las variables de entorno.',
+                error: 'Faltan ONESIGNAL_APP_ID / ONESIGNAL_API_KEY en Cloudflare Pages → Settings → Environment Variables. Configurá ambas (Production + Preview), guardá y volvé a desplegar.',
                 server_logs: logs,
             }, 500);
         }
@@ -127,8 +125,11 @@ export async function onRequestPost(context) {
 
         log(`Respuesta OneSignal HTTP ${response.status}:`, result);
         if (response.status === 401 || response.status === 403) {
-            log('Pista: 401/403 suele significar que la REST API Key no corresponde al App ID, ' +
-                'o que estás usando la "User Auth Key" de la cuenta en lugar de la "REST API Key" del app.');
+            log('Pista (401/403): probables causas, en orden de probabilidad:');
+            log('  1) La REST API Key fue REVOCADA por OneSignal (típicamente porque GitHub Secret Scanning la detectó pública en algún commit).');
+            log('  2) La key no corresponde a este App ID.');
+            log('  3) Es la "User Auth Key" de la cuenta en vez de la "REST API Key" del app.');
+            log('  → Solución: regenerá la REST API Key en OneSignal → Settings → Keys & IDs y configurala como secret ONESIGNAL_API_KEY en Cloudflare Pages.');
         }
 
         const hasErrors = result && (
