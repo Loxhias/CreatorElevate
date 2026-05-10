@@ -67,25 +67,24 @@ export const store = {
             return;
         }
 
-        // 1) sesión + profile
-        const session = await auth.getSession();
-        if (session) {
-            try {
-                state.profile = await auth.getProfile();
-                state.sessionUser = session.user;
-            } catch (e) {
-                console.warn('No se pudo leer profile:', e);
-            }
-        }
-
-        // 2) métricas del período activo (siempre, incluso sin sesión, para mostrar algo)
+        // Cargamos sesión y métricas en paralelo para ahorrar tiempo
         try {
-            const { period, rows } = await metrics.getLatest();
-            state.period = period;
-            state.metricsRows = rows.length ? rows : null;
+            const [sessionResult, metricsResult] = await Promise.allSettled([
+                auth.getSession(),
+                metrics.getLatest()
+            ]);
+
+            if (sessionResult.status === 'fulfilled' && sessionResult.value) {
+                state.sessionUser = sessionResult.value.user;
+                state.profile = await auth.getProfile();
+            }
+
+            if (metricsResult.status === 'fulfilled' && metricsResult.value) {
+                state.period = metricsResult.value.period;
+                state.metricsRows = metricsResult.value.rows.length ? metricsResult.value.rows : null;
+            }
         } catch (e) {
-            console.warn('No se pudieron leer métricas:', e);
-            state.metricsRows = null;
+            console.warn('Error en la inicialización paralela:', e);
         }
     },
 

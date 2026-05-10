@@ -143,16 +143,19 @@ function renderCanales(container) {
 async function boot() {
     const app = document.getElementById('app');
     app.innerHTML = '<div style="height:100vh; display:flex; align-items:center; justify-content:center;">Cargando...</div>';
-    await store.init().catch(console.warn);
 
-    // Registro de Service Worker para Notificaciones
-    if ('serviceWorker' in navigator && isSupabaseConfigured) {
-        try {
-            await navigator.serviceWorker.register('/sw.js');
-        } catch (e) {
-            console.warn('Fallo al registrar SW:', e);
+    // Limpieza de Service Workers antiguos para evitar bucles de error y lentitud
+    if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let registration of registrations) {
+            await registration.unregister();
+            console.log('SW antiguo eliminado para mejorar velocidad');
         }
     }
+
+    await store.init().catch(console.warn);
+
+    // OneSignal se encarga de su propio Service Worker, eliminamos el manual para evitar conflictos
 
     auth.onAuthChange(async (session) => {
         if (!session) { await store.clear(); appState.navigate('login'); }
