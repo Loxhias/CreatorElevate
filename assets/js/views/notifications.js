@@ -150,10 +150,13 @@ function renderContent(container, allProfiles, admins, managers, segments) {
 
             const res = await push.send({ title, body, url, target: finalTarget });
             
+            // Alerta de depuración para ver el resultado real
+            alert("Respuesta de OneSignal: " + JSON.stringify(res.result));
+
             if (res.result && res.result.errors) {
                 appState.showToast('OneSignal: ' + res.result.errors[0], 'warning');
             } else {
-                appState.showToast('¡Notificación enviada! ID: ' + (res.result?.id || 'ok'), 'success');
+                appState.showToast('¡Notificación enviada!', 'success');
                 container.querySelector('#msg-title').value = '';
                 container.querySelector('#msg-body').value = '';
             }
