@@ -148,11 +148,15 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                 finalTarget = { type: 'users', value: targetIds };
             }
 
-            await push.send({ title, body, url, target: finalTarget });
-            appState.showToast('Notificación enviada con éxito', 'success');
+            const res = await push.send({ title, body, url, target: finalTarget });
             
-            container.querySelector('#msg-title').value = '';
-            container.querySelector('#msg-body').value = '';
+            if (res.result && res.result.errors) {
+                appState.showToast('OneSignal: ' + res.result.errors[0], 'warning');
+            } else {
+                appState.showToast('¡Notificación enviada! ID: ' + (res.result?.id || 'ok'), 'success');
+                container.querySelector('#msg-title').value = '';
+                container.querySelector('#msg-body').value = '';
+            }
         } catch (e) {
             console.error(e);
             appState.showToast('Error al enviar: ' + e.message, 'danger');
