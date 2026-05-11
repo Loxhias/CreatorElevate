@@ -548,6 +548,14 @@ export async function renderCreatorsList(container) {
                     </select>
                 </div>
                 <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">TIPO</label>
+                    <select id="cr-filter-type" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos</option>
+                        <option value="new">Nuevos (≤ 30d) 🚀</option>
+                        <option value="old">Consolidados (> 30d)</option>
+                    </select>
+                </div>
+                <div>
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">ORDENAR POR</label>
                     <select id="cr-sort" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="diamonds">Diamantes ↓</option>
@@ -564,6 +572,7 @@ export async function renderCreatorsList(container) {
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
+            const isNew = c.daysSinceJoining != null && c.daysSinceJoining <= 30;
             const tier = getTier(c.diamonds);
             const managerProf = c.managerId ? store.getProfiles().find(p => p.id === c.managerId) : null;
             const managerName = managerProf?.display_name || managerProf?.email || c.manager || null;
@@ -575,7 +584,9 @@ export async function renderCreatorsList(container) {
                 <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.3s ease;" referrerpolicy="no-referrer" onload="this.style.opacity='1';">
             </div>
                 <div style="flex:1; min-width:0;">
-                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>
+                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        @${c.username} ${isNew ? '<span title="Creador Nuevo (≤ 30 días)" style="cursor:help;">🚀</span>' : ''}
+                    </div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
                         <span style="color:${daysColor};">${c.validDays}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
@@ -598,6 +609,7 @@ export async function renderCreatorsList(container) {
         const manager = container.querySelector('#cr-filter-manager').value;
         const level   = container.querySelector('#cr-filter-level').value;
         const days    = container.querySelector('#cr-filter-days').value;
+        const type    = container.querySelector('#cr-filter-type').value;
         const sort    = container.querySelector('#cr-sort').value;
 
         let list = data.filter(c => {
@@ -607,6 +619,8 @@ export async function renderCreatorsList(container) {
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
             if (days === '0'  && c.validDays > 0)   return false;
             if (days !== 'all' && days !== '0' && c.validDays < Number(days)) return false;
+            if (type === 'new' && (c.daysSinceJoining === null || c.daysSinceJoining > 30)) return false;
+            if (type === 'old' && c.daysSinceJoining !== null && c.daysSinceJoining <= 30) return false;
             return true;
         });
 
@@ -618,7 +632,7 @@ export async function renderCreatorsList(container) {
         container.querySelector('#cr-results').innerHTML = renderItems(list);
     };
 
-    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-sort'].forEach(sel => {
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-type', '#cr-sort'].forEach(sel => {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });
