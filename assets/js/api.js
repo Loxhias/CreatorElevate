@@ -160,6 +160,7 @@ function rowFromDb(r) {
         groupName:          r.group_name,
         manager:            r.manager_name_legacy || null,
         managerId:          r.manager_id || null,
+        daysSinceJoining:   r.days_since_joining != null ? Number(r.days_since_joining) : null,
     };
 }
 
@@ -226,6 +227,7 @@ export const metrics = {
             statusActive:      san(r.statusActive) || null,
             groupName:         san(r.groupName) || null,
             manager:           san(r.manager || r.managerName) || null,
+            daysSinceJoining:  r.daysSinceJoining != null ? Number(r.daysSinceJoining) : null,
         })).filter(r => r.username);
 
         console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: payload.length, firstRow: payload[0] });

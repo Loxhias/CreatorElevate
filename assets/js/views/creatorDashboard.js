@@ -53,25 +53,31 @@ function getRanking(me, data) {
     return { pos, total: data.length, pct: Math.round((pos/data.length)*100) };
 }
 function pBar(val, max, color='linear-gradient(90deg,var(--primary),var(--secondary))', leftLabel=null, rightLabel=null) {
-    const p = Math.min(100, max > 0 ? (val / max) * 100 : 0);
-    const pDisplay = Math.min(98, p); // visual cap so dot stays inside
-    // Extract the end color from gradient for the dot glow
-    const dotColorMatch = color.match(/,([^)]+)\)$/);
+    const p     = Math.min(100, max > 0 ? (val / max) * 100 : 0);
+    const pFill = Math.min(98, p);
+    const dotColorMatch = color.match(/,(#[0-9a-f]{3,8}|rgba?\([^)]+\)|var\([^)]+\))\s*\)$/i);
     const dotColor = dotColorMatch ? dotColorMatch[1].trim() : 'var(--primary)';
     const lLabel = leftLabel ?? fmt(val);
     const rLabel = rightLabel ?? fmt(max);
+
     return `
         <div style="margin:0.5rem 0 0.25rem;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
                 <span style="font-size:0.68rem;color:var(--text-muted);">${lLabel}</span>
                 <span style="font-size:0.68rem;font-weight:700;color:var(--primary-light);">${p.toFixed(0)}%</span>
             </div>
-            <div style="height:6px;border-radius:999px;background:rgba(255,255,255,0.08);position:relative;overflow:visible;">
-                <div style="height:100%;width:${pDisplay}%;background:${color};border-radius:999px;position:relative;transition:width 0.5s ease;">
-                    <div style="position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:11px;height:11px;border-radius:50%;background:${dotColor};border:2px solid #0e0e14;box-shadow:0 0 7px ${dotColor};"></div>
+            <!-- Track: padding lateral da espacio al dot sin clipear -->
+            <div style="position:relative;padding:4px 6px;">
+                <div style="height:6px;border-radius:999px;background:rgba(255,255,255,0.08);position:relative;">
+                    <!-- Fill con shimmer contenido -->
+                    <div style="height:100%;width:${pFill}%;background:${color};border-radius:999px;overflow:hidden;position:relative;transition:width 0.6s cubic-bezier(0.4,0,0.2,1);">
+                        <div style="position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.28),transparent);animation:pbar-shine 2.4s ease-in-out infinite;border-radius:999px;"></div>
+                    </div>
+                    <!-- Dot fuera del fill para evitar clipping -->
+                    ${p > 0 ? `<div style="position:absolute;top:50%;left:calc(${pFill}% - 5px);width:11px;height:11px;border-radius:50%;background:${dotColor};border:2px solid #0a0b0f;box-shadow:0 0 8px ${dotColor};animation:dot-glow 2s ease-in-out infinite;transform:translateY(-50%);"></div>` : ''}
                 </div>
             </div>
-            <div style="text-align:right;margin-top:0.35rem;">
+            <div style="text-align:right;margin-top:0.1rem;">
                 <span style="font-size:0.65rem;color:var(--text-muted);">${rLabel}</span>
             </div>
         </div>`;
@@ -550,6 +556,110 @@ function tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, tr
         </div>`;
 }
 
+// ── Missions tab (new creators ≤ 30 days, with grace period) ──────────────
+function tabMissions(me) {
+    const m1 = me.validDays >= 5;
+    const m2 = me.battles   >= 10;
+    const m3 = me.diamonds  >= 20000;
+    const allDone = m1 && m2 && m3;
+
+    function mRow(icon, label, barVal, barMax, done, lLabel, rLabel) {
+        return `
+            <div class="glass-panel" style="margin-bottom:0.75rem;padding:1rem 1.1rem;${done ? 'border-color:rgba(0,217,166,0.35);background:rgba(0,217,166,0.04);' : ''}">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                    <div style="width:34px;height:34px;border-radius:50%;background:${done ? 'rgba(0,217,166,0.15)' : 'rgba(255,255,255,0.05)'};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">${done ? '✅' : icon}</div>
+                    <div style="flex:1;font-weight:700;font-size:0.88rem;">${label}</div>
+                    ${done ? `<span style="font-size:0.68rem;background:rgba(0,217,166,0.15);color:var(--accent);border-radius:999px;padding:0.2rem 0.65rem;font-weight:700;flex-shrink:0;">✓ Lista</span>` : ''}
+                </div>
+                ${pBar(barVal, barMax,
+                    done ? 'linear-gradient(90deg,var(--primary),var(--accent))' : 'linear-gradient(90deg,var(--primary),var(--secondary))',
+                    lLabel, rLabel)}
+            </div>`;
+    }
+
+    return `
+        <div style="margin-bottom:1rem;">
+            <div style="font-size:1rem;font-weight:800;margin-bottom:0.2rem;">🚀 Misiones del Mes</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">Completa los 3 retos para ganar la Insignia Galaxy. Se restablecen con cada reporte mensual.</div>
+        </div>
+
+        ${allDone ? `
+        <div style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.2rem;background:linear-gradient(135deg,rgba(124,110,247,0.15),rgba(0,217,166,0.1));border:1px solid rgba(124,110,247,0.3);border-radius:var(--radius-md);margin-bottom:1rem;">
+            <div style="font-size:2.2rem;">🌌</div>
+            <div>
+                <div style="font-weight:800;font-size:1.05rem;background:linear-gradient(135deg,var(--primary-light),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">¡Insignia Galaxy desbloqueada!</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">Completaste las 3 misiones del mes. ¡Eres una estrella del equipo!</div>
+            </div>
+        </div>` : ''}
+
+        ${mRow('📅', 'Días de transmisión activos', Math.min(me.validDays, 5), 5, m1, `${me.validDays} días`, '5 días')}
+        ${mRow('⚔️', 'Partidas / PKs este mes',    Math.min(me.battles, 10),   10, m2, `${me.battles}`,       '10')}
+        ${mRow('💎', 'Diamantes acumulados',         Math.min(me.diamonds, 20000), 20000, m3, fmt(me.diamonds), fmt(20000))}
+
+        ${!allDone ? `
+        <div style="padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(124,110,247,0.4);margin-top:0.25rem;">
+            <p style="font-size:0.73rem;color:var(--text-muted);">Las misiones se renuevan con cada reporte mensual. ¡Completa las 3 para desbloquear la Insignia Galaxy 🌌!</p>
+        </div>` : ''}`;
+}
+
+// ── Reto 90 días (growing creators 30-90 days) ─────────────────────────────
+function tabChallenge90(me, h, dy) {
+    const c1 = me.diamonds >= 80000;
+    const c2 = me.battles  >= 100;
+    const c3 = dy          >= 22;
+    const c4 = h           >= 90;
+    const allDone = c1 && c2 && c3 && c4;
+    const completedCount = [c1, c2, c3, c4].filter(Boolean).length;
+
+    function cRow(icon, label, barVal, barMax, done, lLabel, rLabel) {
+        return `
+            <div class="glass-panel" style="margin-bottom:0.75rem;padding:1rem 1.1rem;${done ? 'border-color:rgba(255,181,71,0.35);background:rgba(255,181,71,0.04);' : ''}">
+                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+                    <div style="width:34px;height:34px;border-radius:50%;background:${done ? 'rgba(255,181,71,0.15)' : 'rgba(255,255,255,0.05)'};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;">${done ? '✅' : icon}</div>
+                    <div style="flex:1;font-weight:700;font-size:0.88rem;">${label}</div>
+                    ${done ? `<span style="font-size:0.68rem;background:rgba(255,181,71,0.15);color:var(--warning);border-radius:999px;padding:0.2rem 0.65rem;font-weight:700;flex-shrink:0;">✓ Logrado</span>` : ''}
+                </div>
+                ${pBar(barVal, barMax,
+                    done ? 'linear-gradient(90deg,var(--warning),#f97316)' : 'linear-gradient(90deg,rgba(255,181,71,0.55),var(--warning))',
+                    lLabel, rLabel)}
+            </div>`;
+    }
+
+    return `
+        <div style="margin-bottom:1rem;">
+            <div style="font-size:1rem;font-weight:800;margin-bottom:0.2rem;">🏆 Reto de 90 Días</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">Alcanza los 4 objetivos para convertirte en Creador Maduro del equipo.</div>
+        </div>
+
+        <!-- Progress overview -->
+        <div class="glass-panel" style="padding:0.85rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+            <div>
+                <div style="font-size:0.68rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Progreso general</div>
+                <div style="font-size:1.3rem;font-weight:800;color:${allDone ? 'var(--warning)' : 'var(--text-primary)'};">${completedCount} / 4 objetivos</div>
+            </div>
+            <div style="font-size:1.8rem;">${allDone ? '🏆' : completedCount >= 3 ? '🔥' : completedCount >= 2 ? '💪' : '⚡'}</div>
+        </div>
+
+        ${allDone ? `
+        <div style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.2rem;background:linear-gradient(135deg,rgba(255,181,71,0.12),rgba(244,113,181,0.06));border:1px solid rgba(255,181,71,0.4);border-radius:var(--radius-md);margin-bottom:1rem;">
+            <div style="font-size:2.2rem;">🏆</div>
+            <div>
+                <div style="font-weight:800;font-size:1.05rem;color:var(--warning);">¡Creador Maduro!</div>
+                <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">Superaste el reto de 90 días y eres parte del equipo consolidado de la agencia.</div>
+            </div>
+        </div>` : ''}
+
+        ${cRow('💎', 'Diamantes acumulados',          Math.min(me.diamonds, 80000), 80000, c1, fmt(me.diamonds)+' 💎', fmt(80000)+' 💎')}
+        ${cRow('⚔️', 'Partidas / PKs mensuales',       Math.min(me.battles, 100),   100,   c2, me.battles+' partidas', '100 partidas')}
+        ${cRow('📅', 'Días válidos de transmisión',    Math.min(dy, 22),             22,    c3, dy+' días',             '22 días')}
+        ${cRow('⏱️', 'Horas de LIVE',                  Math.min(h, 90),              90,    c4, h.toFixed(1)+'h',       '90h')}
+
+        ${!allDone ? `
+        <div style="padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(255,181,71,0.4);margin-top:0.25rem;">
+            <p style="font-size:0.73rem;color:var(--text-muted);">Supera los 4 objetivos en un mismo mes para obtener el estatus de <strong style="color:var(--warning);">Creador Maduro</strong> 🏆</p>
+        </div>` : ''}`;
+}
+
 // ── Main render ────────────────────────────────────────────────────────────
 
 export async function renderCreatorDashboard(container, targetUsername = null) {
@@ -650,6 +760,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const dLeft = daysLeft();
     const rank  = getRanking(me, data);
 
+    // Determine which special tab to show (mutually exclusive)
+    const daysJoined    = me.daysSinceJoining ?? null;
+    const showMissions  = daysJoined !== null && daysJoined <= 30 + dLeft;
+    const showChallenge = daysJoined !== null && !showMissions && daysJoined <= 90;
+
     // Estimated earnings: $1 per 200 diamonds
     const DIAMONDS_PER_USD = 200;
     const estimatedEarnings = (me.diamonds / DIAMONDS_PER_USD).toFixed(2);
@@ -698,10 +813,12 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         </div>
 
         <!-- Tab Nav -->
-        <div id="creator-tabs" style="display:flex;gap:0.4rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;">
-            <button class="tab-btn active" data-tab="metrics"  style="flex:1;">📊 Métricas</button>
-            <button class="tab-btn"        data-tab="goals"    style="flex:1;">🎯 Objetivos</button>
-            <button class="tab-btn"        data-tab="benefits" style="flex:1;">🎁 Beneficios</button>
+        <div id="creator-tabs" style="display:flex;gap:0.4rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+            <button class="tab-btn active" data-tab="metrics"  style="flex:1;white-space:nowrap;">📊 Métricas</button>
+            <button class="tab-btn"        data-tab="goals"    style="flex:1;white-space:nowrap;">🎯 Objetivos</button>
+            <button class="tab-btn"        data-tab="benefits" style="flex:1;white-space:nowrap;">🎁 Beneficios</button>
+            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex:1;white-space:nowrap;">🚀 Misiones</button>` : ''}
+            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex:1;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
         </div>
 
         <!-- Tab Content -->
@@ -723,12 +840,13 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             }
             .tab-btn:hover { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
             .tab-btn.active { background: var(--bg-elevated, #141720); color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            #creator-tabs::-webkit-scrollbar { display: none; }
         `;
         document.head.appendChild(s);
     }
 
     const tabContent = container.querySelector('#tab-content');
-    const tabs = { metrics: null, goals: null, benefits: null };
+    const tabs = { metrics: null, goals: null, benefits: null, missions: null, challenge: null };
 
     // ── Last month benefit calculation ────────────────────────────────────
     // We only have dLast from the data; hours/days from last month aren't in the file.
@@ -774,9 +892,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     function renderTab(name) {
         if (!tabs[name]) {
-            if (name === 'metrics')  tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
-            if (name === 'goals')    tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status);
-            if (name === 'benefits') tabs[name] = tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
+            if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
+            if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status);
+            if (name === 'benefits')  tabs[name] = tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
+            if (name === 'missions')  tabs[name] = tabMissions(me);
+            if (name === 'challenge') tabs[name] = tabChallenge90(me, h, dy);
         }
         tabContent.innerHTML = `<div class="animate-fade-in">${tabs[name]}</div>`;
     }

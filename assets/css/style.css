@@ -7,14 +7,24 @@
 :root {
     --bg-base: #080a12;
     --bg-surface: #0e1117;
+    --bg-elevated: #141720;
     --primary: #7c6ef7;
+    --primary-light: #a89cf7;
+    --secondary: #f471b5;
     --accent: #00d9a6;
     --danger: #ff5569;
+    --warning: #ffb547;
+    --gold: #f5a623;
     --text-primary: #f0f2ff;
     --text-secondary: #8b92b8;
+    --text-muted: #5a6082;
     --glass-bg: rgba(255, 255, 255, 0.03);
     --glass-border: rgba(255, 255, 255, 0.08);
     --radius: 12px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --font-sans: 'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Plus Jakarta Sans', sans-serif;
 }
 
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -185,6 +195,16 @@ body {
     h2 { font-size: 1.15rem !important; }
 }
 
+/* ---- Progress Bars ---- */
+@keyframes pbar-shine {
+    0%   { transform: translateX(-150%); }
+    100% { transform: translateX(300%); }
+}
+@keyframes dot-glow {
+    0%, 100% { opacity: 1;    transform: translateY(-50%) scale(1);    }
+    50%       { opacity: 0.8; transform: translateY(-50%) scale(1.25); }
+}
+
 /* ---- Skeleton Loader ---- */
 @keyframes skel-pulse {
     0%, 100% { opacity: 0.35; }
@@ -208,3 +228,58 @@ body {
 .toast-msg.success { border-color:var(--accent); }
 .toast-msg.danger  { border-color:var(--danger); }
 .toast-msg.warning { border-color:#f59e0b; }
+
+/* ---- Utility Classes ---- */
+.text-xs { font-size: 0.73rem; }
+.text-sm { font-size: 0.83rem; }
+.text-muted { color: var(--text-muted); }
+.fw-700 { font-weight: 700; }
+.mt-1 { margin-top: 0.5rem; }
+.text-gradient {
+    background: linear-gradient(135deg, var(--primary-light), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.animate-fade-in { animation: fadeIn 0.3s ease; }
+
+/* ---- Input Group ---- */
+.input-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+.input-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+
+/* ---- Progress Track ---- */
+.progress-track { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+
+/* ---- Metric Cards (Creator Dashboard) ---- */
+.metric-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+}
+.metric-left { flex: 1; min-width: 0; }
+.metric-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.3rem; }
+.metric-value { font-size: 1.8rem; font-weight: 900; line-height: 1.1; display: block; }
+.metric-value.sm { font-size: 1.3rem; }
+.metric-subtitle { font-size: 0.72rem; margin-top: 0.3rem; }
+.metric-icon-box { width: 48px; height: 48px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+
+/* ---- Section Cards (Creator Dashboard Goals) ---- */
+.section-card { padding: 1.1rem 1.2rem; }
+.section-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+.section-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; background: rgba(255,255,255,0.06); flex-shrink: 0; }
+
+/* ---- Level Badge ---- */
+.level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(124,110,247,0.12);
+    border: 1px solid rgba(124,110,247,0.25);
+    color: var(--primary-light);
+}

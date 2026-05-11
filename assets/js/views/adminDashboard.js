@@ -84,6 +84,7 @@ function normalizeRow(row) {
     };
     const username = String(find(['Nombre de usuario del creador', 'username']) || '').trim().replace(/^@/, '');
     if (!username) return null;
+    const rawDays = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining']);
     return {
         username,
         diamonds: Number(find(['Diamonds', 'Diamantes']) || 0),
@@ -91,6 +92,7 @@ function normalizeRow(row) {
         liveSeconds: parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE'])),
         validDays: Number(find(['Días válidos', 'Valid Days']) || 0),
         emisionesLive: Number(find(['Emisiones LIVE', 'Total LIVE Emissions']) || 0),
+        daysSinceJoining: rawDays != null && !isNaN(Number(rawDays)) ? Number(rawDays) : null,
     };
 }
 
