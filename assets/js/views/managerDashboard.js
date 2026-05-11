@@ -43,12 +43,11 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
 
     if (isSupabaseConfigured && activeManagerId) {
         try {
-            // 1) Obtener por username desde creator_metrics (Asignación manual/Excel)
-            const usernames = await profiles.getCreatorsByManager(activeManagerId);
+            const [usernames, list] = await Promise.all([
+                profiles.getCreatorsByManager(activeManagerId),
+                profiles.listCreatorsForManager(activeManagerId),
+            ]);
             usernames.forEach(u => myCreatorUsernames.add(u.toLowerCase()));
-            
-            // 2) Obtener por profile ID (Asignación tradicional/cuentas registradas)
-            const list = await profiles.listCreatorsForManager(activeManagerId);
             list.forEach(c => c.tiktok_username && myCreatorUsernames.add(c.tiktok_username.toLowerCase()));
         } catch (e) { console.warn('Error fetching group:', e); }
     } else if (!isSupabaseConfigured) {

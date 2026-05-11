@@ -344,14 +344,12 @@ async function renderGroupEditor(container, managerId) {
     const allProfs = store.getProfiles();
     const manager = allProfs.find(p => p.id === managerId) || { display_name: 'Manager' };
     
-    // Obtener creadores asignados a este manager desde creator_metrics
-    const assignedUsernames = await profiles.getCreatorsByManager(managerId);
-    
-    // Todos los creadores del Excel
     const metricsData = store.getMetricsData() || [];
-    
-    // Obtener TODOS los usernames asignados a CUALQUIER manager (Optimizado)
-    const allTakenUsernames = await profiles.getAllAssignedUsernames();
+
+    const [assignedUsernames, allTakenUsernames] = await Promise.all([
+        profiles.getCreatorsByManager(managerId),
+        profiles.getAllAssignedUsernames(),
+    ]);
     
     // Miembros de este manager
     const myGroup = metricsData.filter(c => assignedUsernames.includes(c.username.toLowerCase()));

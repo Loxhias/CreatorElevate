@@ -99,8 +99,11 @@ export const store = {
     /** Recarga el perfil (ej. tras login). */
     async refreshProfile() {
         if (!isSupabaseConfigured) return;
-        state.profile = await auth.getProfile();
-        const session = await auth.getSession();
+        const [profile, session] = await Promise.all([
+            auth.getProfile(),
+            auth.getSession(),
+        ]);
+        state.profile  = profile;
         state.sessionUser = session?.user || null;
     },
 

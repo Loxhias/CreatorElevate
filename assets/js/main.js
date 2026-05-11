@@ -56,6 +56,25 @@ function getNavItems(role) {
     return items;
 }
 
+async function safeRender(fn, container) {
+    try {
+        await fn(container);
+    } catch (err) {
+        console.error('[safeRender]', err);
+        container.innerHTML = `
+            <div style="padding:3rem; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1.2rem;">
+                <div style="font-size:2rem;">⚠️</div>
+                <p style="color:var(--danger); font-weight:700;">No se pudo conectar</p>
+                <p style="color:var(--text-secondary); font-size:0.85rem; max-width:300px;">
+                    ${err?.message?.includes('abort') || err?.message?.includes('connect')
+                        ? 'Sin conexión con el servidor. Verifica tu internet e inténtalo de nuevo.'
+                        : 'Ocurrió un error inesperado al cargar este panel.'}
+                </p>
+                <button class="btn btn-primary" onclick="location.reload()">🔄 Reintentar</button>
+            </div>`;
+    }
+}
+
 function renderDashboardLayout(container, renderContentFn, role) {
     const user = store.getCurrentUser();
     const navItems = getNavItems(role);
@@ -111,7 +130,7 @@ function renderDashboardLayout(container, renderContentFn, role) {
     `;
 
     const contentArea = container.querySelector('#dashboard-content');
-    renderContentFn(contentArea);
+    safeRender(renderContentFn, contentArea);
 
     // Eventos de Instalación
     container.querySelectorAll('.btn-pwa-install').forEach(btn => {
@@ -129,14 +148,14 @@ function renderDashboardLayout(container, renderContentFn, role) {
             
             container.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
             
-            if (view === 'inicio') renderContentFn(contentArea);
+            if (view === 'inicio') safeRender(renderContentFn, contentArea);
             else if (view === 'normas') renderNormas(contentArea);
             else if (view === 'canales') renderCanales(contentArea);
-            else if (view === 'creadores') renderCreatorsList(contentArea);
+            else if (view === 'creadores') safeRender(renderCreatorsList, contentArea);
             else if (view === 'notificaciones') {
-                import('./views/notifications.js').then(m => m.renderNotificationsView(contentArea));
+                import('./views/notifications.js').then(m => safeRender(m.renderNotificationsView, contentArea));
             }
-            else if (view === 'perfil') renderProfile(contentArea);
+            else if (view === 'perfil') safeRender(renderProfile, contentArea);
         };
     });
 

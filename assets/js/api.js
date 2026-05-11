@@ -5,6 +5,9 @@
 import { supabase, isSupabaseConfigured } from './supabase.js';
 import { preloadedData } from './data.js';
 
+// Elimina surrogates solitarios de UTF-16 que producen JSON inválido en UTF-8
+const san = (s) => typeof s === 'string' ? s.replace(/[\uD800-\uDFFF]/g, '') : s;
+
 // ────────────────────────────────────────────────────────────────────────────
 //  AUTH
 // ────────────────────────────────────────────────────────────────────────────
@@ -207,10 +210,10 @@ export const metrics = {
     async upsertPeriod(periodDate, label, rows) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
         const payload = rows.map(r => ({
-            username:          String(r.username || '').trim().replace(/^@/, ''),
+            username:          san(String(r.username || '').trim().replace(/^@/, '')),
             diamonds:          Number(r.diamonds || 0),
             diamondsLastMonth: Number(r.diamondsLastMonth || 0),
-            liveDuration:      r.liveDuration || '0s',
+            liveDuration:      san(r.liveDuration || '0s'),
             liveSeconds:       Number(r.liveSeconds || 0),
             validDays:         Number(r.validDays || 0),
             newFollowers:      Number(r.newFollowers || 0),
@@ -218,11 +221,11 @@ export const metrics = {
             battles:           Number(r.battles || 0),
             battleDiamonds:    Number(r.battleDiamonds || 0),
             multiGuestDiamonds: Number(r.multiGuestDiamonds || 0),
-            statusGraduation:  r.statusGraduation || null,
-            statusRank:        r.statusRank || null,
-            statusActive:      r.statusActive || null,
-            groupName:         r.groupName || null,
-            manager:           r.manager || r.managerName || null,
+            statusGraduation:  san(r.statusGraduation) || null,
+            statusRank:        san(r.statusRank) || null,
+            statusActive:      san(r.statusActive) || null,
+            groupName:         san(r.groupName) || null,
+            manager:           san(r.manager || r.managerName) || null,
         })).filter(r => r.username);
 
         console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: payload.length, firstRow: payload[0] });
@@ -392,7 +395,7 @@ export const push = {
         const response = await fetch('/api/send-push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, body, url, target }),
+            body: JSON.stringify({ title: san(title), body: san(body), url: san(url), target }),
         });
 
         let payload = null;
