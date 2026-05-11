@@ -238,7 +238,7 @@ async function boot() {
     await store.init().catch(console.warn);
 
     auth.onAuthChange(async (session) => {
-        const isRecovery = window.location.hash.includes('type=recovery');
+        const isRecovery = window.location.href.includes('type=recovery');
 
         if (!session) {
             await store.clear();
@@ -261,7 +261,7 @@ async function boot() {
     if (profile) identifyOneSignalUser(profile);
 
     const user = store.getCurrentUser();
-    const isRecovery = window.location.hash.includes('type=recovery');
+    const isRecovery = window.location.href.includes('type=recovery');
     appState.navigate(user && !isRecovery ? user.role : 'login');
 }
 

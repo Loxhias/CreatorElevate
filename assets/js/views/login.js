@@ -269,11 +269,12 @@ export function renderLogin(container) {
         });
     }
 
-    // Detección de flujo de recuperación
-    const hash = window.location.hash;
-    if (hash && hash.includes('type=recovery')) {
+    // Detección de flujo de recuperación (Hash o Query)
+    const isRecovery = window.location.href.includes('type=recovery');
+    if (isRecovery) {
         renderRecoverPassword();
-        container.querySelector('#login-tabs').style.display = 'none'; // Ocultar tabs durante recuperación
+        const tabs = container.querySelector('#login-tabs');
+        if (tabs) tabs.style.display = 'none'; // Ocultar tabs durante recuperación
     } else {
         renderSignIn();
     }
