@@ -669,14 +669,15 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         <div style="display:flex;align-items:center;gap:0.85rem;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-md);border:1px solid rgba(255,255,255,0.07);">
             <div id="creator-avatar" style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:800;flex-shrink:0;border:2px solid rgba(0,217,166,0.3);overflow:hidden;position:relative;">
                 <span id="creator-avatar-initial" style="position:absolute;">${me.username ? me.username.charAt(0).toUpperCase() : '?'}</span>
-                <img
-                    id="creator-avatar-img"
-                    src="https://unavatar.io/tiktok/${encodeURIComponent(me.username)}"
-                    alt="@${me.username}"
-                    style="width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.3s ease;"
-                    onload="this.style.opacity='1';document.getElementById('creator-avatar-initial').style.opacity='0';"
-                    onerror="this.style.display='none';"
-                />
+                    <img
+                        id="creator-avatar-img"
+                        src="https://unavatar.io/tiktok/${encodeURIComponent(me.username)}"
+                        alt="@${me.username}"
+                        style="width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.3s ease;"
+                        referrerpolicy="no-referrer"
+                        onload="this.style.opacity='1';document.getElementById('creator-avatar-initial').style.opacity='0';"
+                        onerror="this.style.display='none';"
+                    />
             </div>
             <div>
                 <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);">@${me.username}</div>

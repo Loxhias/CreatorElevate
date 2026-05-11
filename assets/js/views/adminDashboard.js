@@ -82,7 +82,7 @@ function normalizeRow(row) {
         const found = entries.find(([k]) => kws.some(kw => k.toLowerCase().trim().includes(kw.toLowerCase())));
         return found ? found[1] : null;
     };
-    const username = String(find(['Nombre de usuario del creador', 'username']) || '').trim().replace(/^@/, '').toLowerCase();
+    const username = String(find(['Nombre de usuario del creador', 'username']) || '').trim().replace(/^@/, '');
     if (!username) return null;
     return {
         username,
@@ -376,7 +376,7 @@ async function renderGroupEditor(container, managerId) {
                                 <div style="display:flex; align-items:center; gap:0.6rem;">
                                     <div style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
                                         <span style="font-size:0.7rem; position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
-                                        <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.2s ease;" onload="this.style.opacity='1';">
+                                        <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.2s ease;" referrerpolicy="no-referrer" onload="this.style.opacity='1';">
                                     </div>
                                     <div>
                                         <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
@@ -431,7 +431,7 @@ function renderAvailableCreators(list) {
             <div style="display:flex; align-items:center; gap:0.6rem;">
                 <div style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
                     <span style="font-size:0.7rem; position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
-                    <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.2s ease;" onload="this.style.opacity='1';">
+                    <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.2s ease;" referrerpolicy="no-referrer" onload="this.style.opacity='1';">
                 </div>
                 <div>
                     <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
@@ -550,7 +550,7 @@ export async function renderCreatorsList(container) {
             <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
             <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
                 <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
-                <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.3s ease;" onload="this.style.opacity='1';">
+                <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.3s ease;" referrerpolicy="no-referrer" onload="this.style.opacity='1';">
             </div>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>

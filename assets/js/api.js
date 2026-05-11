@@ -68,7 +68,7 @@ export const auth = {
     /** Registro de creator: tiktok_username obligatorio + email + password */
     async signUpCreator({ tiktokUsername, email, password, displayName }) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
-        const username = String(tiktokUsername || '').trim().toLowerCase().replace(/^@/, '');
+        const username = String(tiktokUsername || '').trim().replace(/^@/, '');
         if (!username)         throw new Error('El usuario de TikTok es obligatorio.');
         if (!/^[a-z0-9._]+$/i.test(username))
             throw new Error('El usuario de TikTok solo puede contener letras, números, "." y "_".');
@@ -193,7 +193,7 @@ export const metrics = {
     async upsertPeriod(periodDate, label, rows) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
         const payload = rows.map(r => ({
-            username:          String(r.username || '').trim().toLowerCase().replace(/^@/, ''),
+            username:          String(r.username || '').trim().replace(/^@/, ''),
             diamonds:          Number(r.diamonds || 0),
             diamondsLastMonth: Number(r.diamondsLastMonth || 0),
             liveDuration:      r.liveDuration || '0s',
