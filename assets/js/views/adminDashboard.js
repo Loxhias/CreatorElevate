@@ -76,105 +76,97 @@ function parseLiveSeconds(str) {
     return h * 3600 + m * 60 + sec;
 }
 
-function normalizeRow(row) {
-    const entries = Object.entries(row);
+// Nombres exactos de columnas del Excel de TikTok (en español)
+const EXCEL_COLUMNS = {
+    username:           'Nombre de usuario del creador',
+    groupName:          'Grupo',
+    manager:            'Agente',
+    daysSinceJoining:   'Días desde la incorporación',
+    diamonds:           'Diamantes',
+    liveDuration:       'Duración de LIVE',
+    validDays:          'Días válidos de emisiones LIVE',
+    newFollowers:       'Nuevos seguidores',
+    emisionesLive:      'Emisiones LIVE',
+    diamondsLastMonth:  'Diamantes en el último mes',
+    battles:            'Partidas',
+    battleDiamonds:     'Diamantes de partidas',
+    multiGuestDiamonds: 'Diamantes del modo de varios invitados',
+    statusGraduation:   'Estado de graduación',
+    statusRank:         'Estado del rango',
+    statusActive:       'Estado',
+};
 
-    // norm: NFC + minúsculas + normaliza TODOS los tipos de espacio (no-break U+00A0,
-    // thin U+2009, zero-width U+200B, etc.) a espacio normal, y colapsa múltiples espacios.
-    const norm = (s) => String(s)
+function normalizeRow(row) {
+    // Normaliza una cadena: NFC, minúsculas, espacios no-break → espacio, colapsa espacios
+    const nc = (s) => String(s)
         .normalize('NFC')
         .toLowerCase()
-        .replace(/[   ​‌‍ ⁠﻿]/g, ' ')
+        .replace(/[ ​‌‍   ⁠﻿]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
-    // strip: elimina acentos/diacríticos (fallback máximo)
-    const strip = (s) => norm(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
-
-    // findEntry devuelve [key, value] para poder logear qué columna matcheó
-    const findEntry = (kws) => {
-        let e = entries.find(([k]) => kws.some(kw => norm(k).includes(norm(kw))));
-        if (!e) e = entries.find(([k]) => kws.some(kw => strip(k).includes(strip(kw))));
-        return e || null;
+    // Busca el valor de una columna: primero propiedad directa, luego comparación normalizada
+    const get = (colName) => {
+        if (Object.prototype.hasOwnProperty.call(row, colName)) return row[colName];
+        const target = nc(colName);
+        for (const [k, v] of Object.entries(row)) {
+            if (nc(k) === target) return v;
+        }
+        return null;
     };
-    const find = (kws) => { const e = findEntry(kws); return e ? e[1] : null; };
 
-    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User', 'Creator username', 'Nombre usuario']) || '').trim().replace(/^@/, '');
+    const username = String(get(EXCEL_COLUMNS.username) || '').trim().replace(/^@/, '');
     if (!username) return null;
 
     const now = new Date();
     const safeInt = (val, max = 2147483647) => {
         if (val == null || val === '') return 0;
-        let n = parseInt(String(val).replace(/[^\d]/g, ''));
-        if (isNaN(n)) return 0;
-        if (n > 2000000000000) {
+        const parsed = parseInt(String(val).replace(/[^\d]/g, ''));
+        if (isNaN(parsed)) return 0;
+        if (parsed > 2000000000000) {
             try {
-                const s = String(n);
-                const year  = parseInt(s.substring(0, 4));
-                const month = parseInt(s.substring(4, 6)) - 1;
-                const day   = parseInt(s.substring(6, 8));
-                const date  = new Date(year, month, day);
-                if (!isNaN(date.getTime())) {
-                    const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-                    return (diff > 0 && diff < 10000) ? diff : 0;
+                const s = String(parsed);
+                const d = new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
+                if (!isNaN(d.getTime())) {
+                    const diff = Math.floor((now - d) / 86400000);
+                    return diff > 0 && diff < 10000 ? diff : 0;
                 }
-            } catch (e) {}
+            } catch (_) {}
             return 0;
         }
-        return (n < max) ? n : 0;
+        return parsed < max ? parsed : 0;
     };
 
-    const rawDaysValue = find([
-        'Días desde la incorporación', 'Days since joining', 'days_since_joining',
-        'Antigüedad', 'Días de registro', 'Días en la agencia',
-        'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma',
-    ]);
-
-    const validDaysKws = [
-        'Días válidos de emisiones LIVE',
-        'Valid Live Days', 'Días válidos', 'Valid Days', 'valid days',
-        'Días LIVE válidos', 'Días válidos de LIVE', 'días válidos de live',
-        'días de live válidos', 'días activos válidos', 'días activos de live',
-        'active live days', 'valid live days', 'días válidos de transmisión',
-    ];
-    const validDaysEntry = findEntry(validDaysKws);
-
-    // ── Diagnóstico: solo se ejecuta para la PRIMERA fila de cada carga ──────
     if (!normalizeRow._diagDone) {
         normalizeRow._diagDone = true;
-        const emisKws = ['Emisiones LIVE', 'Total LIVE Emissions', 'Emisiones en vivo', 'LIVE sessions'];
-        const emisEntry = findEntry(emisKws);
-        console.group(`🔍 [normalizeRow] Diagnóstico de columnas — @${username}`);
-        if (validDaysEntry) {
-            console.log('✅ validDays  →  columna: "' + validDaysEntry[0] + '"  →  valor: ' + validDaysEntry[1]);
-        } else {
-            console.warn('❌ validDays  →  NINGUNA columna matcheó');
-            console.warn('   Keywords usadas:', validDaysKws);
-            console.warn('   Columnas del Excel:', entries.map(([k]) => '"' + k + '"').join(', '));
-        }
-        if (emisEntry) {
-            console.log('ℹ emisionesLive  →  columna: "' + emisEntry[0] + '"  →  valor: ' + emisEntry[1]);
-        }
+        console.group(`🔍 [normalizeRow] @${username} — valores leídos del Excel`);
+        Object.entries(EXCEL_COLUMNS).forEach(([field, col]) => {
+            const val = get(col);
+            console.log(`  ${field.padEnd(20)} ← "${col}" = ${JSON.stringify(val)}`);
+        });
         console.groupEnd();
     }
 
+    const rawDays = get(EXCEL_COLUMNS.daysSinceJoining);
+
     return {
         username,
-        diamonds:           Number(find(['Diamonds', 'Diamantes este mes', 'Diamantes (actual)', 'Diamantes']) || 0),
-        diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)', 'Diamantes mes anterior']) || 0),
-        liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE', 'Live Duration', 'Duración LIVE']) || '0s'),
-        liveSeconds:        safeInt(parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE', 'Live Duration', 'Duración LIVE'])), 1000000),
-        validDays:          safeInt(validDaysEntry ? validDaysEntry[1] : null, 32),
-        emisionesLive:      safeInt(find(['Emisiones LIVE', 'Total LIVE Emissions', 'Emisiones en vivo', 'LIVE sessions']), 5000),
-        battles:            safeInt(find(['Batallas', 'Battles', 'Partidas', 'PKs', 'PK']), 10000),
-        battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds', 'Diamantes batalla']) || 0),
-        multiGuestDiamonds: Number(find(['Diamantes de invitados múltiples', 'Multi-guest diamonds', 'Multi-guest', 'Multiinvitado']) || 0),
-        statusGraduation:   String(find(['Estado de graduación', 'Graduation status', 'Estado graduación']) || ''),
-        statusRank:         String(find(['Rango', 'Rank', 'Status Rank']) || ''),
-        statusActive:       String(find(['Activo', 'Status Active', 'Estado activo']) || ''),
-        groupName:          String(find(['Nombre del grupo', 'Group name', 'Grupo']) || ''),
-        manager:            String(find(['Manager', 'Manager name', 'Gestor']) || ''),
-        daysSinceJoining:   rawDaysValue != null && rawDaysValue !== '' ? safeInt(rawDaysValue, 10000) : null,
+        diamonds:           Number(get(EXCEL_COLUMNS.diamonds) || 0),
+        diamondsLastMonth:  Number(get(EXCEL_COLUMNS.diamondsLastMonth) || 0),
+        liveDuration:       String(get(EXCEL_COLUMNS.liveDuration) || '0s'),
+        liveSeconds:        safeInt(parseLiveSeconds(get(EXCEL_COLUMNS.liveDuration)), 1000000),
+        validDays:          safeInt(get(EXCEL_COLUMNS.validDays), 32),
+        newFollowers:       safeInt(get(EXCEL_COLUMNS.newFollowers), 1000000),
+        emisionesLive:      safeInt(get(EXCEL_COLUMNS.emisionesLive), 5000),
+        battles:            safeInt(get(EXCEL_COLUMNS.battles), 10000),
+        battleDiamonds:     Number(get(EXCEL_COLUMNS.battleDiamonds) || 0),
+        multiGuestDiamonds: Number(get(EXCEL_COLUMNS.multiGuestDiamonds) || 0),
+        statusGraduation:   String(get(EXCEL_COLUMNS.statusGraduation) || ''),
+        statusRank:         String(get(EXCEL_COLUMNS.statusRank) || ''),
+        statusActive:       String(get(EXCEL_COLUMNS.statusActive) || ''),
+        groupName:          String(get(EXCEL_COLUMNS.groupName) || ''),
+        manager:            String(get(EXCEL_COLUMNS.manager) || ''),
+        daysSinceJoining:   rawDays != null && rawDays !== '' ? safeInt(rawDays, 10000) : null,
     };
 }
 
@@ -183,7 +175,7 @@ export async function renderAdminDashboard(container) {
     // Si ya hay datos en el store, no los volvemos a pedir (evita lentitud)
     const currentProfs = store.getProfiles();
     const currentMetrics = store.getMetricsData();
-    
+
     if (!currentProfs || !currentProfs.length || !currentMetrics || !currentMetrics.length) {
         container.innerHTML = skelAdmin();
         if (isSupabaseConfigured) {
@@ -270,7 +262,7 @@ function renderAuditView(container, managers, creators, metricsData) {
                     // Creadores asignados por cuenta (profiles)
                     const assignedProfs = creators.filter(c => c.manager_id === m.id);
                     const usernamesFromProfs = assignedProfs.map(c => (c.tiktok_username || '').toLowerCase());
-                    
+
                     // Creadores asignados por métricas (Excel/Username)
                     const groupMetrics = metricsData.filter(d => {
                         const isAssignedByMetric = d.manager_id === m.id;
@@ -315,7 +307,7 @@ function renderManageView(container) {
         <div class="glass-panel animate-fadeIn">
             <h2 style="margin-bottom:1rem;">Gestión de Managers</h2>
             <p style="color:var(--text-secondary); margin-bottom:1.5rem; font-size:0.9rem;">Busca un usuario registrado por su email o nombre para asignarle el rol de Manager.</p>
-            
+
             <div style="display:flex; gap:0.8rem; margin-bottom:2rem;">
                 <input type="text" id="m-search-input" class="input-control" placeholder="Email o nombre del usuario..." style="flex:1;">
                 <button id="m-search-btn" class="btn btn-primary">Buscar</button>
@@ -342,7 +334,7 @@ function renderManageView(container) {
                         <div style="font-weight:700;">${p.display_name || p.email}</div>
                         <div style="font-size:0.75rem; color:var(--text-secondary);">${p.email}</div>
                     </div>
-                    <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}" 
+                    <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}"
                             style="background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
                         ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
                     </button>
@@ -355,7 +347,7 @@ function renderManageView(container) {
                     const uid = rBtn.dataset.id;
                     const isActive = rBtn.dataset.active === 'true';
                     if (isActive && !confirm('¿Estás seguro de quitar el rol de Manager a este usuario?')) return;
-                    
+
                     try {
                         const p = (await profiles.searchProfiles(uid))[0];
                         await profiles.updateRoles(uid, { isAdmin: p.is_admin, isManager: !isActive, isCreator: p.is_creator });
@@ -483,20 +475,20 @@ function renderUploadView(container, mainContainer) {
 // Asignación por USERNAME directo en creator_metrics. No requiere cuenta.
 async function renderGroupEditor(container, managerId) {
     container.innerHTML = '<div style="padding:2rem;">Sincronizando equipo...</div>';
-    
+
     const allProfs = store.getProfiles();
     const manager = allProfs.find(p => p.id === managerId) || { display_name: 'Manager' };
-    
+
     const metricsData = store.getMetricsData() || [];
 
     const [assignedUsernames, allTakenUsernames] = await Promise.all([
         profiles.getCreatorsByManager(managerId),
         profiles.getAllAssignedUsernames(),
     ]);
-    
+
     // Miembros de este manager
     const myGroup = metricsData.filter(c => assignedUsernames.includes(c.username.toLowerCase()));
-    
+
     // Disponibles: no asignados a ningún manager
     const freeCreators = metricsData.filter(c => {
         return c.username && !allTakenUsernames.includes(c.username.toLowerCase());
@@ -560,7 +552,7 @@ async function renderGroupEditor(container, managerId) {
         appState.showToast('Creador desvinculado', 'info');
         renderGroupEditor(container, managerId);
     });
-    
+
     // Añadir: por username
     bindAddBtns(container, managerId, container);
 }
@@ -1021,4 +1013,3 @@ async function renderContentEditor(container) {
         };
     });
 }
-
