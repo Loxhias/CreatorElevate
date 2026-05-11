@@ -85,27 +85,45 @@ function normalizeRow(row) {
     const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
     if (!username) return null;
     
-    const rawDaysValue = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma']);
-    
-    let daysSinceJoining = null;
-    if (rawDaysValue != null) {
-        // 1. Limpiar texto
-        const cleanNum = parseInt(String(rawDaysValue).replace(/[^\d]/g, ''));
-        // 2. Filtro de seguridad: Si es > 10000 es probablemente un ID o Timestamp, lo ignoramos
-        if (!isNaN(cleanNum) && cleanNum < 10000) {
-            daysSinceJoining = cleanNum;
+    const now = new Date();
+    const safeInt = (val, max = 2147483647) => {
+        if (val == null || val === '') return 0;
+        let n = parseInt(String(val).replace(/[^\d]/g, ''));
+        if (isNaN(n)) return 0;
+
+        // Si el número parece una fecha formato YYYYMMDD... (ej: 20250807...)
+        if (n > 2000000000000) { 
+            try {
+                const s = String(n);
+                const year  = parseInt(s.substring(0,4));
+                const month = parseInt(s.substring(4,6)) - 1;
+                const day   = parseInt(s.substring(6,8));
+                const date  = new Date(year, month, day);
+                if (!isNaN(date.getTime())) {
+                    const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+                    return (diff > 0 && diff < 10000) ? diff : 0;
+                }
+            } catch(e) {}
+            return 0; // Si falla el parseo de fecha, mejor devolver 0 que un ID gigante
         }
-    }
+
+        return (n < max) ? n : 0;
+    };
+
+    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
+    if (!username) return null;
+    
+    const rawDaysValue = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma']);
     
     return {
         username,
         diamonds:           Number(find(['Diamonds', 'Diamantes este mes', 'Diamantes (actual)']) || find(['Diamantes']) || 0),
         diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)']) || 0),
         liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE']) || '0s'),
-        liveSeconds:        parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE'])),
-        validDays:          Number(find(['Días válidos', 'Valid Days']) || 0),
-        emisionesLive:      Number(find(['Emisiones LIVE', 'Total LIVE Emissions']) || 0),
-        battles:            Number(find(['Batallas', 'Battles', 'Partidas']) || 0),
+        liveSeconds:        safeInt(parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE'])), 1000000),
+        validDays:          safeInt(find(['Días válidos', 'Valid Days']), 32),
+        emisionesLive:      safeInt(find(['Emisiones LIVE', 'Total LIVE Emissions']), 5000),
+        battles:            safeInt(find(['Batallas', 'Battles', 'Partidas']), 10000),
         battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds']) || 0),
         multiGuestDiamonds: Number(find(['Diamantes de invitados múltiples', 'Multi-guest diamonds', 'Multi-guest']) || 0),
         statusGraduation:   String(find(['Estado de graduación', 'Graduation status']) || ''),
@@ -113,7 +131,7 @@ function normalizeRow(row) {
         statusActive:       String(find(['Activo', 'Status Active', 'Estado activo']) || ''),
         groupName:          String(find(['Nombre del grupo', 'Group name']) || ''),
         manager:            String(find(['Manager', 'Manager name', 'Gestor']) || ''),
-        daysSinceJoining:   daysSinceJoining,
+        daysSinceJoining:   safeInt(rawDaysValue, 10000),
     };
 }
 
