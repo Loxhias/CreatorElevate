@@ -96,8 +96,6 @@ function normalizeRow(row) {
     const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User', 'Creator username', 'Nombre usuario']) || '').trim().replace(/^@/, '');
     if (!username) return null;
 
-    console.log('📂 Columnas del Excel:', entries.map(([k, v]) => `"${k}": ${JSON.stringify(v)}`).slice(0, 20).join(' | '));
-
     const now = new Date();
     const safeInt = (val, max = 2147483647) => {
         if (val == null || val === '') return 0;
@@ -126,10 +124,9 @@ function normalizeRow(row) {
         'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma',
     ]);
 
-    // Para días válidos buscamos tanto la forma exacta como variaciones comunes
-    // y también búsqueda sin acentos como fallback (ya cubierto por find())
     const rawValidDays = find([
-        'Días válidos', 'Valid Days', 'valid days',
+        'Días válidos de emisiones LIVE',
+        'Valid Live Days', 'Días válidos', 'Valid Days', 'valid days',
         'Días LIVE válidos', 'Días válidos de LIVE', 'días válidos de live',
         'días de live válidos', 'días activos válidos', 'días activos de live',
         'active live days', 'valid live days', 'días válidos de transmisión',
@@ -391,7 +388,6 @@ function renderUploadView(container, mainContainer) {
         const lbl = dt.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(/^./, c => c.toUpperCase());
         uBtn.disabled = true;
         uBtn.textContent = 'Publicando...';
-        console.log('🚀 Iniciando publicación de reporte:', { month: m, label: lbl, creators: rows.length });
 
         try {
             await metrics.upsertPeriod(`${m}-01`, lbl, rows);
@@ -399,9 +395,8 @@ function renderUploadView(container, mainContainer) {
             // Refrescamos los datos en el store antes de volver
             await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
-        } catch (err) { 
-            console.error('❌ Error publicando reporte:', err);
-            appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error'); 
+        } catch (err) {
+            appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error');
             uBtn.disabled = false;
             uBtn.textContent = 'PUBLICAR MÉTRICAS';
         }

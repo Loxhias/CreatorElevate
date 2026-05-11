@@ -202,15 +202,6 @@ export const metrics = {
         if (error) throw error;
 
         const rows = data.map(rowFromDb);
-
-        // Log diagnóstico — eliminar tras confirmar que los datos llegan correctamente
-        if (rows.length > 0) {
-            const s = rows[0];
-            console.log('[API] Período activo:', period.label ?? period.period);
-            console.log('[API] Primera fila (raw DB):', data[0]);
-            console.log('[API] Primera fila (mapeada):', { username: s.username, diamonds: s.diamonds, validDays: s.validDays, battles: s.battles, managerId: s.managerId });
-        }
-
         return { period, rows };
     },
 
@@ -259,7 +250,6 @@ export const metrics = {
         })).filter(r => r.username);
 
         const safePayload = sanDeep(payload);
-        console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: safePayload.length, firstRow: safePayload[0] });
 
         const { data, error } = await supabase.rpc('admin_upsert_metrics', {
             p_period: periodDate,
@@ -267,7 +257,6 @@ export const metrics = {
             p_rows:   safePayload,
         });
         if (error) throw error;
-        console.log('✅ API SEND SUCCESS:', data);
         return data;
     },
 };
