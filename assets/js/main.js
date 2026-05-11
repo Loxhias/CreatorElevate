@@ -1,6 +1,6 @@
 import { env, isSupabaseConfigured } from './env.js';
 import { store } from './store.js';
-import { auth, push } from './api.js';
+import { auth, push, content } from './api.js';
 import { renderLogin } from './views/login.js';
 import { renderAdminDashboard, renderCreatorsList } from './views/adminDashboard.js';
 import { renderManagerDashboard } from './views/managerDashboard.js';
@@ -149,8 +149,8 @@ function renderDashboardLayout(container, renderContentFn, role) {
             container.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
             
             if (view === 'inicio') safeRender(renderContentFn, contentArea);
-            else if (view === 'normas') renderNormas(contentArea);
-            else if (view === 'canales') renderCanales(contentArea);
+            else if (view === 'normas') safeRender(renderNormas, contentArea);
+            else if (view === 'canales') safeRender(renderCanales, contentArea);
             else if (view === 'creadores') safeRender(renderCreatorsList, contentArea);
             else if (view === 'notificaciones') {
                 import('./views/notifications.js').then(m => safeRender(m.renderNotificationsView, contentArea));
@@ -168,13 +168,49 @@ function renderDashboardLayout(container, renderContentFn, role) {
     });
 }
 
-// Vistas simples (Normas/Canales) - Restauradas al diseño funcional
-function renderNormas(container) {
-    container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2><div class="glass-panel">Contenido de normas cargando...</div>`;
+// ── Normas / Canales ──────────────────────────────────────────────────────────
+function renderAgencyBody(text) {
+    if (!text) return '<p style="color:var(--text-muted);">Sin contenido todavía.</p>';
+    return text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => `<p style="margin-bottom:0.6rem;">${line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`)
+        .join('');
 }
 
-function renderCanales(container) {
-    container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2><div class="glass-panel">Contenido de canales cargando...</div>`;
+async function renderNormas(container) {
+    container.innerHTML = `
+        <h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2>
+        <div class="glass-panel skel-panel" style="min-height:120px;"></div>`;
+    try {
+        const page = await content.getPage('normas');
+        container.innerHTML = `
+            <h2 style="margin-bottom:1.5rem;">📋 ${page?.title || 'Normas de la Agencia'}</h2>
+            <div class="glass-panel animate-fadeIn" style="line-height:1.8;">
+                ${renderAgencyBody(page?.body)}
+            </div>`;
+    } catch (err) {
+        container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2>
+            <div class="glass-panel" style="color:var(--danger);">Error al cargar: ${err.message}</div>`;
+    }
+}
+
+async function renderCanales(container) {
+    container.innerHTML = `
+        <h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2>
+        <div class="glass-panel skel-panel" style="min-height:120px;"></div>`;
+    try {
+        const page = await content.getPage('canales');
+        container.innerHTML = `
+            <h2 style="margin-bottom:1.5rem;">📢 ${page?.title || 'Canales Oficiales'}</h2>
+            <div class="glass-panel animate-fadeIn" style="line-height:1.8;">
+                ${renderAgencyBody(page?.body)}
+            </div>`;
+    } catch (err) {
+        container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2>
+            <div class="glass-panel" style="color:var(--danger);">Error al cargar: ${err.message}</div>`;
+    }
 }
 
 /**

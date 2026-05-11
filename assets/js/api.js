@@ -140,7 +140,7 @@ export const auth = {
         if (!user) throw new Error('No autenticado.');
         const { data, error } = await supabase
             .from('profiles')
-            .update(patch)
+            .update(sanDeep(patch))
             .eq('id', user.id)
             .select()
             .single();
@@ -410,7 +410,7 @@ export const push = {
         const response = await fetch('/api/send-push', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: san(title), body: san(body), url: san(url), target }),
+            body: JSON.stringify({ title: san(title), body: san(body), url: san(url), target: sanDeep(target) }),
         });
 
         let payload = null;
