@@ -652,7 +652,10 @@ export async function renderCreatorsList(container) {
         const sort    = container.querySelector('#cr-sort').value;
 
         console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
-        if (data && data[0]) console.log('📝 Datos del primer creador:', data[0]);
+        if (data && data[0]) {
+            console.log('📊 Columnas detectadas en la tabla:', Object.keys(data[0]));
+            console.log('📝 Ejemplo de datos del primer creador:', data[0]);
+        }
 
         let list = data.filter(c => {
             const antiquity = c.days_since_joining;
