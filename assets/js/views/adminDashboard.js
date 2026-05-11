@@ -82,17 +82,28 @@ function normalizeRow(row) {
         const found = entries.find(([k]) => kws.some(kw => k.toLowerCase().trim().includes(kw.toLowerCase())));
         return found ? found[1] : null;
     };
-    const username = String(find(['Nombre de usuario del creador', 'username']) || '').trim().replace(/^@/, '');
+    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
     if (!username) return null;
+    
     const rawDays = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining']);
+    
     return {
         username,
-        diamonds: Number(find(['Diamonds', 'Diamantes']) || 0),
-        liveDuration: String(find(['LIVE Duration', 'Duración de LIVE']) || '0s'),
-        liveSeconds: parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE'])),
-        validDays: Number(find(['Días válidos', 'Valid Days']) || 0),
-        emisionesLive: Number(find(['Emisiones LIVE', 'Total LIVE Emissions']) || 0),
-        daysSinceJoining: rawDays != null && !isNaN(Number(rawDays)) ? Number(rawDays) : null,
+        diamonds:           Number(find(['Diamonds', 'Diamantes este mes', 'Diamantes (actual)']) || find(['Diamantes']) || 0),
+        diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)']) || 0),
+        liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE']) || '0s'),
+        liveSeconds:        parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE'])),
+        validDays:          Number(find(['Días válidos', 'Valid Days']) || 0),
+        emisionesLive:      Number(find(['Emisiones LIVE', 'Total LIVE Emissions']) || 0),
+        battles:            Number(find(['Batallas', 'Battles', 'Partidas']) || 0),
+        battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds']) || 0),
+        multiGuestDiamonds: Number(find(['Diamantes de invitados múltiples', 'Multi-guest diamonds', 'Multi-guest']) || 0),
+        statusGraduation:   String(find(['Estado de graduación', 'Graduation status']) || ''),
+        statusRank:         String(find(['Rango', 'Rank', 'Status Rank']) || ''),
+        statusActive:       String(find(['Activo', 'Status Active', 'Estado activo']) || ''),
+        groupName:          String(find(['Nombre del grupo', 'Group name']) || ''),
+        manager:            String(find(['Manager', 'Manager name', 'Gestor']) || ''),
+        daysSinceJoining:   rawDays != null && !isNaN(Number(rawDays)) ? Number(rawDays) : null,
     };
 }
 

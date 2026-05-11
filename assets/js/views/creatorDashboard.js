@@ -176,7 +176,7 @@ function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
         </div>`;
 }
 
-function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, proj, projStatus) {
+function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, proj, projStatus, cashAmt) {
     const advanceTarget = nextTier ? nextTier.range : me.diamonds;
     const dMissing = Math.max(0, advanceTarget - me.diamonds);
 
@@ -903,7 +903,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     function renderTab(name) {
         if (!tabs[name]) {
             if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
-            if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status);
+            if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
             if (name === 'benefits')  tabs[name] = tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
             if (name === 'missions')  tabs[name] = tabMissions(me);
             if (name === 'challenge') tabs[name] = tabChallenge90(me, h, dy);
