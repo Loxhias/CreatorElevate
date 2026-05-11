@@ -183,11 +183,12 @@ export const metrics = {
             return { period: null, rows: preloadedData };
         }
 
-        // Consulta directa a las tablas para evitar vistas con columnas desactualizadas
+        // Consulta directa a las tablas — ordenado por uploaded_at para evitar
+        // períodos futuros/vacíos que tengan fecha más reciente sin datos reales
         const { data: period, error: pErr } = await supabase
             .from('report_periods')
             .select('*')
-            .order('period', { ascending: false })
+            .order('uploaded_at', { ascending: false })
             .limit(1)
             .maybeSingle();
         if (pErr) throw pErr;
@@ -201,6 +202,15 @@ export const metrics = {
         if (error) throw error;
 
         const rows = data.map(rowFromDb);
+
+        // Log diagnóstico — eliminar tras confirmar que los datos llegan correctamente
+        if (rows.length > 0) {
+            const s = rows[0];
+            console.log('[API] Período activo:', period.label ?? period.period);
+            console.log('[API] Primera fila (raw DB):', data[0]);
+            console.log('[API] Primera fila (mapeada):', { username: s.username, diamonds: s.diamonds, validDays: s.validDays, battles: s.battles, managerId: s.managerId });
+        }
+
         return { period, rows };
     },
 

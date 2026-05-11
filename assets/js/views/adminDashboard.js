@@ -512,15 +512,12 @@ function getTier(diamonds) {
 }
 
 export async function renderCreatorsList(container) {
-    const currentMetrics = store.getMetricsData();
-    if (!currentMetrics || !currentMetrics.length) {
-        container.innerHTML = skelRows(5);
-        if (isSupabaseConfigured) {
-            await Promise.all([
-                store.refreshMetrics(),
-                store.refreshAdminLists(),
-            ]).catch(console.warn);
-        }
+    container.innerHTML = skelRows(5);
+    if (isSupabaseConfigured) {
+        await Promise.all([
+            store.refreshMetrics(),
+            store.refreshAdminLists(),
+        ]).catch(console.warn);
     }
     const data = store.getMetricsData() || [];
 
