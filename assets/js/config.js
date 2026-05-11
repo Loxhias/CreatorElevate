@@ -12,16 +12,16 @@
 //    range = diamantes mínimos necesarios para ESTAR en ese rango
 // ─────────────────────────────────────────────────────────────────────
 export const visualTiers = [
-    { level: 1, range: 0, emoji: '🔰', name: 'Nivel 1' },
-    { level: 2, range: 40000, emoji: '🟤', name: 'Nivel 2' },
-    { level: 3, range: 80000, emoji: '⚪', name: 'Nivel 3' },
-    { level: 4, range: 150000, emoji: '🟡', name: 'Nivel 4' },
-    { level: 5, range: 300000, emoji: '🩵', name: 'Nivel 5' },
-    { level: 6, range: 500000, emoji: '💎', name: 'Nivel 6' },
-    { level: 7, range: 800000, emoji: '🔼', name: 'Nivel 7' },
-    { level: 8, range: 1200000, emoji: '👑', name: 'Nivel 8' },
-    { level: 9, range: 1600000, emoji: '🌟', name: 'Nivel 9' },
-    { level: 10, range: 3000000, emoji: '⚡', name: 'Nivel 10' },
+    { level: 1, range: 0, emoji: '🔰', name: 'Nivel 1', icon: '/assets/levels/level-1.png' },
+    { level: 2, range: 40000, emoji: '🟤', name: 'Nivel 2', icon: '/assets/levels/level-2.png' },
+    { level: 3, range: 80000, emoji: '⚪', name: 'Nivel 3', icon: '/assets/levels/level-3.png' },
+    { level: 4, range: 150000, emoji: '🟡', name: 'Nivel 4', icon: '/assets/levels/level-4.png' },
+    { level: 5, range: 300000, emoji: '🩵', name: 'Nivel 5', icon: '/assets/levels/level-5.png' },
+    { level: 6, range: 500000, emoji: '💎', name: 'Nivel 6', icon: '/assets/levels/level-6.png' },
+    { level: 7, range: 800000, emoji: '🔼', name: 'Nivel 7', icon: '/assets/levels/level-7.png' },
+    { level: 8, range: 1200000, emoji: '👑', name: 'Nivel 8', icon: '/assets/levels/level-8.png' },
+    { level: 9, range: 1600000, emoji: '🌟', name: 'Nivel 9', icon: '/assets/levels/level-9.png' },
+    { level: 10, range: 3000000, emoji: '⚡', name: 'Nivel 10', icon: '/assets/levels/level-10.png' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────

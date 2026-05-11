@@ -8,7 +8,9 @@ export function renderLogin(container) {
         <div class="login-page animate-fade-in">
             <div class="glass-panel login-card">
                 <div class="login-brand">
-                    <div class="login-brand-logo">⚡</div>
+                    <div class="login-brand-logo">
+                        <img src="/assets/icons/app-icon-purple.png" alt="Creator Elevate Logo" style="width:100%;height:100%;object-fit:contain;">
+                    </div>
                     <h1 class="text-gradient">Creator Elevate</h1>
                     <p>Tu panel de crecimiento en TikTok LIVE</p>
                 </div>

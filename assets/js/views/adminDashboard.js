@@ -373,9 +373,15 @@ async function renderGroupEditor(container, managerId) {
                     <div style="display:flex; flex-direction:column; gap:0.5rem;">
                         ${myGroup.map(c => `
                             <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
-                                    <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎</div>
+                                <div style="display:flex; align-items:center; gap:0.6rem;">
+                                    <div style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
+                                        <span style="font-size:0.7rem; position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                                        <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.2s ease;" onload="this.style.opacity='1';">
+                                    </div>
+                                    <div>
+                                        <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                                        <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎</div>
+                                    </div>
                                 </div>
                                 <button class="rem-c" data-username="${c.username}" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Quitar</button>
                             </div>
@@ -422,9 +428,15 @@ function renderAvailableCreators(list) {
     if (!list.length) return '<p style="font-size:0.8rem; color:var(--text-muted);">No hay creadores disponibles.</p>';
     return list.map(c => `
         <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
-                <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎 · ${c.validDays}d</div>
+            <div style="display:flex; align-items:center; gap:0.6rem;">
+                <div style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; flex-shrink:0;">
+                    <span style="font-size:0.7rem; position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                    <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.2s ease;" onload="this.style.opacity='1';">
+                </div>
+                <div>
+                    <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                    <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎 · ${c.validDays}d</div>
+                </div>
             </div>
             <button class="add-c" data-username="${c.username}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:700; font-size:0.8rem;">Añadir</button>
         </div>
@@ -497,7 +509,10 @@ export async function renderCreatorsList(container) {
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">NIVEL</label>
                     <select id="cr-filter-level" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="all">Todos los niveles</option>
-                        ${visualTiers.map(t => `<option value="${t.level}">${t.emoji} ${t.name}</option>`).join('')}
+                        ${visualTiers.map(t => {
+                            const iconStyle = t.icon ? `display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:middle;` : '';
+                            return `<option value="${t.level}">${t.emoji} ${t.name}</option>`;
+                        }).join('')}
                     </select>
                 </div>
                 <div>
@@ -533,7 +548,10 @@ export async function renderCreatorsList(container) {
             const daysColor = c.validDays >= 22 ? 'var(--accent)' : c.validDays >= 7 ? 'var(--warning)' : 'var(--danger)';
             return `
             <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
-                <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0;">${c.username.charAt(0).toUpperCase()}</div>
+            <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
+                <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.3s ease;" onload="this.style.opacity='1';">
+            </div>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
@@ -542,7 +560,10 @@ export async function renderCreatorsList(container) {
                     </div>
                 </div>
                 <div style="text-align:right; flex-shrink:0;">
-                    <div style="font-size:0.68rem; margin-bottom:0.2rem;">${tier.emoji} ${tier.name}</div>
+                    <div style="font-size:0.68rem; margin-bottom:0.2rem; display:flex; align-items:center; justify-content:flex-end; gap:0.3rem;">
+                        ${tier.icon ? `<img src="${tier.icon}" style="width:14px; height:14px; object-fit:contain;">` : `<span>${tier.emoji}</span>`}
+                        <span>${tier.name}</span>
+                    </div>
                     <div style="font-weight:800; color:var(--accent); font-size:0.95rem;">${fmt(c.diamonds)} 💎</div>
                     <button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="margin-top:0.35rem; font-size:0.65rem; padding:0.2rem 0.6rem;">Ver →</button>
                 </div>

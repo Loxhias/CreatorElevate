@@ -66,7 +66,15 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
     const tableRows = myCreators.length
         ? myCreators.sort((a, b) => Number(b.diamonds) - Number(a.diamonds)).map(c => `
             <tr>
-                <td style="font-weight:500;color:var(--text-primary);">@${c.username}</td>
+                <td style="font-weight:500;color:var(--text-primary);">
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                        <div style="width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;flex-shrink:0;border:1px solid rgba(255,255,255,0.1);">
+                            <span style="font-size:0.65rem;position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                            <img src="https://unavatar.io/tiktok/${c.username}" alt="@${c.username}" style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.2s ease;" onload="this.style.opacity='1';">
+                        </div>
+                        <span>@${c.username}</span>
+                    </div>
+                </td>
                 <td style="color:var(--accent);font-weight:600;">${fmt(c.diamonds)}</td>
                 <td>${c.validDays}</td>
                 <td>${c.battles}</td>

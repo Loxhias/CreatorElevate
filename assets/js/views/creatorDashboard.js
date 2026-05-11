@@ -25,6 +25,12 @@ function daysLeft() {
 function daysElapsed() {
     return new Date().getDate();
 }
+function renderTier(tier, size='1.1rem') {
+    if (tier.icon) {
+        return `<img src="${tier.icon}" alt="${tier.name}" style="width:${size};height:${size};vertical-align:middle;margin-right:0.3rem;object-fit:contain;">`;
+    }
+    return `<span style="margin-right:0.3rem;">${tier.emoji}</span>`;
+}
 function daysInMonth() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
@@ -81,7 +87,7 @@ function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
     return `
         <!-- Nivel (basado en mes anterior) -->
         <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-            <span class="level-badge ${levelClass(lastMonthTier.level)}">${lastMonthTier.emoji} ${lastMonthTier.name}</span>
+            <span class="level-badge ${levelClass(lastMonthTier.level)}">${renderTier(lastMonthTier, '1.2rem')} ${lastMonthTier.name}</span>
             <span class="text-xs text-muted">Rango del mes anterior</span>
             ${rank.pct<=20
                 ? `<span style="margin-left:auto;font-size:0.73rem;background:rgba(0,217,166,0.12);color:var(--accent);border:1px solid rgba(0,217,166,0.25);padding:0.2rem 0.7rem;border-radius:999px;font-weight:700;">🏅 Top ${rank.pct}%</span>`
@@ -174,8 +180,8 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
             <div class="section-header">
                 <div class="section-icon">💎</div>
                 <div>
-                    <h3 style="font-size:0.92rem;">${nextTier?`Subir a ${nextTier.emoji} ${nextTier.name}`:'¡Nivel máximo!'}</h3>
-                    <p class="text-xs text-muted">Nivel actual: ${curTier.emoji} ${curTier.name} · Meta: ${fmt(advanceTarget)} 💎</p>
+                    <h3 style="font-size:0.92rem;">${nextTier?`Subir a ${renderTier(nextTier, '1rem')} ${nextTier.name}`:'¡Nivel máximo!'}</h3>
+                    <p class="text-xs text-muted">Nivel actual: ${renderTier(curTier, '0.85rem')} ${curTier.name} · Meta: ${fmt(advanceTarget)} 💎</p>
                 </div>
             </div>
             ${pBar(me.diamonds, advanceTarget)}
@@ -674,7 +680,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             </div>
             <div>
                 <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);">@${me.username}</div>
-                <div style="font-size:0.67rem;color:var(--text-muted);">${curTier.emoji} ${curTier.name} · Panel personal · ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
+                <div style="display:flex;align-items:center;gap:0.3rem;font-size:0.67rem;color:var(--text-muted);">${renderTier(curTier, '0.9rem')} ${curTier.name} · Panel personal · ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
             </div>
         </div>
 
