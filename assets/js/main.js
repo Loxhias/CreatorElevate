@@ -238,17 +238,22 @@ async function boot() {
     await store.init().catch(console.warn);
 
     auth.onAuthChange(async (session) => {
+        const isRecovery = window.location.hash.includes('type=recovery');
+
         if (!session) {
             await store.clear();
             await logoutOneSignalUser();
-            appState.navigate('login');
+            if (!isRecovery) appState.navigate('login');
             return;
         }
         await store.refreshProfile();
         const profile = store.getProfile();
         const u = store.getCurrentUser();
         if (profile) identifyOneSignalUser(profile);
-        if (u)        appState.navigate(u.role);
+        
+        // Si estamos en flujo de recuperación de contraseña, NO navegamos al dashboard
+        // para permitir que el usuario vea el formulario de "Nueva Contraseña".
+        if (u && !isRecovery) appState.navigate(u.role);
     });
 
     // Si ya había sesión cargada en store.init(), identificamos también al boot.
@@ -256,7 +261,8 @@ async function boot() {
     if (profile) identifyOneSignalUser(profile);
 
     const user = store.getCurrentUser();
-    appState.navigate(user ? user.role : 'login');
+    const isRecovery = window.location.hash.includes('type=recovery');
+    appState.navigate(user && !isRecovery ? user.role : 'login');
 }
 
 // Función global para disparar el prompt (llamada desde los botones)
