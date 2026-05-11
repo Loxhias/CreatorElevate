@@ -67,17 +67,24 @@ function renderDashboardLayout(container, renderContentFn, role) {
         </a>
     `).join('');
 
+    const installBtnStyle = deferredPrompt ? 'display:flex;' : 'display:none;';
+
     container.innerHTML = `
         <div class="app-shell animate-fadeIn">
             <!-- Sidebar (Escritorio) -->
             <aside class="sidebar">
                 <div style="margin-bottom:2.5rem; display:flex; align-items:center; gap:0.8rem;">
-                    <div style="width:36px; height:36px; background:var(--primary); border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:900;">⚡</div>
+                    <img src="/iconos/logo_morado.png" alt="Logo" style="width:32px; height:32px; object-fit:contain;">
                     <span style="font-weight:800; font-size:1.1rem;">Creator Elevate</span>
                 </div>
                 
                 <nav style="display:flex; flex-direction:column; gap:0.4rem; flex:1;">
                     ${navHtml}
+                    <!-- Botón de Instalación (Sidebar) -->
+                    <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} margin-top:1rem; border:1px dashed var(--primary); border-radius:var(--radius-md); background:rgba(124,110,247,0.05);">
+                        <span class="nav-icon">📲</span>
+                        <span style="color:var(--primary-light);">Instalar App</span>
+                    </a>
                 </nav>
 
                 <div style="margin-top:auto; padding-top:1.5rem; border-top:1px solid var(--glass-border);">
@@ -93,6 +100,9 @@ function renderDashboardLayout(container, renderContentFn, role) {
             <!-- Bottom Nav (Móvil) -->
             <nav class="bottom-nav">
                 ${navHtml}
+                <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} color:var(--primary-light); font-weight:700;">
+                    <span>📲</span><span>Instalar</span>
+                </a>
                 <a href="#" class="nav-item btn-logout" style="color:var(--danger);">
                     <span>🚪</span><span>Salir</span>
                 </a>
@@ -102,6 +112,14 @@ function renderDashboardLayout(container, renderContentFn, role) {
 
     const contentArea = container.querySelector('#dashboard-content');
     renderContentFn(contentArea);
+
+    // Eventos de Instalación
+    container.querySelectorAll('.btn-pwa-install').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            window.installPWA();
+        };
+    });
 
     // Eventos de Navegación
     container.querySelectorAll('.nav-item[data-view]').forEach(item => {
@@ -175,6 +193,15 @@ async function logoutOneSignalUser() {
     }
 }
 
+// ── PWA Install Logic ──────────────────────────────────────────────────────
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Disparamos un evento custom para que la UI sepa que puede mostrar el botón
+    window.dispatchEvent(new CustomEvent('pwa-installable'));
+});
+
 async function boot() {
     const app = document.getElementById('app');
     app.innerHTML = `<div style="height:100vh;display:flex;align-items:center;justify-content:center;">
@@ -184,6 +211,12 @@ async function boot() {
             <div class="skel" style="width:100px;height:10px;opacity:0.5;"></div>
         </div>
     </div>`;
+
+    // Escuchar el evento de instalabilidad para refrescar la UI si es necesario
+    window.addEventListener('pwa-installable', () => {
+        const installBtn = document.querySelectorAll('.btn-pwa-install');
+        installBtn.forEach(btn => btn.style.display = 'flex');
+    });
 
     // Limpiamos Service Workers antiguos PERO conservamos el de OneSignal:
     // desregistrarlo en cada arranque rompe la suscripción push y deja errores en bucle.
@@ -225,5 +258,16 @@ async function boot() {
     const user = store.getCurrentUser();
     appState.navigate(user ? user.role : 'login');
 }
+
+// Función global para disparar el prompt (llamada desde los botones)
+window.installPWA = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+        deferredPrompt = null;
+        document.querySelectorAll('.btn-pwa-install').forEach(btn => btn.style.display = 'none');
+    }
+};
 
 boot();
