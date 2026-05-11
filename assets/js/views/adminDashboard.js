@@ -85,7 +85,9 @@ function normalizeRow(row) {
     const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
     if (!username) return null;
     
-    const rawDays = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia']);
+    const rawDays = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación']);
+    
+    // Si no hay días pero hay una fecha, podríamos calcularlo (opcional futuro)
     
     return {
         username,
@@ -553,6 +555,7 @@ export async function renderCreatorsList(container) {
                         <option value="all">Todos</option>
                         <option value="new">Nuevos (≤ 30d) 🚀</option>
                         <option value="old">Consolidados (> 30d)</option>
+                        <option value="none">Sin datos de antigüedad ⚠️</option>
                     </select>
                 </div>
                 <div>
@@ -620,7 +623,8 @@ export async function renderCreatorsList(container) {
             if (days === '0'  && c.validDays > 0)   return false;
             if (days !== 'all' && days !== '0' && c.validDays < Number(days)) return false;
             if (type === 'new' && (c.daysSinceJoining === null || c.daysSinceJoining > 30)) return false;
-            if (type === 'old' && c.daysSinceJoining !== null && c.daysSinceJoining <= 30) return false;
+            if (type === 'old' && (c.daysSinceJoining === null || c.daysSinceJoining <= 30)) return false;
+            if (type === 'none' && c.daysSinceJoining !== null) return false;
             return true;
         });
 
