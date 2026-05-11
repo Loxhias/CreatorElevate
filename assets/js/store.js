@@ -39,8 +39,14 @@ export const store = {
         };
     },
 
-    /** Compat: muchos render() lo llaman síncrono. Usamos cache. */
-    getMetricsData: () => state.metricsRows ?? preloadedData,
+    /** 
+     * Devuelve las filas de métricas cargadas. 
+     * Si Supabase está activo, NO debe devolver preloadedData.
+     */
+    getMetricsData: () => {
+        if (!isSupabaseConfigured) return preloadedData;
+        return state.metricsRows || [];
+    },
 
     // ── nuevos getters ─────────────────────────────────────────────────────
     getProfile:  () => state.profile,

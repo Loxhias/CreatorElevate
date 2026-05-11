@@ -694,8 +694,18 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     if (!data?.length) { container.innerHTML = emptyState('Sin datos', 'Aún no se cargó el reporte del mes.'); return; }
 
-    const me = data.find(c => (c.username || '').toLowerCase() === myUsername);
-    if (!me) { container.innerHTML = emptyState(`No se encontraron métricas para @${myUsername}`, 'El usuario no está en el reporte actual.'); return; }
+    // Buscamos a la creadora (limpiando @ y espacios, e insensible a mayúsculas)
+    const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
+    const searchName = cleanMatch(myUsername);
+    const me = data.find(c => cleanMatch(c.username) === searchName);
+
+    if (!me) { 
+        container.innerHTML = emptyState(
+            `No se encontraron métricas para @${myUsername}`, 
+            'Asegúrate de que el usuario de TikTok en el perfil coincida exactamente con el del reporte Excel.'
+        ); 
+        return; 
+    }
 
     // Calculations
     const h  = parseHours(me.liveDuration);
