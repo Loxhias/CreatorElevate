@@ -1,0 +1,285 @@
+/* =====================================================
+   CREATOR ELEVATE — Professional Admin System
+   ===================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --bg-base: #080a12;
+    --bg-surface: #0e1117;
+    --bg-elevated: #141720;
+    --primary: #7c6ef7;
+    --primary-light: #a89cf7;
+    --secondary: #f471b5;
+    --accent: #00d9a6;
+    --danger: #ff5569;
+    --warning: #ffb547;
+    --gold: #f5a623;
+    --text-primary: #f0f2ff;
+    --text-secondary: #8b92b8;
+    --text-muted: #5a6082;
+    --glass-bg: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --font-sans: 'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Plus Jakarta Sans', sans-serif;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+/* ---- Estructura ---- */
+.app-shell { display: flex; min-height: 100vh; }
+.main-content { flex: 1; padding: 2rem; width: 100%; }
+
+/* Sidebar (Solo Escritorio) */
+.sidebar {
+    width: 260px;
+    background: var(--bg-surface);
+    border-right: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1.5rem;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+
+/* Bottom Nav (Solo Móvil) */
+.bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(14, 17, 23, 0.95);
+    backdrop-filter: blur(20px);
+    display: none;
+    justify-content: space-around;
+    padding: 0.8rem;
+    border-top: 1px solid var(--glass-border);
+    z-index: 1000;
+}
+
+@media (max-width: 1023px) {
+    .sidebar { display: none; }
+    .bottom-nav { display: flex; }
+    .main-content { padding-bottom: 5rem; }
+}
+
+/* ---- Navegación ---- */
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.nav-item:hover { background: var(--glass-bg); color: var(--text-primary); }
+.nav-item.active { background: rgba(124, 110, 247, 0.1); color: var(--primary); }
+
+.bottom-nav .nav-item { flex-direction: column; gap: 4px; font-size: 0.7rem; padding: 0.5rem; }
+
+/* ---- Paneles y Cards ---- */
+.glass-panel {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+}
+
+.action-card {
+    cursor: pointer;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.action-card:hover { transform: translateY(-2px); border-color: var(--primary); }
+
+/* ---- UI Components ---- */
+.btn {
+    padding: 0.7rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-ghost { background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); }
+
+.input-control {
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--glass-border);
+    padding: 0.8rem 1rem;
+    border-radius: 8px;
+    color: white;
+    width: 100%;
+    outline: none;
+}
+.input-control:focus { border-color: var(--primary); }
+
+/* ---- Metrics Grid ---- */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.metric-card { text-align: center; }
+.metric-value { font-size: 2rem; font-weight: 800; display: block; }
+.metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+
+.badge {
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+}
+
+/* Animaciones simples */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.animate-fadeIn { animation: fadeIn 0.3s ease; }
+
+/* ---- Responsive Mobile ---- */
+
+/* Colapsa layouts de dos paneles (1fr Npx) en móvil */
+.two-panel { display: grid; gap: 2rem; align-items: start; }
+.two-panel { grid-template-columns: 1fr 320px; }
+
+/* Tabla con scroll horizontal en móvil */
+.table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.data-table { min-width: 460px; }
+
+@media (max-width: 768px) {
+    /* Padding lateral reducido */
+    .main-content { padding: 1rem 0.85rem 5.5rem; }
+
+    /* Paneles de dos columnas → una columna */
+    .two-panel { grid-template-columns: 1fr !important; }
+
+    /* Metrics grid más compacto */
+    .metrics-grid { gap: 0.75rem; margin-bottom: 1.25rem; }
+    .metric-value { font-size: 1.5rem; }
+    .glass-panel { padding: 1rem; }
+
+    /* Prevenir zoom de iOS al enfocar inputs (requiere font-size >= 16px) */
+    input.input-control,
+    textarea.input-control,
+    select.input-control { font-size: 16px; }
+
+    /* Touch targets mínimos */
+    .btn { min-height: 44px; }
+    .btn-sm { min-height: 36px; padding: 0.4rem 0.8rem; }
+
+    /* Navegación inferior: texto más pequeño */
+    .bottom-nav .nav-item { font-size: 0.65rem; }
+}
+
+@media (max-width: 480px) {
+    /* En pantallas muy pequeñas forzar columna única en métricas */
+    .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+
+    /* Tipografía ajustada */
+    h1 { font-size: 1.35rem !important; }
+    h2 { font-size: 1.15rem !important; }
+}
+
+/* ---- Progress Bars ---- */
+@keyframes pbar-shine {
+    0%   { transform: translateX(-150%); }
+    100% { transform: translateX(300%); }
+}
+@keyframes dot-glow {
+    0%, 100% { opacity: 1;    transform: translateY(-50%) scale(1);    }
+    50%       { opacity: 0.8; transform: translateY(-50%) scale(1.25); }
+}
+
+/* ---- Skeleton Loader ---- */
+@keyframes skel-pulse {
+    0%, 100% { opacity: 0.35; }
+    50%       { opacity: 0.65; }
+}
+.skel {
+    background: rgba(255,255,255,0.07);
+    border-radius: 6px;
+    animation: skel-pulse 1.5s ease-in-out infinite;
+}
+.skel-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: var(--radius);
+    animation: skel-pulse 1.5s ease-in-out infinite;
+}
+
+/* ---- Toast ---- */
+.toast-container { position:fixed; bottom:1.5rem; right:1.5rem; display:flex; flex-direction:column; gap:0.5rem; z-index:9999; }
+.toast-msg { padding:0.8rem 1.2rem; font-size:0.85rem; font-weight:600; min-width:220px; pointer-events:none; transition:opacity 0.3s ease; }
+.toast-msg.success { border-color:var(--accent); }
+.toast-msg.danger  { border-color:var(--danger); }
+.toast-msg.warning { border-color:#f59e0b; }
+
+/* ---- Utility Classes ---- */
+.text-xs { font-size: 0.73rem; }
+.text-sm { font-size: 0.83rem; }
+.text-muted { color: var(--text-muted); }
+.fw-700 { font-weight: 700; }
+.mt-1 { margin-top: 0.5rem; }
+.text-gradient {
+    background: linear-gradient(135deg, var(--primary-light), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.animate-fade-in { animation: fadeIn 0.3s ease; }
+
+/* ---- Input Group ---- */
+.input-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+.input-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+
+/* ---- Progress Track ---- */
+.progress-track { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+
+/* ---- Metric Cards (Creator Dashboard) ---- */
+.metric-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+}
+.metric-left { flex: 1; min-width: 0; }
+.metric-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.3rem; }
+.metric-value { font-size: 1.8rem; font-weight: 900; line-height: 1.1; display: block; }
+.metric-value.sm { font-size: 1.3rem; }
+.metric-subtitle { font-size: 0.72rem; margin-top: 0.3rem; }
+.metric-icon-box { width: 48px; height: 48px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+
+/* ---- Section Cards (Creator Dashboard Goals) ---- */
+.section-card { padding: 1.1rem 1.2rem; }
+.section-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+.section-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; background: rgba(255,255,255,0.06); flex-shrink: 0; }
+
+/* ---- Level Badge ---- */
+.level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(124,110,247,0.12);
+    border: 1px solid rgba(124,110,247,0.25);
+    color: var(--primary-light);
+}

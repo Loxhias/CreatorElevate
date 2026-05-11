@@ -1,0 +1,11 @@
+# Configuración para Cloudflare Pages vía Wrangler CLI (opcional).
+# Despliegue manual:
+#   npm i -g wrangler
+#   wrangler login
+#   wrangler pages deploy . --project-name creator-elevate
+#
+# O bien conecta el repo en https://dash.cloudflare.com → Workers & Pages → Pages.
+
+name = "creator-elevate"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "."

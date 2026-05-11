@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+.env
+.env.local
+.env.*.local
+
+# Excel real con datos sensibles (no versionar)
+*.xlsx
+
+# Wrangler / Cloudflare
+.wrangler/
+.dev.vars
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db

@@ -1,0 +1,14 @@
+{
+    "name": "creatorelevate",
+    "version": "1.0.0",
+    "description": "Panel de creadores de TikTok LIVE para Interactik Agency. Frontend estático + Supabase + Cloudflare Pages.",
+    "type": "module",
+    "scripts": {
+        "icons": "node scripts/generate-icons.mjs",
+        "vapid": "npx --yes web-push generate-vapid-keys",
+        "deploy": "npx --yes wrangler pages deploy . --project-name creator-elevate",
+        "fn:deploy": "npx --yes supabase functions deploy send-push",
+        "fn:secrets": "npx --yes supabase secrets set VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY VAPID_PRIVATE_KEY=$VAPID_PRIVATE_KEY VAPID_SUBJECT=$VAPID_SUBJECT"
+    },
+    "license": "ISC"
+}

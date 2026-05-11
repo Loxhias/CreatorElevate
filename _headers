@@ -1,0 +1,21 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+
+# El Service Worker debe servirse desde el root y sin caché agresivo.
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
+/manifest.json
+  Cache-Control: public, max-age=3600
+
+# Assets cacheables (JS/CSS sin hash → cache corto + revalidate)
+/assets/*
+  Cache-Control: public, max-age=300, must-revalidate
+
+# Iconos: cache largo
+/assets/icons/*
+  Cache-Control: public, max-age=604800, immutable
