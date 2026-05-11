@@ -61,7 +61,7 @@ function renderContent(container, allProfiles, admins, managers, segments) {
         <div class="animate-fadeIn">
             <h1 style="margin-bottom:1.5rem;">Centro de Mensajes</h1>
 
-            <div style="display:grid; grid-template-columns: 1fr 320px; gap:2rem; align-items: start;">
+            <div class="two-panel">
                 <!-- Formulario de Envío -->
                 <div class="glass-panel" style="padding:2rem;">
                     <h3 style="margin-top:0;">Nuevo Mensaje</h3>

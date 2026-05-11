@@ -141,6 +141,50 @@ body {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .animate-fadeIn { animation: fadeIn 0.3s ease; }
 
+/* ---- Responsive Mobile ---- */
+
+/* Colapsa layouts de dos paneles (1fr Npx) en móvil */
+.two-panel { display: grid; gap: 2rem; align-items: start; }
+.two-panel { grid-template-columns: 1fr 320px; }
+
+/* Tabla con scroll horizontal en móvil */
+.table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.data-table { min-width: 460px; }
+
+@media (max-width: 768px) {
+    /* Padding lateral reducido */
+    .main-content { padding: 1rem 0.85rem 5.5rem; }
+
+    /* Paneles de dos columnas → una columna */
+    .two-panel { grid-template-columns: 1fr !important; }
+
+    /* Metrics grid más compacto */
+    .metrics-grid { gap: 0.75rem; margin-bottom: 1.25rem; }
+    .metric-value { font-size: 1.5rem; }
+    .glass-panel { padding: 1rem; }
+
+    /* Prevenir zoom de iOS al enfocar inputs (requiere font-size >= 16px) */
+    input.input-control,
+    textarea.input-control,
+    select.input-control { font-size: 16px; }
+
+    /* Touch targets mínimos */
+    .btn { min-height: 44px; }
+    .btn-sm { min-height: 36px; padding: 0.4rem 0.8rem; }
+
+    /* Navegación inferior: texto más pequeño */
+    .bottom-nav .nav-item { font-size: 0.65rem; }
+}
+
+@media (max-width: 480px) {
+    /* En pantallas muy pequeñas forzar columna única en métricas */
+    .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+
+    /* Tipografía ajustada */
+    h1 { font-size: 1.35rem !important; }
+    h2 { font-size: 1.15rem !important; }
+}
+
 /* ---- Skeleton Loader ---- */
 @keyframes skel-pulse {
     0%, 100% { opacity: 0.35; }

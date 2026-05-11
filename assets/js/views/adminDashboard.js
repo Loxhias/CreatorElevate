@@ -367,7 +367,7 @@ async function renderGroupEditor(container, managerId) {
                 <h3 style="margin:0;">Equipo de ${manager.display_name || manager.email}</h3>
                 <button id="close-grp" class="btn btn-ghost btn-sm">← Volver</button>
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1.5rem;">
                 <div class="glass-panel">
                     <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">MIEMBROS ACTUALES (${myGroup.length})</h5>
                     <div style="display:flex; flex-direction:column; gap:0.5rem;">
