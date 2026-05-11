@@ -770,10 +770,10 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const dLeft = daysLeft();
     const rank  = getRanking(me, data);
 
-    // Misiones: para nuevos (≤30 días) o si estamos en modo auditoría/admin
-    const daysJoined    = me.daysSinceJoining ?? 0;
-    const isAdmin       = store.getCurrentUser().role === 'admin';
-    const showMissions  = isAuditing || isAdmin || daysJoined <= (30 + dLeft);
+    // Misiones: solo para nuevos (≤30 días). Si no hay datos, asumimos que es antiguo (999)
+    const daysJoined    = me.daysSinceJoining ?? 999;
+    const isAdmin       = store.getCurrentUser()?.role === 'admin';
+    const showMissions  = isAuditing || isAdmin || (me.daysSinceJoining !== null && daysJoined <= (30 + dLeft));
     const showChallenge = !showMissions && (isAuditing || isAdmin || daysJoined <= 90);
 
     // Estimated earnings: $1 per 200 diamonds
