@@ -69,6 +69,10 @@ export async function onRequestPost(context) {
             app_id:   ONESIGNAL_APP_ID,
             headings: { en: title, es: title },
             contents: { en: body,  es: body  },
+            // Personalización de iconos
+            chrome_web_icon: "https://creatorelevate.pages.dev/iconos/logo_morado.png",
+            chrome_web_badge: "https://creatorelevate.pages.dev/iconos/logo_blanco.png",
+            firefox_icon: "https://creatorelevate.pages.dev/iconos/logo_morado.png"
         };
         if (url) {
             notificationBody.url     = url;
