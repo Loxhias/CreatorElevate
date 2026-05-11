@@ -566,10 +566,7 @@ export async function renderCreatorsList(container) {
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">NIVEL</label>
                     <select id="cr-filter-level" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="all">Todos los niveles</option>
-                        ${visualTiers.map(t => {
-                            const iconStyle = t.icon ? `display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:middle;` : '';
-                            return `<option value="${t.level}">${t.emoji} ${t.name}</option>`;
-                        }).join('')}
+                        ${visualTiers.map(t => `<option value="${t.level}">${t.emoji} ${t.name}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -580,15 +577,6 @@ export async function renderCreatorsList(container) {
                         <option value="15">≥ 15 días</option>
                         <option value="7">≥ 7 días</option>
                         <option value="0">Sin días válidos</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">TIPO</label>
-                    <select id="cr-filter-type" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
-                        <option value="all">Todos</option>
-                        <option value="new">Nuevos (≤ 30d) 🚀</option>
-                        <option value="old">Consolidados (> 30d)</option>
-                        <option value="none">Sin datos de antigüedad ⚠️</option>
                     </select>
                 </div>
                 <div>
@@ -608,35 +596,26 @@ export async function renderCreatorsList(container) {
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
-            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
-            const isNew = antiquity != null && antiquity <= 30;
             const tier = getTier(c.diamonds);
-            const managerId = c.manager_id ?? c.managerId;
-            const managerProf = managerId ? store.getProfiles().find(p => p.id === managerId) : null;
-            const managerName = managerProf?.display_name || managerProf?.email || c.manager_name_legacy || c.manager || null;
-            const vDays = c.valid_days ?? c.validDays ?? 0;
+            const managerProf = c.managerId ? store.getProfiles().find(p => p.id === c.managerId) : null;
+            const managerName = managerProf?.display_name || managerProf?.email || c.manager || null;
+            const vDays = c.validDays ?? 0;
             const daysColor = vDays >= 22 ? 'var(--accent)' : vDays >= 7 ? 'var(--warning)' : 'var(--danger)';
-            // Intentar recuperar del caché local si existe
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
 
             return `
             <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
-            <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
-                <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
-                <img src="${cachedAvatar || `https://unavatar.io/tiktok/${encodeURIComponent(c.username)}`}"
-                     alt="@${c.username}"
-                     loading="lazy"
-                     style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:${cachedAvatar ? '1' : '0'}; transition:opacity 0.3s ease;"
-                     referrerpolicy="no-referrer"
-                     onload="this.style.opacity='1';"
-                     onerror="this.style.display='none';">
-            </div>
+                <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
+                    <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                    <img src="${cachedAvatar || `https://unavatar.io/tiktok/${encodeURIComponent(c.username)}`}"
+                         alt="@${c.username}" loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:${cachedAvatar ? '1' : '0'}; transition:opacity 0.3s ease;"
+                         referrerpolicy="no-referrer" onload="this.style.opacity='1';" onerror="this.style.display='none';">
+                </div>
                 <div style="flex:1; min-width:0;">
-                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        @${c.username} ${isNew ? '<span title="Creador Nuevo (≤ 30 días)" style="cursor:help;">🚀</span>' : ''}
-                    </div>
+                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
-                        <span style="color:${daysColor};">${c.valid_days ?? c.validDays ?? 0}d</span>
+                        <span style="color:${daysColor};">${vDays}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
                     </div>
                 </div>
@@ -657,51 +636,28 @@ export async function renderCreatorsList(container) {
         const manager = container.querySelector('#cr-filter-manager').value;
         const level   = container.querySelector('#cr-filter-level').value;
         const days    = container.querySelector('#cr-filter-days').value;
-        const type    = container.querySelector('#cr-filter-type').value;
         const sort    = container.querySelector('#cr-sort').value;
 
-        console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
-        if (data && data.length > 0) {
-            const withData = data.filter(c => (c.days_since_joining ?? c.daysSinceJoining) !== null);
-            console.log(`📊 Estadísticas: ${withData.length} de ${data.length} creadores tienen dato de antigüedad.`);
-            if (withData.length > 0) {
-                console.log('📝 Ejemplo del primer creador CON antigüedad:', withData[0]);
-            } else {
-                console.log('⚠️ AVISO: Ningún creador en la base de datos tiene dato de antigüedad (todos son null).');
-            }
-        }
-
         let list = data.filter(c => {
-            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
-            const vDays = c.valid_days ?? c.validDays ?? 0;
-            const mId = c.manager_id ?? c.managerId;
-
+            const vDays = c.validDays ?? 0;
             if (q && !c.username.toLowerCase().includes(q)) return false;
-            if (manager === 'none' && mId) return false;
-            if (manager !== 'all' && manager !== 'none' && mId !== manager) return false;
+            if (manager === 'none' && c.managerId) return false;
+            if (manager !== 'all' && manager !== 'none' && c.managerId !== manager) return false;
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
-            if (days === '0'  && vDays > 0)   return false;
+            if (days === '0' && vDays > 0) return false;
             if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
-            if (type === 'new') {
-                return antiquity !== null && antiquity !== undefined && antiquity <= 30;
-            } else if (type === 'old') {
-                return antiquity !== null && antiquity !== undefined && antiquity > 30;
-            } else if (type === 'none') {
-                return antiquity === null || antiquity === undefined;
-            }
             return true;
         });
 
-        console.log('✅ Resultados encontrados:', list.length);
         if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
-        if (sort === 'validDays') list = [...list].sort((a, b) => (b.valid_days ?? b.validDays ?? 0) - (a.valid_days ?? a.validDays ?? 0));
+        if (sort === 'validDays') list = [...list].sort((a, b) => (b.validDays ?? 0) - (a.validDays ?? 0));
         if (sort === 'username')  list = [...list].sort((a, b) => a.username.localeCompare(b.username));
 
         container.querySelector('#cr-count').textContent = `${list.length} de ${data.length} creadores`;
         container.querySelector('#cr-results').innerHTML = renderItems(list);
     };
 
-    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-type', '#cr-sort'].forEach(sel => {
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-sort'].forEach(sel => {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });

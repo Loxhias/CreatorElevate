@@ -182,19 +182,25 @@ export const metrics = {
         if (!isSupabaseConfigured) {
             return { period: null, rows: preloadedData };
         }
+
+        // Consulta directa a las tablas para evitar vistas con columnas desactualizadas
         const { data: period, error: pErr } = await supabase
-            .from('latest_period').select('*').maybeSingle();
+            .from('report_periods')
+            .select('*')
+            .order('period', { ascending: false })
+            .limit(1)
+            .maybeSingle();
         if (pErr) throw pErr;
         if (!period) return { period: null, rows: [] };
 
         const { data, error } = await supabase
-            .from('latest_metrics')
+            .from('creator_metrics')
             .select('*')
+            .eq('period_id', period.id)
             .order('diamonds', { ascending: false });
         if (error) throw error;
 
         const rows = data.map(rowFromDb);
-        console.log('📥 API RECEIVE: Latest metrics from DB:', rows);
         return { period, rows };
     },
 
