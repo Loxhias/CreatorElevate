@@ -78,60 +78,78 @@ function parseLiveSeconds(str) {
 
 function normalizeRow(row) {
     const entries = Object.entries(row);
-    if (Math.random() < 0.01 || true) { // Loguear siempre durante depuración
-        console.log('📂 Columnas detectadas en el EXCEL:', entries.map(e => e[0]));
-    }
+
+    // Normaliza Unicode (NFC) y minúsculas para comparación robusta.
+    // Esto resuelve el caso en que Excel exporta 'á'/'é' como forma descompuesta (NFD)
+    // que no coincide con la forma compuesta (NFC) usada en las keywords.
+    const norm = (s) => String(s).normalize('NFC').toLowerCase().trim();
+
     const find = (kws) => {
-        const found = entries.find(([k]) => kws.some(kw => k.toLowerCase().trim().includes(kw.toLowerCase())));
-        return found ? found[1] : null;
+        const found = entries.find(([k]) => kws.some(kw => norm(k).includes(norm(kw))));
+        if (found) return found[1];
+        // Segundo intento sin acentos (strip diacritics) para mayor tolerancia
+        const strip = (s) => norm(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const found2 = entries.find(([k]) => kws.some(kw => strip(k).includes(strip(kw))));
+        return found2 ? found2[1] : null;
     };
-    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
+
+    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User', 'Creator username', 'Nombre usuario']) || '').trim().replace(/^@/, '');
     if (!username) return null;
-    
+
+    console.log('📂 Columnas del Excel:', entries.map(([k, v]) => `"${k}": ${JSON.stringify(v)}`).slice(0, 20).join(' | '));
+
     const now = new Date();
     const safeInt = (val, max = 2147483647) => {
         if (val == null || val === '') return 0;
         let n = parseInt(String(val).replace(/[^\d]/g, ''));
         if (isNaN(n)) return 0;
-
-        // Si el número parece una fecha formato YYYYMMDD... (ej: 20250807...)
-        if (n > 2000000000000) { 
+        if (n > 2000000000000) {
             try {
                 const s = String(n);
-                const year  = parseInt(s.substring(0,4));
-                const month = parseInt(s.substring(4,6)) - 1;
-                const day   = parseInt(s.substring(6,8));
+                const year  = parseInt(s.substring(0, 4));
+                const month = parseInt(s.substring(4, 6)) - 1;
+                const day   = parseInt(s.substring(6, 8));
                 const date  = new Date(year, month, day);
                 if (!isNaN(date.getTime())) {
                     const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
                     return (diff > 0 && diff < 10000) ? diff : 0;
                 }
-            } catch(e) {}
-            return 0; // Si falla el parseo de fecha, mejor devolver 0 que un ID gigante
+            } catch (e) {}
+            return 0;
         }
-
         return (n < max) ? n : 0;
     };
 
+    const rawDaysValue = find([
+        'Días desde la incorporación', 'Days since joining', 'days_since_joining',
+        'Antigüedad', 'Días de registro', 'Días en la agencia',
+        'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma',
+    ]);
 
-    
-    const rawDaysValue = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma']);
-    
+    // Para días válidos buscamos tanto la forma exacta como variaciones comunes
+    // y también búsqueda sin acentos como fallback (ya cubierto por find())
+    const rawValidDays = find([
+        'Días válidos', 'Valid Days', 'valid days',
+        'Días LIVE válidos', 'Días válidos de LIVE', 'días válidos de live',
+        'días de live válidos', 'días activos válidos', 'días activos de live',
+        'active live days', 'valid live days', 'días válidos de transmisión',
+    ]);
+
     return {
         username,
-        diamonds:           Number(find(['Diamonds', 'Diamantes este mes', 'Diamantes (actual)']) || find(['Diamantes']) || 0),
-        diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)']) || 0),
-        liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE']) || '0s'),
-        liveSeconds:        safeInt(parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE'])), 1000000),
-        validDays:          safeInt(find(['Días válidos', 'Valid Days']), 32),
-        emisionesLive:      safeInt(find(['Emisiones LIVE', 'Total LIVE Emissions']), 5000),
-        battles:            safeInt(find(['Batallas', 'Battles', 'Partidas']), 10000),
-        battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds']) || 0),
-        multiGuestDiamonds: Number(find(['Diamantes de invitados múltiples', 'Multi-guest diamonds', 'Multi-guest']) || 0),
-        statusGraduation:   String(find(['Estado de graduación', 'Graduation status']) || ''),
+        diamonds:           Number(find(['Diamonds', 'Diamantes este mes', 'Diamantes (actual)', 'Diamantes']) || 0),
+        diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)', 'Diamantes mes anterior']) || 0),
+        liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE', 'Live Duration', 'Duración LIVE']) || '0s'),
+        liveSeconds:        safeInt(parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE', 'Live Duration', 'Duración LIVE'])), 1000000),
+        validDays:          safeInt(rawValidDays, 32),
+        emisionesLive:      safeInt(find(['Emisiones LIVE', 'Total LIVE Emissions', 'Emisiones en vivo', 'LIVE sessions']), 5000),
+        battles:            safeInt(find(['Batallas', 'Battles', 'Partidas', 'PKs', 'PK']), 10000),
+        battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds', 'Diamantes batalla']) || 0),
+        multiGuestDiamonds: Number(find(['Diamantes de invitados múltiples', 'Multi-guest diamonds', 'Multi-guest', 'Multiinvitado']) || 0),
+        statusGraduation:   String(find(['Estado de graduación', 'Graduation status', 'Estado graduación']) || ''),
         statusRank:         String(find(['Rango', 'Rank', 'Status Rank']) || ''),
         statusActive:       String(find(['Activo', 'Status Active', 'Estado activo']) || ''),
-        groupName:          String(find(['Nombre del grupo', 'Group name']) || ''),
+        groupName:          String(find(['Nombre del grupo', 'Group name', 'Grupo']) || ''),
         manager:            String(find(['Manager', 'Manager name', 'Gestor']) || ''),
         daysSinceJoining:   rawDaysValue != null && rawDaysValue !== '' ? safeInt(rawDaysValue, 10000) : null,
     };
