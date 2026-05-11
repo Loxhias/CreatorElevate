@@ -73,14 +73,20 @@ export function renderLogin(container) {
                     <label for="si-id">Usuario de TikTok o email</label>
                     <input type="text" id="si-id" class="input-control" placeholder="ej: heyprive o tu@email.com" required autocomplete="username">
                 </div>
-                <div class="input-group" style="margin-bottom:1.25rem;">
+                <div class="input-group" style="margin-bottom:0.5rem;">
                     <label for="si-pass">Contraseña</label>
                     <input type="password" id="si-pass" class="input-control" placeholder="••••••••" ${isSupabaseConfigured ? 'required' : ''} autocomplete="current-password">
+                </div>
+                <div style="text-align:right; margin-bottom:1.5rem;">
+                    <a href="#" id="forgot-link" style="font-size:0.75rem; color:var(--primary-light); text-decoration:none; font-weight:600;">¿Olvidaste tu contraseña?</a>
                 </div>
                 <button type="submit" class="btn btn-primary" style="width:100%;font-size:1rem;padding:0.9rem;">
                     Ingresar al Panel
                 </button>
             </form>`;
+
+        const forgotLink = pane.querySelector('#forgot-link');
+        if (forgotLink) forgotLink.onclick = (e) => { e.preventDefault(); renderForgotPassword(); };
 
         pane.querySelector('#signin-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -182,6 +188,96 @@ export function renderLogin(container) {
         });
     }
 
+    function renderForgotPassword() {
+        pane.innerHTML = `
+            <form id="forgot-form">
+                <h3 style="margin-bottom:1rem; font-size:1.1rem;">Recuperar Contraseña</h3>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1.25rem;">
+                    Ingresa tu email y te enviaremos un enlace para restablecer tu clave.
+                </p>
+                <div id="forgot-msg"></div>
+                <div class="input-group">
+                    <label for="fo-email">Tu Email</label>
+                    <input type="email" id="fo-email" class="input-control" placeholder="tu@email.com" required autocomplete="email">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;font-size:1rem;padding:0.9rem; margin-top:0.5rem;">
+                    Enviar Instrucciones
+                </button>
+                <div style="text-align:center; margin-top:1.25rem;">
+                    <a href="#" id="back-to-login" style="font-size:0.8rem; color:var(--text-muted); text-decoration:none;">← Volver al ingreso</a>
+                </div>
+            </form>`;
+
+        pane.querySelector('#back-to-login').onclick = (e) => { e.preventDefault(); renderSignIn(); };
+
+        pane.querySelector('#forgot-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = pane.querySelector('#fo-email').value.trim();
+            const msg = pane.querySelector('#forgot-msg');
+            const btn = pane.querySelector('button[type=submit]');
+            msg.innerHTML = '';
+            btn.disabled = true; btn.textContent = 'Enviando…';
+            try {
+                await auth.resetPassword(email);
+                msg.innerHTML = `<div class="form-success">✓ Enlace enviado. Revisa tu correo electrónico.</div>`;
+                pane.querySelector('#forgot-form').reset();
+            } catch (err) {
+                msg.innerHTML = `<div class="form-error">⚠ ${err.message || 'Error al enviar el enlace.'}</div>`;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Enviar Instrucciones';
+            }
+        });
+    }
+
+    /**
+     * Se llama cuando el usuario viene de un email de recuperación
+     * (Supabase adjunta el token en la URL fragmentada)
+     */
+    function renderRecoverPassword() {
+        pane.innerHTML = `
+            <form id="recover-form">
+                <h3 style="margin-bottom:1rem; font-size:1.1rem;">Nueva Contraseña</h3>
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1.25rem;">
+                    Elige una nueva clave de acceso para tu cuenta.
+                </p>
+                <div id="recover-msg"></div>
+                <div class="input-group">
+                    <label for="re-pass">Nueva Contraseña (mín. 6 caracteres)</label>
+                    <input type="password" id="re-pass" class="input-control" placeholder="••••••••" required minlength="6" autocomplete="new-password">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;font-size:1rem;padding:0.9rem; margin-top:0.5rem;">
+                    Cambiar Contraseña
+                </button>
+            </form>`;
+
+        pane.querySelector('#recover-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pass = pane.querySelector('#re-pass').value;
+            const msg = pane.querySelector('#recover-msg');
+            const btn = pane.querySelector('button[type=submit]');
+            msg.innerHTML = '';
+            btn.disabled = true; btn.textContent = 'Actualizando…';
+            try {
+                await auth.updatePassword(pass);
+                appState.showToast('✓ Contraseña actualizada correctamente', 'success');
+                renderSignIn();
+            } catch (err) {
+                msg.innerHTML = `<div class="form-error">⚠ ${err.message || 'Error al actualizar.'}</div>`;
+            } finally {
+                btn.disabled = false; btn.textContent = 'Cambiar Contraseña';
+            }
+        });
+    }
+
+    // Detección de flujo de recuperación
+    const hash = window.location.hash;
+    if (hash && hash.includes('type=recovery')) {
+        renderRecoverPassword();
+        container.querySelector('#login-tabs').style.display = 'none'; // Ocultar tabs durante recuperación
+    } else {
+        renderSignIn();
+    }
+
     container.querySelectorAll('#login-tabs .tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             container.querySelectorAll('#login-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -189,6 +285,4 @@ export function renderLogin(container) {
             if (btn.dataset.tab === 'signin') renderSignIn(); else renderSignUp();
         });
     });
-
-    renderSignIn();
 }

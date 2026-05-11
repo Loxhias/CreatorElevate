@@ -105,6 +105,20 @@ export const auth = {
         await supabase.auth.signOut();
     },
 
+    async resetPassword(email) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin,
+        });
+        if (error) throw error;
+    },
+
+    async updatePassword(newPassword) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+    },
+
     async updateOwnProfile(patch) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
         const { data: { user } } = await supabase.auth.getUser();
