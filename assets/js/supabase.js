@@ -9,10 +9,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4?bundle
 
 let supabase = null;
 
-// Toda llamada a Supabase aborta automáticamente si supera 10 segundos
+// Toda llamada a Supabase aborta automáticamente si supera 30 segundos
 const fetchWithTimeout = (url, opts = {}) => {
     const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 10000);
+    const tid  = setTimeout(() => ctrl.abort(), 30000);
     return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(tid));
 };
 

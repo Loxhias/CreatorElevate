@@ -326,12 +326,17 @@ function renderUploadView(container, mainContainer) {
         const lbl = dt.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(/^./, c => c.toUpperCase());
         uBtn.disabled = true;
         uBtn.textContent = 'Publicando...';
+        console.log('🚀 Iniciando publicación de reporte:', { month: m, label: lbl, creators: rows.length });
+
         try {
             await metrics.upsertPeriod(`${m}-01`, lbl, rows);
             appState.showToast('Datos publicados con éxito', 'success');
+            // Refrescamos los datos en el store antes de volver
+            await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
         } catch (err) { 
-            appState.showToast('Error: ' + err.message, 'error'); 
+            console.error('❌ Error publicando reporte:', err);
+            appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error'); 
             uBtn.disabled = false;
             uBtn.textContent = 'PUBLICAR MÉTRICAS';
         }

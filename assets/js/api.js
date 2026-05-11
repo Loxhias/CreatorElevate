@@ -8,6 +8,18 @@ import { preloadedData } from './data.js';
 // Elimina surrogates solitarios de UTF-16 que producen JSON inválido en UTF-8
 const san = (s) => typeof s === 'string' ? s.replace(/[\uD800-\uDFFF]/g, '') : s;
 
+// Sanitiza recursivamente todo el objeto/array (cubre emoji de Excel vía SheetJS)
+function sanDeep(v) {
+    if (typeof v === 'string')  return san(v);
+    if (Array.isArray(v))       return v.map(sanDeep);
+    if (v !== null && typeof v === 'object') {
+        const out = {};
+        for (const [k, val] of Object.entries(v)) out[k] = sanDeep(val);
+        return out;
+    }
+    return v;
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 //  AUTH
 // ────────────────────────────────────────────────────────────────────────────
@@ -230,12 +242,13 @@ export const metrics = {
             daysSinceJoining:  r.daysSinceJoining != null ? Number(r.daysSinceJoining) : null,
         })).filter(r => r.username);
 
-        console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: payload.length, firstRow: payload[0] });
+        const safePayload = sanDeep(payload);
+        console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: safePayload.length, firstRow: safePayload[0] });
 
         const { data, error } = await supabase.rpc('admin_upsert_metrics', {
             p_period: periodDate,
-            p_label:  label,
-            p_rows:   payload,
+            p_label:  san(label),
+            p_rows:   safePayload,
         });
         if (error) throw error;
         console.log('✅ API SEND SUCCESS:', data);
@@ -427,5 +440,36 @@ export const push = {
         }
 
         return payload;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  CONTENIDOS — Normas y Canales editables por el admin
+// ────────────────────────────────────────────────────────────────────────────
+
+const CONTENT_DEFAULTS = {
+    normas:  { title: 'Normas de la Agencia',  body: '' },
+    canales: { title: 'Canales Oficiales',     body: '' },
+};
+
+export const content = {
+    async getPage(slug) {
+        if (!isSupabaseConfigured) return CONTENT_DEFAULTS[slug] || null;
+        const { data, error } = await supabase
+            .from('agency_content')
+            .select('slug, title, body')
+            .eq('slug', slug)
+            .maybeSingle();
+        if (error) throw error;
+        return data || CONTENT_DEFAULTS[slug];
+    },
+
+    async upsertPage(slug, title, body) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('agency_content')
+            .upsert({ slug, title: san(title), body: san(body), updated_at: new Date().toISOString() },
+                    { onConflict: 'slug' });
+        if (error) throw error;
     },
 };
