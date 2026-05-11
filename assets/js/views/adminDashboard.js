@@ -397,40 +397,64 @@ function renderUploadView(container, mainContainer) {
     fileIn.onchange = async (e) => {
         const f = e.target.files[0];
         if (!f) return;
-        normalizeRow._diagDone = false; // resetear diagnóstico para cada carga
+        normalizeRow._diagDone = false;
         try {
             const buf = await f.arrayBuffer();
             const wb = window.XLSX.read(buf, { type: 'array' });
             const rawData = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
 
-            // ── DIAGNÓSTICO: muestra las columnas exactas del Excel ──────────
-            if (rawData.length > 0) {
-                const cols = Object.keys(rawData[0]);
-                console.group('📊 [DIAGNÓSTICO EXCEL] Columnas detectadas en el archivo:');
-                cols.forEach((col, i) => console.log(`  [${i}] "${col}" → valor fila 1: ${JSON.stringify(rawData[0][col])}`));
-                console.groupEnd();
+            if (!rawData.length) {
+                preview.innerHTML = '<span style="color:var(--danger);">El archivo está vacío.</span>';
+                return;
             }
+
+            // Columnas exactas del Excel (para diagnóstico y rediseño)
+            const cols = Object.keys(rawData[0]);
+            const firstRow = rawData[0];
 
             rows = rawData.map(normalizeRow).filter(Boolean);
 
-            // ── DIAGNÓSTICO: muestra qué parseó normalizeRow ─────────────────
-            if (rows.length > 0) {
-                const r = rows[0];
-                console.group(`📊 [DIAGNÓSTICO PARSEADO] Primera fila → @${r.username}`);
-                console.log('  diamonds:', r.diamonds, '| diamondsLastMonth:', r.diamondsLastMonth);
-                console.log('  validDays:', r.validDays, '← este debe coincidir con el Excel');
-                console.log('  battles:', r.battles, '| emisionesLive:', r.emisionesLive);
-                console.log('  liveDuration:', r.liveDuration, '| liveSeconds:', r.liveSeconds);
-                console.groupEnd();
-            }
+            // Mostrar tabla de columnas en pantalla para poder copiarlas
+            const colsHtml = cols.map((col, i) => {
+                const val = firstRow[col];
+                return `<tr>
+                    <td style="padding:0.3rem 0.5rem;color:var(--text-muted);font-size:0.7rem;">[${i}]</td>
+                    <td style="padding:0.3rem 0.5rem;font-size:0.72rem;word-break:break-all;">${col}</td>
+                    <td style="padding:0.3rem 0.5rem;color:var(--accent);font-size:0.72rem;">${val != null ? String(val).slice(0, 40) : '—'}</td>
+                </tr>`;
+            }).join('');
 
             const withValidDays = rows.filter(r => r.validDays > 0).length;
-            preview.innerHTML = `<span style="color:var(--accent);">✓ Detectados ${rows.length} creadores · ${withValidDays} con días válidos.</span>`;
-            if (withValidDays === 0) {
-                preview.innerHTML += `<br><span style="color:var(--danger); font-size:0.8rem;">⚠ Ningún creador tiene días válidos — revisa la consola para ver el nombre exacto de la columna en el Excel.</span>`;
-            }
+
+            preview.innerHTML = `
+                <div style="margin-bottom:0.75rem;">
+                    <span style="color:var(--accent);">✓ ${rows.length} creadores detectados</span>
+                    ${withValidDays > 0
+                        ? `<span style="color:var(--accent);margin-left:0.5rem;">· ${withValidDays} con días válidos ✓</span>`
+                        : `<span style="color:var(--danger);margin-left:0.5rem;">· 0 con días válidos ⚠</span>`}
+                </div>
+                <details open>
+                    <summary style="cursor:pointer;font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem;">
+                        📋 Columnas del Excel (${cols.length}) — primera fila de muestra
+                    </summary>
+                    <div style="overflow-x:auto;max-height:300px;overflow-y:auto;border:1px solid var(--glass-border);border-radius:6px;">
+                        <table style="width:100%;border-collapse:collapse;font-family:monospace;">
+                            <thead>
+                                <tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;">
+                                    <th style="padding:0.3rem 0.5rem;font-size:0.7rem;text-align:left;color:var(--text-muted);">#</th>
+                                    <th style="padding:0.3rem 0.5rem;font-size:0.7rem;text-align:left;color:var(--text-muted);">Nombre de columna</th>
+                                    <th style="padding:0.3rem 0.5rem;font-size:0.7rem;text-align:left;color:var(--text-muted);">Valor muestra</th>
+                                </tr>
+                            </thead>
+                            <tbody>${colsHtml}</tbody>
+                        </table>
+                    </div>
+                </details>`;
+
             uBtn.disabled = false;
-        } catch (e) { preview.innerHTML = '<span style="color:var(--danger);">Error leyendo el archivo.</span>'; }
+        } catch (err) {
+            preview.innerHTML = '<span style="color:var(--danger);">Error leyendo el archivo: ' + err.message + '</span>';
+        }
     };
 
     uBtn.onclick = async () => {
