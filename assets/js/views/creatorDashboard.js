@@ -456,10 +456,8 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
 }
 
 
-function tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashIdx) {
-    // ── Data from LAST month ────────────────────────────────────────────────
-    // We use diamondsLastMonth to determine the tier/bonus earned last month.
-    // hLast / dyLast / cashAmtLast come from the previous month's calculation.
+function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashIdx) {
+    // hLast y dyLast no existen en la BD — se ignoran y se infiere desde diamondsLastMonth
     const now = new Date();
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthName = lastMonthDate.toLocaleString('es', { month: 'long', year: 'numeric' });
@@ -681,13 +679,13 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             </div>
         </div>`;
 
-    if (isSupabaseConfigured && !targetUsername && !store.getMetricsData()?.length) {
+    if (isSupabaseConfigured) {
         await store.refreshMetrics().catch(() => {});
     }
 
     const data = store.getMetricsData();
     const user = store.getCurrentUser();
-    
+
     // Si hay targetUsername, estamos en "Modo Auditoría"
     const isAuditing = !!targetUsername;
     const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || user?.username || '').toLowerCase();
@@ -770,11 +768,10 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const dLeft = daysLeft();
     const rank  = getRanking(me, data);
 
-    // Misiones: solo para nuevos (≤30 días). Si no hay datos, asumimos que es antiguo (999)
-    const daysJoined    = me.daysSinceJoining ?? 999;
     const isAdmin       = store.getCurrentUser()?.role === 'admin';
-    const showMissions  = isAuditing || isAdmin || (me.daysSinceJoining !== null && daysJoined <= (30 + dLeft));
-    const showChallenge = !showMissions && (isAuditing || isAdmin || daysJoined <= 90);
+    // Ambas pestañas siempre visibles — days_since_joining no tiene datos reales en la BD
+    const showMissions  = true;
+    const showChallenge = true;
 
     // Estimated earnings: $1 per 200 diamonds
     const DIAMONDS_PER_USD = 200;
@@ -860,44 +857,24 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const tabs = { metrics: null, goals: null, benefits: null, missions: null, challenge: null };
 
     // ── Last month benefit calculation ────────────────────────────────────
-    // We only have dLast from the data; hours/days from last month aren't in the file.
-    // We calculate what tier they were in last month and what bonus they earned.
-    // Note: hoursLastMonth and daysLastMonth are not available, so we use
-    // me.hoursLastMonth / me.daysLastMonth if present, otherwise assume met.
-    const hLast     = me.hoursLastMonth  != null ? parseHours(me.hoursLastMonth)  : null;
-    const dyLast    = me.daysLastMonth   != null ? me.daysLastMonth                : null;
+    // Solo tenemos diamonds_last_month de la BD; horas y días del mes anterior
+    // no están almacenados. Se asume que se cumplieron si los diamantes lo indican.
     const lastCashTierIdx = Math.max(-1, getIdx(dLast, cashBonuses));
-    // Trend for last month: compare dLast vs the month before (not available → assume 'mantiene')
-    const trendLast = trend; // re-use current trend as best approximation
+    const trendLast = trend;
     let cashAmtLast = 0;
-    // Only calculate if we have enough data
     if (lastCashTierIdx >= 0) {
-        const meetsHLast = hLast != null ? hLast >= cashH : true; // assume met if no data
-        const meetsDyLast = dyLast != null ? dyLast >= cashDy : true;
-        if (meetsHLast && meetsDyLast) {
-            const tier = cashBonuses[lastCashTierIdx];
-            cashAmtLast = trendLast === 'subio' ? tier.subio : trendLast === 'mantiene' ? tier.mantiene : 0;
-        }
+        const tier = cashBonuses[lastCashTierIdx];
+        cashAmtLast = trendLast === 'subio' ? tier.subio : trendLast === 'mantiene' ? tier.mantiene : 0;
     }
     let diamAmtLast = 0;
     const lastDiamIdx = getIdx(dLast, diamondRewards);
     if (lastDiamIdx >= 0) {
-        const meetsHLast = hLast != null ? hLast >= diamH : true;
-        const meetsDyLast = dyLast != null ? dyLast >= diamDy : true;
-        if (meetsHLast && meetsDyLast) {
-            const base = diamondRewards[lastDiamIdx].reward;
-            const battlesLast = Math.min(me.battles ?? 0, maxBattles);
-            const extra = Math.round(base * (Math.floor(battlesLast / 100) * 0.1));
-            diamAmtLast = base + extra;
-        }
+        const base = diamondRewards[lastDiamIdx].reward;
+        const battlesLast = Math.min(me.battles ?? 0, maxBattles);
+        const extra = Math.round(base * (Math.floor(battlesLast / 100) * 0.1));
+        diamAmtLast = base + extra;
     }
-    // If dyLast is unavailable, infer activity from diamond count:
-    // 80K+ diamonds implies the creator was active enough (15+ days).
-    const dyLastMetSub = dyLast != null
-        ? dyLast >= subscriptionRequirements.minDays
-        : dLast >= subscriptionRequirements.minDiamonds; // high diamonds → assume active days met
-    const hasSubLast = dyLastMetSub && dLast >= subscriptionRequirements.minDiamonds;
-
+    const hasSubLast = dLast >= subscriptionRequirements.minDiamonds;
     const meetsCashLast = cashAmtLast > 0;
     const meetsDiamLast = diamAmtLast > 0;
 
@@ -905,7 +882,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         if (!tabs[name]) {
             if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
             if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
-            if (name === 'benefits')  tabs[name] = tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
+            if (name === 'benefits')  tabs[name] = tabBenefits(me, null, null, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
             if (name === 'missions')  tabs[name] = tabMissions(me);
             if (name === 'challenge') tabs[name] = tabChallenge90(me, h, dy);
         }

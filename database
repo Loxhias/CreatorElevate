@@ -1,0 +1,103 @@
+## Table `agency_content`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `slug` | `text` | Primary |
+| `title` | `text` |  |
+| `body` | `text` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `creator_metrics`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `period_id` | `uuid` |  |
+| `username` | `citext` |  |
+| `diamonds` | `numeric` |  |
+| `diamonds_last_month` | `numeric` |  |
+| `live_duration` | `text` |  Nullable |
+| `live_seconds` | `int4` |  |
+| `valid_days` | `int4` |  |
+| `battles` | `int4` |  |
+| `manager_name_legacy` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+| `emisiones_live` | `int4` |  |
+| `new_followers` | `int4` |  Nullable |
+| `battle_diamonds` | `numeric` |  Nullable |
+| `multi_guest_diamonds` | `numeric` |  Nullable |
+| `status_graduation` | `text` |  Nullable |
+| `status_rank` | `text` |  Nullable |
+| `status_active` | `text` |  Nullable |
+| `group_name` | `text` |  Nullable |
+| `manager_id` | `uuid` |  Nullable |
+| `days_since_joining` | `int4` |  Nullable |
+
+## Table `notifications`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `sent_by` | `uuid` |  Nullable |
+| `title` | `text` |  |
+| `body` | `text` |  |
+| `url` | `text` |  Nullable |
+| `target_type` | `text` |  |
+| `target_value` | `text` |  Nullable |
+| `sent_at` | `timestamptz` |  |
+| `delivered` | `int4` |  Nullable |
+| `failed` | `int4` |  Nullable |
+
+## Table `profiles`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `tiktok_username` | `citext` |  Nullable Unique |
+| `email` | `citext` |  Nullable Unique |
+| `role` | `text` |  |
+| `manager_id` | `uuid` |  Nullable |
+| `display_name` | `text` |  Nullable |
+| `phone` | `text` |  Nullable |
+| `avatar_url` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+| `is_admin` | `bool` |  Nullable |
+| `is_manager` | `bool` |  Nullable |
+| `is_creator` | `bool` |  Nullable |
+
+## Table `push_subscriptions`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  |
+| `endpoint` | `text` |  Unique |
+| `p256dh` | `text` |  |
+| `auth` | `text` |  |
+| `user_agent` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `report_periods`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `period` | `date` |  Unique |
+| `label` | `text` |  Nullable |
+| `uploaded_at` | `timestamptz` |  |
+| `uploaded_by` | `uuid` |  Nullable |
+
