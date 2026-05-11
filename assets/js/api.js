@@ -239,14 +239,6 @@ export const profiles = {
         return data;
     },
 
-    async listManagers() {
-        if (!isSupabaseConfigured) return [];
-        const { data, error } = await supabase
-            .from('profiles').select('*').eq('role', 'manager');
-        if (error) throw error;
-        return data;
-    },
-
     async updateRoles(userId, roles) {
         const { data, error } = await supabase
             .from('profiles')
@@ -273,6 +265,7 @@ export const profiles = {
     },
 
     async listManagers() {
+        if (!isSupabaseConfigured) return [];
         const { data, error } = await supabase
             .from('profiles')
             .select('*')

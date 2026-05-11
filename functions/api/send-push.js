@@ -78,15 +78,20 @@ export async function onRequestPost(context) {
         const t = target || { type: 'all' };
 
         if (t.type === 'role') {
-            // Requiere que en el cliente hayas hecho OneSignal.User.addTag('role', '<rol>')
-            notificationBody.filters = [
-                { field: "tag", key: "role", relation: "=", value: String(t.value) },
-            ];
+            notificationBody.filters = [{ field: "tag", key: "role", relation: "=", value: t.value }];
             log('Filtrando por tag role =', t.value);
+        } else if (t.type === 'segment') {
+            const segmentMap = {
+                'all': 'Subscribed Users',
+                'top': 'Top Creators',
+                'potential': 'Potential Creators',
+                'risk': 'At Risk',
+                'novice': 'Novice Creators',
+                'new': 'New Users'
+            };
+            notificationBody.included_segments = [segmentMap[t.value] || t.value];
+            log('Enviando a segmento:', notificationBody.included_segments[0]);
         } else if (t.type === 'user') {
-            // Usamos la sintaxis legacy `include_external_user_ids` porque la nueva
-            // `include_aliases.external_id` con `target_channel: "push"` reportadamente
-            // resuelve a 0 destinatarios para web push aunque el alias exista.
             notificationBody.include_external_user_ids = [String(t.value)];
             notificationBody.channel_for_external_user_ids = 'push';
             log('Destino externo (1):', t.value);
@@ -140,13 +145,12 @@ export async function onRequestPost(context) {
             (result.errors && typeof result.errors === 'object' && Object.keys(result.errors).length)
         );
 
-        // OneSignal devuelve `recipients` en la respuesta. Si vale 0 (o falta), la notificación
-        // se aceptó pero no se entregó a nadie — típicamente porque el external_id/tag no resolvió.
+        // Nota: la API V2 (api.onesignal.com/notifications) puede NO devolver `recipients`
+        // en la respuesta inmediata; solo lo hace explícitamente cuando vale 0.
         const recipients = (typeof result?.recipients === 'number') ? result.recipients : null;
-        if (response.ok && !hasErrors && (recipients === 0 || recipients === null)) {
-            log('⚠️ OneSignal aceptó la notificación pero recipients=' + recipients +
-                '. Posibles causas: (a) el external_id no está asociado a ningún device suscrito, ' +
-                '(b) el tag no matchea, (c) los devices están unsubscribed.');
+        if (response.ok && !hasErrors && recipients === 0) {
+            log('⚠️ OneSignal aceptó la notificación pero recipients=0. Probablemente el ' +
+                'external_id/tag no matchea ningún device suscrito (revisá Audience → Subscriptions).');
         }
 
         const success = response.ok && !hasErrors;

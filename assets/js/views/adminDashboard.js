@@ -2,8 +2,69 @@ import { store } from '../store.js';
 import { appState } from '../main.js';
 import { metrics, profiles, push } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
+import { visualTiers } from '../config.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
+
+// ── Skeleton helpers ──────────────────────────────────────────────────────────
+const skelAdmin = () => `
+    <div style="padding:0;">
+        <div class="skel" style="height:36px;width:260px;margin-bottom:2rem;"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;margin-bottom:2rem;">
+            <div class="skel-panel" style="height:88px;"></div>
+            <div class="skel-panel" style="height:88px;"></div>
+            <div class="skel-panel" style="height:88px;"></div>
+            <div class="skel-panel" style="height:88px;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;">
+            <div class="skel-panel" style="height:72px;"></div>
+            <div class="skel-panel" style="height:72px;"></div>
+            <div class="skel-panel" style="height:72px;"></div>
+        </div>
+    </div>`;
+
+const skelRows = (n = 4) => `
+    <div style="display:flex;flex-direction:column;gap:0.8rem;">
+        ${Array.from({length: n}, () => `
+            <div class="skel-panel" style="height:72px;display:flex;align-items:center;gap:1rem;padding:1rem;">
+                <div class="skel" style="width:40px;height:40px;border-radius:50%;flex-shrink:0;"></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:0.5rem;">
+                    <div class="skel" style="height:13px;width:140px;"></div>
+                    <div class="skel" style="height:11px;width:90px;opacity:0.6;"></div>
+                </div>
+                <div class="skel" style="height:20px;width:80px;"></div>
+            </div>`).join('')}
+    </div>`;
+
+const skelCreator = () => `
+    <div>
+        <div class="skel" style="height:22px;width:200px;border-radius:999px;margin-bottom:1rem;"></div>
+        <div class="skel-panel" style="height:60px;margin-bottom:1rem;"></div>
+        <div class="skel-panel" style="height:88px;margin-bottom:1.25rem;"></div>
+        <div style="display:flex;gap:0.4rem;margin-bottom:1.25rem;">
+            <div class="skel" style="height:36px;flex:1;border-radius:8px;"></div>
+            <div class="skel" style="height:36px;flex:1;border-radius:8px;"></div>
+            <div class="skel" style="height:36px;flex:1;border-radius:8px;"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+            <div class="skel-panel" style="height:110px;"></div>
+            <div class="skel-panel" style="height:110px;"></div>
+            <div class="skel-panel" style="height:110px;"></div>
+            <div class="skel-panel" style="height:110px;"></div>
+        </div>
+    </div>`;
+
+const skelHistory = () => `
+    <div>
+        <div class="skel" style="height:32px;width:240px;margin-bottom:1.5rem;"></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1.5rem;margin-bottom:1.5rem;">
+            <div class="skel-panel" style="height:80px;"></div>
+            <div class="skel-panel" style="height:80px;"></div>
+            <div class="skel-panel" style="height:80px;"></div>
+        </div>
+        <div class="skel-panel" style="height:280px;margin-bottom:1.5rem;"></div>
+        <div class="skel-panel" style="height:200px;"></div>
+    </div>`;
 
 function parseLiveSeconds(str) {
     if (!str) return 0;
@@ -40,7 +101,7 @@ export async function renderAdminDashboard(container) {
     const currentMetrics = store.getMetricsData();
     
     if (!currentProfs || !currentProfs.length || !currentMetrics || !currentMetrics.length) {
-        container.innerHTML = `<div style="padding:2rem; text-align:center;">Cargando datos por primera vez...</div>`;
+        container.innerHTML = skelAdmin();
         if (isSupabaseConfigured) {
             await Promise.all([store.refreshAdminLists(), store.refreshMetrics()]).catch(console.warn);
         }
@@ -75,6 +136,11 @@ export async function renderAdminDashboard(container) {
                     <h3 style="font-size:0.95rem;">Cargar Reporte TikTok</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Subir Excel de métricas mensual.</p>
                 </div>
+                <div class="glass-panel action-card" id="nav-history">
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📈</div>
+                    <h3 style="font-size:0.95rem;">Historial de Métricas</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Evolución por período y creador.</p>
+                </div>
             </div>
 
             <div id="admin-view-content">
@@ -98,9 +164,10 @@ export async function renderAdminDashboard(container) {
 
     const viewContent = container.querySelector('#admin-view-content');
 
-    container.querySelector('#nav-audit').onclick = () => renderAuditView(viewContent, managers, creators, data);
-    container.querySelector('#nav-manage').onclick = () => renderManageView(viewContent);
-    container.querySelector('#nav-upload').onclick = () => renderUploadView(viewContent, container);
+    container.querySelector('#nav-audit').onclick   = () => renderAuditView(viewContent, managers, creators, data);
+    container.querySelector('#nav-manage').onclick   = () => renderManageView(viewContent);
+    container.querySelector('#nav-upload').onclick   = () => renderUploadView(viewContent, container);
+    container.querySelector('#nav-history').onclick  = () => renderHistoryView(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────
@@ -143,7 +210,7 @@ function renderAuditView(container, managers, creators, metricsData) {
 
     container.querySelectorAll('.v-m-dash').forEach(btn => {
         btn.onclick = () => {
-            container.innerHTML = '<div style="padding:2rem;">Cargando Dashboard...</div>';
+            container.innerHTML = skelRows(3);
             import('./managerDashboard.js').then(mod => mod.renderManagerDashboard(container, btn.dataset.id));
         };
     });
@@ -274,7 +341,7 @@ function renderUploadView(container, mainContainer) {
 async function renderGroupEditor(container, managerId) {
     container.innerHTML = '<div style="padding:2rem;">Sincronizando equipo...</div>';
     
-    const allProfs = await profiles.searchProfiles('');
+    const allProfs = store.getProfiles();
     const manager = allProfs.find(p => p.id === managerId) || { display_name: 'Manager' };
     
     // Obtener creadores asignados a este manager desde creator_metrics
@@ -373,59 +440,362 @@ function bindAddBtns(el, managerId, rootContainer) {
 }
 
 // ── VISTA: CREADORES ────────────────────────────────────────────────────────
+function getTier(diamonds) {
+    for (let i = visualTiers.length - 1; i >= 0; i--) {
+        if (diamonds >= visualTiers[i].range) return visualTiers[i];
+    }
+    return visualTiers[0];
+}
+
 export async function renderCreatorsList(container) {
     const currentMetrics = store.getMetricsData();
     if (!currentMetrics || !currentMetrics.length) {
-        container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando listado...</div>';
+        container.innerHTML = skelRows(5);
         if (isSupabaseConfigured) await store.refreshMetrics().catch(console.warn);
     }
     const data = store.getMetricsData() || [];
 
-    const renderItems = (list) => {
-        if (!list.length) return '<p style="padding:2rem; text-align:center;">No hay creadores cargados en este período.</p>';
-        return list.map(c => `
-            <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.8rem;">
-                <div style="width:40px; height:40px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; color:white; font-weight:800;">${c.username.charAt(0).toUpperCase()}</div>
-                <div style="flex:1;">
-                    <div style="font-weight:700;">@${c.username}</div>
-                    <div style="font-size:0.75rem; color:var(--text-secondary);">${c.validDays} días válidos</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="font-weight:800; color:var(--accent);">${fmt(c.diamonds)} 💎</div>
-                    <button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="margin-top:0.4rem; font-size:0.65rem;">Ver Dashboard</button>
-                </div>
-            </div>
-        `).join('');
-    };
+    // Construir lista de managers únicos presentes en las métricas
+    const managersInData = [];
+    const seenManagerIds = new Set();
+    data.forEach(c => {
+        if (c.managerId && !seenManagerIds.has(c.managerId)) {
+            seenManagerIds.add(c.managerId);
+            const prof = store.getProfiles().find(p => p.id === c.managerId);
+            managersInData.push({ id: c.managerId, name: prof?.display_name || prof?.email || c.manager || c.managerId });
+        }
+    });
+
+    const managerOptions = managersInData.map(m =>
+        `<option value="${m.id}">${m.name}</option>`
+    ).join('');
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <h2 style="margin-bottom:1.5rem;">Creadores</h2>
-            <p style="color:var(--text-secondary); margin-bottom:1.5rem; font-size:0.9rem;">Todos los creadores cargados en el último reporte de métricas.</p>
-            <div class="glass-panel" style="padding:0.8rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:0.8rem;">
-                <span>🔍</span>
-                <input type="text" id="cr-search" placeholder="Buscar creador..." class="input-control" style="background:none; border:none; padding:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                <h2 style="margin:0;">Creadores</h2>
+                <span id="cr-count" style="font-size:0.8rem; color:var(--text-secondary);"></span>
             </div>
-            <div id="cr-results">${renderItems(data)}</div>
+
+            <!-- Barra de búsqueda -->
+            <div class="glass-panel" style="padding:0.8rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.8rem;">
+                <span>🔍</span>
+                <input type="text" id="cr-search" placeholder="Buscar por username..." class="input-control" style="background:none; border:none; padding:0; flex:1;">
+            </div>
+
+            <!-- Filtros -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.8rem; margin-bottom:1.5rem;">
+                <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">MANAGER</label>
+                    <select id="cr-filter-manager" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos</option>
+                        ${managerOptions}
+                        <option value="none">Sin asignar</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">NIVEL</label>
+                    <select id="cr-filter-level" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos los niveles</option>
+                        ${visualTiers.map(t => `<option value="${t.level}">${t.emoji} ${t.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">DÍAS VÁLIDOS</label>
+                    <select id="cr-filter-days" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos</option>
+                        <option value="22">≥ 22 días (élite)</option>
+                        <option value="15">≥ 15 días</option>
+                        <option value="7">≥ 7 días</option>
+                        <option value="0">Sin días válidos</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">ORDENAR POR</label>
+                    <select id="cr-sort" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="diamonds">Diamantes ↓</option>
+                        <option value="validDays">Días válidos ↓</option>
+                        <option value="username">Username A-Z</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="cr-results"></div>
         </div>
     `;
 
-    const input = container.querySelector('#cr-search');
-    const results = container.querySelector('#cr-results');
-    input.oninput = () => {
-        const q = input.value.toLowerCase().trim();
-        results.innerHTML = renderItems(data.filter(c => c.username.toLowerCase().includes(q)));
+    const renderItems = (list) => {
+        if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
+        return list.map(c => {
+            const tier = getTier(c.diamonds);
+            const managerProf = c.managerId ? store.getProfiles().find(p => p.id === c.managerId) : null;
+            const managerName = managerProf?.display_name || managerProf?.email || c.manager || null;
+            const daysColor = c.validDays >= 22 ? 'var(--accent)' : c.validDays >= 7 ? 'var(--warning)' : 'var(--danger)';
+            return `
+            <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
+                <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0;">${c.username.charAt(0).toUpperCase()}</div>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>
+                    <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
+                        <span style="color:${daysColor};">${c.validDays}d</span>
+                        ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
+                    </div>
+                </div>
+                <div style="text-align:right; flex-shrink:0;">
+                    <div style="font-size:0.68rem; margin-bottom:0.2rem;">${tier.emoji} ${tier.name}</div>
+                    <div style="font-weight:800; color:var(--accent); font-size:0.95rem;">${fmt(c.diamonds)} 💎</div>
+                    <button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="margin-top:0.35rem; font-size:0.65rem; padding:0.2rem 0.6rem;">Ver →</button>
+                </div>
+            </div>`;
+        }).join('');
     };
 
-    // Escuchar clics en botones de dashboard
+    const applyFilters = () => {
+        const q       = container.querySelector('#cr-search').value.toLowerCase().trim();
+        const manager = container.querySelector('#cr-filter-manager').value;
+        const level   = container.querySelector('#cr-filter-level').value;
+        const days    = container.querySelector('#cr-filter-days').value;
+        const sort    = container.querySelector('#cr-sort').value;
+
+        let list = data.filter(c => {
+            if (q && !c.username.toLowerCase().includes(q)) return false;
+            if (manager === 'none' && c.managerId) return false;
+            if (manager !== 'all' && manager !== 'none' && c.managerId !== manager) return false;
+            if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
+            if (days === '0'  && c.validDays > 0)   return false;
+            if (days !== 'all' && days !== '0' && c.validDays < Number(days)) return false;
+            return true;
+        });
+
+        if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
+        if (sort === 'validDays') list = [...list].sort((a, b) => b.validDays - a.validDays);
+        if (sort === 'username')  list = [...list].sort((a, b) => a.username.localeCompare(b.username));
+
+        container.querySelector('#cr-count').textContent = `${list.length} de ${data.length} creadores`;
+        container.querySelector('#cr-results').innerHTML = renderItems(list);
+    };
+
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-sort'].forEach(sel => {
+        const el = container.querySelector(sel);
+        el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
+    });
+
+    applyFilters();
+
     container.addEventListener('click', (e) => {
         const btn = e.target.closest('.v-c-dash');
         if (btn) {
             const username = btn.dataset.username;
-            container.innerHTML = '<div style="padding:2rem; text-align:center;">Cargando Dashboard del Creador...</div>';
+            container.innerHTML = skelCreator();
             import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
         }
     });
 }
 
+// ── VISTA: HISTORIAL DE MÉTRICAS ─────────────────────────────────────────────
+const CHART_DEFAULTS = {
+    scales: {
+        x: {
+            grid:  { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: 'rgba(255,255,255,0.45)', font: { size: 11 } },
+        },
+        y: {
+            grid:  { color: 'rgba(255,255,255,0.05)' },
+            ticks: {
+                color: 'rgba(255,255,255,0.45)',
+                font: { size: 11 },
+                callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v,
+            },
+        },
+    },
+    plugins: { legend: { display: false } },
+    responsive: true,
+    maintainAspectRatio: false,
+};
+
+async function renderHistoryView(container) {
+    container.innerHTML = skelHistory();
+
+    if (!isSupabaseConfigured) {
+        container.innerHTML = '<div class="glass-panel" style="padding:2rem; text-align:center; color:var(--text-muted);">El historial requiere Supabase configurado.</div>';
+        return;
+    }
+
+    const periods = await metrics.listPeriods().catch(() => []);
+    if (!periods.length) {
+        container.innerHTML = '<div class="glass-panel" style="padding:2rem; text-align:center; color:var(--text-muted);">Aún no hay períodos históricos cargados.</div>';
+        return;
+    }
+
+    // Últimos 6 períodos, del más antiguo al más reciente (orden correcto para el eje X)
+    const recent = periods.slice(0, 6).reverse();
+    const periodData = await Promise.all(
+        recent.map(p => metrics.getByPeriod(p.id).then(rows => ({ period: p, rows })))
+    );
+
+    const labels        = periodData.map(d => d.period.label);
+    const totalDiamonds = periodData.map(d => d.rows.reduce((s, r) => s + r.diamonds, 0));
+    const totalCreators = periodData.map(d => d.rows.length);
+
+    container.innerHTML = `
+        <div class="animate-fadeIn">
+            <h2 style="margin-bottom:1.5rem;">Historial de Métricas</h2>
+
+            <!-- KPIs rápidos -->
+            <div class="metrics-grid" style="margin-bottom:1.5rem;">
+                <div class="glass-panel metric-card">
+                    <span class="metric-label">Períodos cargados</span>
+                    <span class="metric-value">${periods.length}</span>
+                </div>
+                <div class="glass-panel metric-card">
+                    <span class="metric-label">Mejor mes (💎)</span>
+                    <span class="metric-value" style="color:var(--accent);">${fmt(Math.max(...totalDiamonds))}</span>
+                </div>
+                <div class="glass-panel metric-card">
+                    <span class="metric-label">Máx. creadores activos</span>
+                    <span class="metric-value">${Math.max(...totalCreators)}</span>
+                </div>
+            </div>
+
+            <!-- Gráfico global -->
+            <div class="glass-panel" style="padding:1.5rem; margin-bottom:1.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                    <h4 style="margin:0; font-size:0.8rem; color:var(--text-secondary); letter-spacing:0.05em;">DIAMANTES TOTALES POR PERÍODO</h4>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn btn-sm chart-type-btn active" data-type="bar"  style="font-size:0.7rem; padding:0.25rem 0.6rem;">Barras</button>
+                        <button class="btn btn-sm chart-type-btn"        data-type="line" style="font-size:0.7rem; padding:0.25rem 0.6rem;">Línea</button>
+                    </div>
+                </div>
+                <div style="position:relative; height:220px;">
+                    <canvas id="chart-global"></canvas>
+                </div>
+            </div>
+
+            <!-- Búsqueda por creador -->
+            <div class="glass-panel" style="padding:1.5rem;">
+                <h4 style="margin-top:0; font-size:0.8rem; color:var(--text-secondary); letter-spacing:0.05em;">EVOLUCIÓN POR CREADOR</h4>
+                <div style="display:flex; gap:0.8rem; margin-bottom:1.25rem;">
+                    <input type="text" id="hist-username" class="input-control" placeholder="@username..." style="flex:1;">
+                    <button id="hist-search-btn" class="btn btn-primary" style="white-space:nowrap;">Ver evolución</button>
+                </div>
+                <div id="hist-creator-wrap" style="position:relative; height:220px; display:none;">
+                    <canvas id="chart-creator"></canvas>
+                </div>
+                <p id="hist-creator-msg" style="text-align:center; color:var(--text-muted); font-size:0.85rem; margin:0;">
+                    Ingresa un username para ver su evolución de diamantes período a período.
+                </p>
+            </div>
+        </div>
+    `;
+
+    // ── Gráfico global ────────────────────────────────────────────────────────
+    let globalChart = new Chart(
+        container.querySelector('#chart-global').getContext('2d'),
+        {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    data: totalDiamonds,
+                    backgroundColor: 'rgba(124,110,247,0.55)',
+                    borderColor:     'rgba(124,110,247,1)',
+                    borderWidth: 1,
+                    borderRadius: 5,
+                    // line props (inactivos en modo bar)
+                    tension: 0.35,
+                    fill: true,
+                    pointBackgroundColor: 'rgba(124,110,247,1)',
+                    pointRadius: 4,
+                }],
+            },
+            options: { ...CHART_DEFAULTS },
+        }
+    );
+
+    // Alternar tipo de gráfico
+    container.querySelectorAll('.chart-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            container.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            globalChart.destroy();
+            globalChart = new Chart(
+                container.querySelector('#chart-global').getContext('2d'),
+                {
+                    type: btn.dataset.type,
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: totalDiamonds,
+                            backgroundColor: btn.dataset.type === 'line' ? 'rgba(124,110,247,0.15)' : 'rgba(124,110,247,0.55)',
+                            borderColor:     'rgba(124,110,247,1)',
+                            borderWidth: btn.dataset.type === 'line' ? 2 : 1,
+                            borderRadius: 5,
+                            tension: 0.35,
+                            fill: true,
+                            pointBackgroundColor: 'rgba(124,110,247,1)',
+                            pointRadius: 4,
+                        }],
+                    },
+                    options: { ...CHART_DEFAULTS },
+                }
+            );
+        });
+    });
+
+    // ── Gráfico por creador ───────────────────────────────────────────────────
+    let creatorChart = null;
+
+    const searchCreator = () => {
+        const q    = container.querySelector('#hist-username').value.trim().toLowerCase().replace(/^@/, '');
+        const wrap = container.querySelector('#hist-creator-wrap');
+        const msg  = container.querySelector('#hist-creator-msg');
+
+        if (!q) return;
+
+        const creatorDiamonds = periodData.map(d => {
+            const row = d.rows.find(r => r.username === q);
+            return row ? row.diamonds : null;
+        });
+
+        if (creatorDiamonds.every(v => v === null)) {
+            wrap.style.display = 'none';
+            msg.style.display  = 'block';
+            msg.textContent    = `No se encontró "@${q}" en ninguno de los últimos ${periodData.length} períodos.`;
+            return;
+        }
+
+        wrap.style.display = 'block';
+        msg.style.display  = 'none';
+
+        if (creatorChart) creatorChart.destroy();
+
+        creatorChart = new Chart(
+            container.querySelector('#chart-creator').getContext('2d'),
+            {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: `@${q}`,
+                        data: creatorDiamonds,
+                        borderColor:          '#00d9a6',
+                        backgroundColor:      'rgba(0,217,166,0.1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#00d9a6',
+                        pointRadius: 4,
+                        tension: 0.35,
+                        fill: true,
+                        spanGaps: true,
+                    }],
+                },
+                options: { ...CHART_DEFAULTS },
+            }
+        );
+    };
+
+    container.querySelector('#hist-search-btn').addEventListener('click', searchCreator);
+    container.querySelector('#hist-username').addEventListener('keypress', e => {
+        if (e.key === 'Enter') searchCreator();
+    });
+}
 

@@ -140,3 +140,27 @@ body {
 /* Animaciones simples */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .animate-fadeIn { animation: fadeIn 0.3s ease; }
+
+/* ---- Skeleton Loader ---- */
+@keyframes skel-pulse {
+    0%, 100% { opacity: 0.35; }
+    50%       { opacity: 0.65; }
+}
+.skel {
+    background: rgba(255,255,255,0.07);
+    border-radius: 6px;
+    animation: skel-pulse 1.5s ease-in-out infinite;
+}
+.skel-panel {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: var(--radius);
+    animation: skel-pulse 1.5s ease-in-out infinite;
+}
+
+/* ---- Toast ---- */
+.toast-container { position:fixed; bottom:1.5rem; right:1.5rem; display:flex; flex-direction:column; gap:0.5rem; z-index:9999; }
+.toast-msg { padding:0.8rem 1.2rem; font-size:0.85rem; font-weight:600; min-width:220px; pointer-events:none; transition:opacity 0.3s ease; }
+.toast-msg.success { border-color:var(--accent); }
+.toast-msg.danger  { border-color:var(--danger); }
+.toast-msg.warning { border-color:#f59e0b; }

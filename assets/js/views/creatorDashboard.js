@@ -547,7 +547,23 @@ function tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, tr
 // ── Main render ────────────────────────────────────────────────────────────
 
 export async function renderCreatorDashboard(container, targetUsername = null) {
-    container.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-muted);">Cargando…</div>`;
+    container.innerHTML = `
+        <div>
+            <div class="skel" style="height:20px;width:200px;border-radius:999px;margin-bottom:1rem;"></div>
+            <div class="skel-panel" style="height:62px;margin-bottom:1rem;"></div>
+            <div class="skel-panel" style="height:90px;margin-bottom:1.25rem;"></div>
+            <div style="display:flex;gap:0.4rem;margin-bottom:1.25rem;">
+                <div class="skel" style="height:36px;flex:1;border-radius:8px;"></div>
+                <div class="skel" style="height:36px;flex:1;border-radius:8px;"></div>
+                <div class="skel" style="height:36px;flex:1;border-radius:8px;"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="skel-panel" style="height:110px;"></div>
+                <div class="skel-panel" style="height:110px;"></div>
+                <div class="skel-panel" style="height:110px;"></div>
+                <div class="skel-panel" style="height:110px;"></div>
+            </div>
+        </div>`;
 
     if (isSupabaseConfigured && !targetUsername) {
         await store.refreshMetrics().catch(() => {});
@@ -770,11 +786,12 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     // Manejar botón de volver
     container.querySelector('#back-to-list')?.addEventListener('click', () => {
-        // Al recargar el dashboard principal se restaura la vista admin/manager
-        import('../main.js').then(m => {
-            const role = store.getCurrentUser().role;
-            m.appState.navigate(role);
-        });
+        const role = store.getCurrentUser().role;
+        if (role === 'manager') {
+            import('./managerDashboard.js').then(m => m.renderManagerDashboard(container));
+        } else {
+            import('./adminDashboard.js').then(m => m.renderCreatorsList(container));
+        }
     });
 }
 

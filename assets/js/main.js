@@ -177,7 +177,13 @@ async function logoutOneSignalUser() {
 
 async function boot() {
     const app = document.getElementById('app');
-    app.innerHTML = '<div style="height:100vh; display:flex; align-items:center; justify-content:center;">Cargando...</div>';
+    app.innerHTML = `<div style="height:100vh;display:flex;align-items:center;justify-content:center;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1.2rem;">
+            <div class="skel" style="width:44px;height:44px;border-radius:10px;"></div>
+            <div class="skel" style="width:160px;height:14px;"></div>
+            <div class="skel" style="width:100px;height:10px;opacity:0.5;"></div>
+        </div>
+    </div>`;
 
     // Limpiamos Service Workers antiguos PERO conservamos el de OneSignal:
     // desregistrarlo en cada arranque rompe la suscripción push y deja errores en bucle.

@@ -5,7 +5,16 @@ import { profiles } from '../api.js';
 function fmt(n) { return Number(n).toLocaleString('es'); }
 
 export async function renderManagerDashboard(container, targetManagerId = null) {
-    container.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text-muted);">Cargando…</div>`;
+    container.innerHTML = `
+        <div>
+            <div class="skel" style="height:36px;width:260px;margin-bottom:1.5rem;"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;margin-bottom:2rem;">
+                <div class="skel-panel" style="height:90px;"></div>
+                <div class="skel-panel" style="height:90px;"></div>
+            </div>
+            <div class="skel" style="height:20px;width:180px;margin-bottom:1rem;"></div>
+            <div class="skel-panel" style="height:220px;"></div>
+        </div>`;
 
     if (isSupabaseConfigured && !targetManagerId) {
         await store.refreshMetrics().catch(() => {});
