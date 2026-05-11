@@ -78,6 +78,9 @@ function parseLiveSeconds(str) {
 
 function normalizeRow(row) {
     const entries = Object.entries(row);
+    if (Math.random() < 0.01 || true) { // Loguear siempre durante depuración
+        console.log('📂 Columnas detectadas en el EXCEL:', entries.map(e => e[0]));
+    }
     const find = (kws) => {
         const found = entries.find(([k]) => kws.some(kw => k.toLowerCase().trim().includes(kw.toLowerCase())));
         return found ? found[1] : null;
