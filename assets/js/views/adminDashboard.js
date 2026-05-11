@@ -85,9 +85,18 @@ function normalizeRow(row) {
     const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
     if (!username) return null;
     
-    const rawDays = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación']);
+    const rawDaysValue = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma']);
     
-    // Si no hay días pero hay una fecha, podríamos calcularlo (opcional futuro)
+    let daysSinceJoining = null;
+    if (rawDaysValue != null) {
+        // 1. Intentar limpiar texto (ej: "10 días" -> 10)
+        const cleanNum = parseInt(String(rawDaysValue).replace(/[^\d]/g, ''));
+        if (!isNaN(cleanNum)) {
+            daysSinceJoining = cleanNum;
+        } 
+        // 2. Si parece una fecha (formato Excel o string), podríamos calcularlo
+        // Por ahora nos centramos en que el número sea robusto
+    }
     
     return {
         username,
@@ -105,7 +114,7 @@ function normalizeRow(row) {
         statusActive:       String(find(['Activo', 'Status Active', 'Estado activo']) || ''),
         groupName:          String(find(['Nombre del grupo', 'Group name']) || ''),
         manager:            String(find(['Manager', 'Manager name', 'Gestor']) || ''),
-        daysSinceJoining:   rawDays != null && !isNaN(Number(rawDays)) ? Number(rawDays) : null,
+        daysSinceJoining:   daysSinceJoining,
     };
 }
 
