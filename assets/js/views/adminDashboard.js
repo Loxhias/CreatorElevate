@@ -651,19 +651,30 @@ export async function renderCreatorsList(container) {
         const type    = container.querySelector('#cr-filter-type').value;
         const sort    = container.querySelector('#cr-sort').value;
 
+        console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
+        if (data && data[0]) console.log('📝 Datos del primer creador:', data[0]);
+
         let list = data.filter(c => {
             const antiquity = c.days_since_joining;
+            
             if (q && !c.username.toLowerCase().includes(q)) return false;
             if (manager === 'none' && c.manager_id) return false;
             if (manager !== 'all' && manager !== 'none' && c.manager_id !== manager) return false;
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
             if (days === '0'  && c.valid_days > 0)   return false;
             if (days !== 'all' && days !== '0' && c.valid_days < Number(days)) return false;
-            if (type === 'new' && (antiquity === null || antiquity > 30)) return false;
-            if (type === 'old' && (antiquity === null || antiquity <= 30)) return false;
-            if (type === 'none' && antiquity !== null) return false;
+            
+            if (type === 'new') {
+                return antiquity !== null && antiquity <= 30;
+            } else if (type === 'old') {
+                return antiquity !== null && antiquity > 30;
+            } else if (type === 'none') {
+                return antiquity === null;
+            }
             return true;
         });
+
+        console.log('✅ Resultados encontrados:', list.length);
 
         if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
         if (sort === 'validDays') list = [...list].sort((a, b) => b.valid_days - a.valid_days);
