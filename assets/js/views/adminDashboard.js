@@ -376,7 +376,9 @@ function renderUploadView(container, mainContainer) {
             const wb = window.XLSX.read(buf, { type: 'array' });
             const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
             rows = data.map(normalizeRow).filter(Boolean);
-            preview.innerHTML = `<span style="color:var(--accent);">✓ Detectados ${rows.length} creadores.</span>`;
+            const withValidDays = rows.filter(r => r.validDays > 0).length;
+            console.log(`[Upload] ${rows.length} creadores. Con validDays>0: ${withValidDays}. Ejemplo:`, rows[0]);
+            preview.innerHTML = `<span style="color:var(--accent);">✓ Detectados ${rows.length} creadores · ${withValidDays} con días válidos.</span>`;
             uBtn.disabled = false;
         } catch (e) { preview.innerHTML = '<span style="color:var(--danger);">Error leyendo el archivo.</span>'; }
     };
