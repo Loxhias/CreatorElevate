@@ -770,10 +770,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const dLeft = daysLeft();
     const rank  = getRanking(me, data);
 
-    // Determine which special tab to show (mutually exclusive)
-    const daysJoined    = me.daysSinceJoining ?? null;
-    const showMissions  = daysJoined !== null && daysJoined <= 30 + dLeft;
-    const showChallenge = daysJoined !== null && !showMissions && daysJoined <= 90;
+    // Misiones: para nuevos (≤30 días) o si estamos en modo auditoría/admin
+    const daysJoined    = me.daysSinceJoining ?? 0;
+    const isAdmin       = store.getCurrentUser().role === 'admin';
+    const showMissions  = isAuditing || isAdmin || daysJoined <= (30 + dLeft);
+    const showChallenge = !showMissions && (isAuditing || isAdmin || daysJoined <= 90);
 
     // Estimated earnings: $1 per 200 diamonds
     const DIAMONDS_PER_USD = 200;
