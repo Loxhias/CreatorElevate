@@ -655,7 +655,7 @@ export async function renderCreatorsList(container) {
 
         console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
         if (data && data[0]) {
-            console.log('📊 Columnas detectadas en la tabla:', Object.keys(data[0]));
+            console.log('📊 TODAS las columnas detectadas:', JSON.stringify(Object.keys(data[0])));
             console.log('📝 Ejemplo de datos del primer creador:', data[0]);
         }
 
