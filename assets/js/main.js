@@ -267,6 +267,14 @@ async function boot() {
 
 // Función global para disparar el prompt (llamada desde los botones)
 window.installPWA = async () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+    if (isIOS && !isStandalone) {
+        appState.showToast('En iOS: pulsa el botón "Compartir" (abajo) y luego "Añadir a pantalla de inicio" 📲', 'info');
+        return;
+    }
+
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
@@ -275,5 +283,15 @@ window.installPWA = async () => {
         document.querySelectorAll('.btn-pwa-install').forEach(btn => btn.style.display = 'none');
     }
 };
+
+// Al arrancar, si es iOS y no está instalada, mostramos el botón
+window.addEventListener('load', () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isIOS && !isStandalone) {
+        const installBtn = document.querySelectorAll('.btn-pwa-install');
+        installBtn.forEach(btn => btn.style.display = 'flex');
+    }
+});
 
 boot();
