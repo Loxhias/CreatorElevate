@@ -110,8 +110,7 @@ function normalizeRow(row) {
         return (n < max) ? n : 0;
     };
 
-    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
-    if (!username) return null;
+
     
     const rawDaysValue = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma']);
     
