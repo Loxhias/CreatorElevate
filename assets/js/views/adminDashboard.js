@@ -609,7 +609,12 @@ export async function renderCreatorsList(container) {
             <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
             <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
                 <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
-                <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" alt="@${c.username}" style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.3s ease;" referrerpolicy="no-referrer" onload="this.style.opacity='1';">
+                <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" 
+                     alt="@${c.username}" 
+                     style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:0; transition:opacity 0.3s ease;" 
+                     referrerpolicy="no-referrer" 
+                     onload="this.style.opacity='1';"
+                     onerror="this.style.display='none';">
             </div>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
