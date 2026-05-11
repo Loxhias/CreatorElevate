@@ -512,12 +512,15 @@ function getTier(diamonds) {
 }
 
 export async function renderCreatorsList(container) {
-    container.innerHTML = skelRows(5);
-    if (isSupabaseConfigured) {
-        await Promise.all([
-            store.refreshMetrics(),
-            store.refreshAdminLists(),
-        ]).catch(console.warn);
+    const currentMetrics = store.getMetricsData();
+    if (!currentMetrics || !currentMetrics.length) {
+        container.innerHTML = skelRows(5);
+        if (isSupabaseConfigured) {
+            await Promise.all([
+                store.refreshMetrics(),
+                store.refreshAdminLists(),
+            ]).catch(console.warn);
+        }
     }
     const data = store.getMetricsData() || [];
 
@@ -580,6 +583,15 @@ export async function renderCreatorsList(container) {
                     </select>
                 </div>
                 <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">TIPO</label>
+                    <select id="cr-filter-type" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos</option>
+                        <option value="new">Nuevos (≤ 30d) 🚀</option>
+                        <option value="old">Consolidados (> 30d)</option>
+                        <option value="none">Sin datos de antigüedad ⚠️</option>
+                    </select>
+                </div>
+                <div>
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">ORDENAR POR</label>
                     <select id="cr-sort" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="diamonds">Diamantes ↓</option>
@@ -596,12 +608,15 @@ export async function renderCreatorsList(container) {
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
+            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
+            const isNew = antiquity != null && antiquity <= 30;
             const tier = getTier(c.diamonds);
             const managerId = c.manager_id ?? c.managerId;
             const managerProf = managerId ? store.getProfiles().find(p => p.id === managerId) : null;
             const managerName = managerProf?.display_name || managerProf?.email || c.manager_name_legacy || c.manager || null;
             const vDays = c.valid_days ?? c.validDays ?? 0;
             const daysColor = vDays >= 22 ? 'var(--accent)' : vDays >= 7 ? 'var(--warning)' : 'var(--danger)';
+            // Intentar recuperar del caché local si existe
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
 
             return `
@@ -618,7 +633,7 @@ export async function renderCreatorsList(container) {
             </div>
                 <div style="flex:1; min-width:0;">
                     <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        @${c.username}
+                        @${c.username} ${isNew ? '<span title="Creador Nuevo (≤ 30 días)" style="cursor:help;">🚀</span>' : ''}
                     </div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
                         <span style="color:${daysColor};">${c.valid_days ?? c.validDays ?? 0}d</span>
@@ -642,9 +657,22 @@ export async function renderCreatorsList(container) {
         const manager = container.querySelector('#cr-filter-manager').value;
         const level   = container.querySelector('#cr-filter-level').value;
         const days    = container.querySelector('#cr-filter-days').value;
+        const type    = container.querySelector('#cr-filter-type').value;
         const sort    = container.querySelector('#cr-sort').value;
 
+        console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
+        if (data && data.length > 0) {
+            const withData = data.filter(c => (c.days_since_joining ?? c.daysSinceJoining) !== null);
+            console.log(`📊 Estadísticas: ${withData.length} de ${data.length} creadores tienen dato de antigüedad.`);
+            if (withData.length > 0) {
+                console.log('📝 Ejemplo del primer creador CON antigüedad:', withData[0]);
+            } else {
+                console.log('⚠️ AVISO: Ningún creador en la base de datos tiene dato de antigüedad (todos son null).');
+            }
+        }
+
         let list = data.filter(c => {
+            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
             const vDays = c.valid_days ?? c.validDays ?? 0;
             const mId = c.manager_id ?? c.managerId;
 
@@ -654,9 +682,17 @@ export async function renderCreatorsList(container) {
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
             if (days === '0'  && vDays > 0)   return false;
             if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
+            if (type === 'new') {
+                return antiquity !== null && antiquity !== undefined && antiquity <= 30;
+            } else if (type === 'old') {
+                return antiquity !== null && antiquity !== undefined && antiquity > 30;
+            } else if (type === 'none') {
+                return antiquity === null || antiquity === undefined;
+            }
             return true;
         });
 
+        console.log('✅ Resultados encontrados:', list.length);
         if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
         if (sort === 'validDays') list = [...list].sort((a, b) => (b.valid_days ?? b.validDays ?? 0) - (a.valid_days ?? a.validDays ?? 0));
         if (sort === 'username')  list = [...list].sort((a, b) => a.username.localeCompare(b.username));
@@ -665,7 +701,7 @@ export async function renderCreatorsList(container) {
         container.querySelector('#cr-results').innerHTML = renderItems(list);
     };
 
-    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-sort'].forEach(sel => {
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-type', '#cr-sort'].forEach(sel => {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });
