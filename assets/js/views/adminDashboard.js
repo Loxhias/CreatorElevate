@@ -600,11 +600,12 @@ export async function renderCreatorsList(container) {
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
-            const isNew = c.daysSinceJoining != null && c.daysSinceJoining <= 30;
+            const antiquity = c.days_since_joining;
+            const isNew = antiquity != null && antiquity <= 30;
             const tier = getTier(c.diamonds);
-            const managerProf = c.managerId ? store.getProfiles().find(p => p.id === c.managerId) : null;
-            const managerName = managerProf?.display_name || managerProf?.email || c.manager || null;
-            const daysColor = c.validDays >= 22 ? 'var(--accent)' : c.validDays >= 7 ? 'var(--warning)' : 'var(--danger)';
+            const managerProf = c.manager_id ? store.getProfiles().find(p => p.id === c.manager_id) : null;
+            const managerName = managerProf?.display_name || managerProf?.email || c.manager_name_legacy || null;
+            const daysColor = c.valid_days >= 22 ? 'var(--accent)' : c.valid_days >= 7 ? 'var(--warning)' : 'var(--danger)';
             
             // Intentar recuperar del caché local si existe
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
@@ -626,7 +627,7 @@ export async function renderCreatorsList(container) {
                         @${c.username} ${isNew ? '<span title="Creador Nuevo (≤ 30 días)" style="cursor:help;">🚀</span>' : ''}
                     </div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
-                        <span style="color:${daysColor};">${c.validDays}d</span>
+                        <span style="color:${daysColor};">${c.valid_days}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
                     </div>
                 </div>
@@ -651,20 +652,21 @@ export async function renderCreatorsList(container) {
         const sort    = container.querySelector('#cr-sort').value;
 
         let list = data.filter(c => {
+            const antiquity = c.days_since_joining;
             if (q && !c.username.toLowerCase().includes(q)) return false;
-            if (manager === 'none' && c.managerId) return false;
-            if (manager !== 'all' && manager !== 'none' && c.managerId !== manager) return false;
+            if (manager === 'none' && c.manager_id) return false;
+            if (manager !== 'all' && manager !== 'none' && c.manager_id !== manager) return false;
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
-            if (days === '0'  && c.validDays > 0)   return false;
-            if (days !== 'all' && days !== '0' && c.validDays < Number(days)) return false;
-            if (type === 'new' && (c.daysSinceJoining === null || c.daysSinceJoining > 30)) return false;
-            if (type === 'old' && (c.daysSinceJoining === null || c.daysSinceJoining <= 30)) return false;
-            if (type === 'none' && c.daysSinceJoining !== null) return false;
+            if (days === '0'  && c.valid_days > 0)   return false;
+            if (days !== 'all' && days !== '0' && c.valid_days < Number(days)) return false;
+            if (type === 'new' && (antiquity === null || antiquity > 30)) return false;
+            if (type === 'old' && (antiquity === null || antiquity <= 30)) return false;
+            if (type === 'none' && antiquity !== null) return false;
             return true;
         });
 
         if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
-        if (sort === 'validDays') list = [...list].sort((a, b) => b.validDays - a.validDays);
+        if (sort === 'validDays') list = [...list].sort((a, b) => b.valid_days - a.valid_days);
         if (sort === 'username')  list = [...list].sort((a, b) => a.username.localeCompare(b.username));
 
         container.querySelector('#cr-count').textContent = `${list.length} de ${data.length} creadores`;
