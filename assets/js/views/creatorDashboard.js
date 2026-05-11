@@ -565,7 +565,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             </div>
         </div>`;
 
-    if (isSupabaseConfigured && !targetUsername) {
+    if (isSupabaseConfigured && !targetUsername && !store.getMetricsData()?.length) {
         await store.refreshMetrics().catch(() => {});
     }
 

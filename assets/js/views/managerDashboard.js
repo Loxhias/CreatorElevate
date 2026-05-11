@@ -16,7 +16,7 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
             <div class="skel-panel" style="height:220px;"></div>
         </div>`;
 
-    if (isSupabaseConfigured && !targetManagerId) {
+    if (isSupabaseConfigured && !targetManagerId && !store.getMetricsData()?.length) {
         await store.refreshMetrics().catch(() => {});
     }
 

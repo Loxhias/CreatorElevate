@@ -13,7 +13,7 @@ export async function renderNotificationsView(container) {
         </div>`;
 
     try {
-        const allProfiles = await profiles.listAll() || [];
+        const allProfiles = store.getProfiles().length ? store.getProfiles() : (await profiles.listAll() || []);
         const metricsData = store.getMetricsData() || [];
         const admins   = allProfiles.filter(p => p.role === 'admin');
         const managers = allProfiles.filter(p => p.role === 'manager');
