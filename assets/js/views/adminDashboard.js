@@ -654,9 +654,14 @@ export async function renderCreatorsList(container) {
         const sort    = container.querySelector('#cr-sort').value;
 
         console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
-        if (data && data[0]) {
-            console.log('📊 TODAS las columnas detectadas:', JSON.stringify(Object.keys(data[0])));
-            console.log('📝 Ejemplo de datos del primer creador:', data[0]);
+        if (data && data.length > 0) {
+            const withData = data.filter(c => (c.days_since_joining ?? c.daysSinceJoining) !== null);
+            console.log(`📊 Estadísticas: ${withData.length} de ${data.length} creadores tienen dato de antigüedad.`);
+            if (withData.length > 0) {
+                console.log('📝 Ejemplo del primer creador CON antigüedad:', withData[0]);
+            } else {
+                console.log('⚠️ AVISO: Ningún creador en la base de datos tiene dato de antigüedad (todos son null).');
+            }
         }
 
         let list = data.filter(c => {
