@@ -89,13 +89,12 @@ function normalizeRow(row) {
     
     let daysSinceJoining = null;
     if (rawDaysValue != null) {
-        // 1. Intentar limpiar texto (ej: "10 días" -> 10)
+        // 1. Limpiar texto
         const cleanNum = parseInt(String(rawDaysValue).replace(/[^\d]/g, ''));
-        if (!isNaN(cleanNum)) {
+        // 2. Filtro de seguridad: Si es > 10000 es probablemente un ID o Timestamp, lo ignoramos
+        if (!isNaN(cleanNum) && cleanNum < 10000) {
             daysSinceJoining = cleanNum;
-        } 
-        // 2. Si parece una fecha (formato Excel o string), podríamos calcularlo
-        // Por ahora nos centramos en que el número sea robusto
+        }
     }
     
     return {
