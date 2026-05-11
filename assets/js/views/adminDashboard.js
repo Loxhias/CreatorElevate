@@ -79,19 +79,25 @@ function parseLiveSeconds(str) {
 function normalizeRow(row) {
     const entries = Object.entries(row);
 
-    // Normaliza Unicode (NFC) y minúsculas para comparación robusta.
-    // Esto resuelve el caso en que Excel exporta 'á'/'é' como forma descompuesta (NFD)
-    // que no coincide con la forma compuesta (NFC) usada en las keywords.
-    const norm = (s) => String(s).normalize('NFC').toLowerCase().trim();
+    // norm: NFC + minúsculas + normaliza TODOS los tipos de espacio (no-break U+00A0,
+    // thin U+2009, zero-width U+200B, etc.) a espacio normal, y colapsa múltiples espacios.
+    const norm = (s) => String(s)
+        .normalize('NFC')
+        .toLowerCase()
+        .replace(/[   ​‌‍ ⁠﻿]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-    const find = (kws) => {
-        const found = entries.find(([k]) => kws.some(kw => norm(k).includes(norm(kw))));
-        if (found) return found[1];
-        // Segundo intento sin acentos (strip diacritics) para mayor tolerancia
-        const strip = (s) => norm(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
-        const found2 = entries.find(([k]) => kws.some(kw => strip(k).includes(strip(kw))));
-        return found2 ? found2[1] : null;
+    // strip: elimina acentos/diacríticos (fallback máximo)
+    const strip = (s) => norm(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+    // findEntry devuelve [key, value] para poder logear qué columna matcheó
+    const findEntry = (kws) => {
+        let e = entries.find(([k]) => kws.some(kw => norm(k).includes(norm(kw))));
+        if (!e) e = entries.find(([k]) => kws.some(kw => strip(k).includes(strip(kw))));
+        return e || null;
     };
+    const find = (kws) => { const e = findEntry(kws); return e ? e[1] : null; };
 
     const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User', 'Creator username', 'Nombre usuario']) || '').trim().replace(/^@/, '');
     if (!username) return null;
@@ -124,13 +130,33 @@ function normalizeRow(row) {
         'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma',
     ]);
 
-    const rawValidDays = find([
+    const validDaysKws = [
         'Días válidos de emisiones LIVE',
         'Valid Live Days', 'Días válidos', 'Valid Days', 'valid days',
         'Días LIVE válidos', 'Días válidos de LIVE', 'días válidos de live',
         'días de live válidos', 'días activos válidos', 'días activos de live',
         'active live days', 'valid live days', 'días válidos de transmisión',
-    ]);
+    ];
+    const validDaysEntry = findEntry(validDaysKws);
+
+    // ── Diagnóstico: solo se ejecuta para la PRIMERA fila de cada carga ──────
+    if (!normalizeRow._diagDone) {
+        normalizeRow._diagDone = true;
+        const emisKws = ['Emisiones LIVE', 'Total LIVE Emissions', 'Emisiones en vivo', 'LIVE sessions'];
+        const emisEntry = findEntry(emisKws);
+        console.group(`🔍 [normalizeRow] Diagnóstico de columnas — @${username}`);
+        if (validDaysEntry) {
+            console.log('✅ validDays  →  columna: "' + validDaysEntry[0] + '"  →  valor: ' + validDaysEntry[1]);
+        } else {
+            console.warn('❌ validDays  →  NINGUNA columna matcheó');
+            console.warn('   Keywords usadas:', validDaysKws);
+            console.warn('   Columnas del Excel:', entries.map(([k]) => '"' + k + '"').join(', '));
+        }
+        if (emisEntry) {
+            console.log('ℹ emisionesLive  →  columna: "' + emisEntry[0] + '"  →  valor: ' + emisEntry[1]);
+        }
+        console.groupEnd();
+    }
 
     return {
         username,
@@ -138,7 +164,7 @@ function normalizeRow(row) {
         diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)', 'Diamantes mes anterior']) || 0),
         liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE', 'Live Duration', 'Duración LIVE']) || '0s'),
         liveSeconds:        safeInt(parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE', 'Live Duration', 'Duración LIVE'])), 1000000),
-        validDays:          safeInt(rawValidDays, 32),
+        validDays:          safeInt(validDaysEntry ? validDaysEntry[1] : null, 32),
         emisionesLive:      safeInt(find(['Emisiones LIVE', 'Total LIVE Emissions', 'Emisiones en vivo', 'LIVE sessions']), 5000),
         battles:            safeInt(find(['Batallas', 'Battles', 'Partidas', 'PKs', 'PK']), 10000),
         battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds', 'Diamantes batalla']) || 0),
@@ -371,14 +397,38 @@ function renderUploadView(container, mainContainer) {
     fileIn.onchange = async (e) => {
         const f = e.target.files[0];
         if (!f) return;
+        normalizeRow._diagDone = false; // resetear diagnóstico para cada carga
         try {
             const buf = await f.arrayBuffer();
             const wb = window.XLSX.read(buf, { type: 'array' });
-            const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
-            rows = data.map(normalizeRow).filter(Boolean);
+            const rawData = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+
+            // ── DIAGNÓSTICO: muestra las columnas exactas del Excel ──────────
+            if (rawData.length > 0) {
+                const cols = Object.keys(rawData[0]);
+                console.group('📊 [DIAGNÓSTICO EXCEL] Columnas detectadas en el archivo:');
+                cols.forEach((col, i) => console.log(`  [${i}] "${col}" → valor fila 1: ${JSON.stringify(rawData[0][col])}`));
+                console.groupEnd();
+            }
+
+            rows = rawData.map(normalizeRow).filter(Boolean);
+
+            // ── DIAGNÓSTICO: muestra qué parseó normalizeRow ─────────────────
+            if (rows.length > 0) {
+                const r = rows[0];
+                console.group(`📊 [DIAGNÓSTICO PARSEADO] Primera fila → @${r.username}`);
+                console.log('  diamonds:', r.diamonds, '| diamondsLastMonth:', r.diamondsLastMonth);
+                console.log('  validDays:', r.validDays, '← este debe coincidir con el Excel');
+                console.log('  battles:', r.battles, '| emisionesLive:', r.emisionesLive);
+                console.log('  liveDuration:', r.liveDuration, '| liveSeconds:', r.liveSeconds);
+                console.groupEnd();
+            }
+
             const withValidDays = rows.filter(r => r.validDays > 0).length;
-            console.log(`[Upload] ${rows.length} creadores. Con validDays>0: ${withValidDays}. Ejemplo:`, rows[0]);
             preview.innerHTML = `<span style="color:var(--accent);">✓ Detectados ${rows.length} creadores · ${withValidDays} con días válidos.</span>`;
+            if (withValidDays === 0) {
+                preview.innerHTML += `<br><span style="color:var(--danger); font-size:0.8rem;">⚠ Ningún creador tiene días válidos — revisa la consola para ver el nombre exacto de la columna en el Excel.</span>`;
+            }
             uBtn.disabled = false;
         } catch (e) { preview.innerHTML = '<span style="color:var(--danger);">Error leyendo el archivo.</span>'; }
     };
