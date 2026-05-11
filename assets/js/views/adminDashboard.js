@@ -600,12 +600,14 @@ export async function renderCreatorsList(container) {
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
-            const antiquity = c.days_since_joining;
+            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
             const isNew = antiquity != null && antiquity <= 30;
             const tier = getTier(c.diamonds);
-            const managerProf = c.manager_id ? store.getProfiles().find(p => p.id === c.manager_id) : null;
-            const managerName = managerProf?.display_name || managerProf?.email || c.manager_name_legacy || null;
-            const daysColor = c.valid_days >= 22 ? 'var(--accent)' : c.valid_days >= 7 ? 'var(--warning)' : 'var(--danger)';
+            const managerId = c.manager_id ?? c.managerId;
+            const managerProf = managerId ? store.getProfiles().find(p => p.id === managerId) : null;
+            const managerName = managerProf?.display_name || managerProf?.email || c.manager_name_legacy || c.manager || null;
+            const vDays = c.valid_days ?? c.validDays ?? 0;
+            const daysColor = vDays >= 22 ? 'var(--accent)' : vDays >= 7 ? 'var(--warning)' : 'var(--danger)';
             
             // Intentar recuperar del caché local si existe
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
@@ -627,7 +629,7 @@ export async function renderCreatorsList(container) {
                         @${c.username} ${isNew ? '<span title="Creador Nuevo (≤ 30 días)" style="cursor:help;">🚀</span>' : ''}
                     </div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
-                        <span style="color:${daysColor};">${c.valid_days}d</span>
+                        <span style="color:${daysColor};">${c.valid_days ?? c.validDays ?? 0}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
                     </div>
                 </div>
@@ -658,21 +660,23 @@ export async function renderCreatorsList(container) {
         }
 
         let list = data.filter(c => {
-            const antiquity = c.days_since_joining;
-            
+            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
+            const vDays = c.valid_days ?? c.validDays ?? 0;
+            const mId = c.manager_id ?? c.managerId;
+
             if (q && !c.username.toLowerCase().includes(q)) return false;
-            if (manager === 'none' && c.manager_id) return false;
-            if (manager !== 'all' && manager !== 'none' && c.manager_id !== manager) return false;
+            if (manager === 'none' && mId) return false;
+            if (manager !== 'all' && manager !== 'none' && mId !== manager) return false;
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
-            if (days === '0'  && c.valid_days > 0)   return false;
-            if (days !== 'all' && days !== '0' && c.valid_days < Number(days)) return false;
+            if (days === '0'  && vDays > 0)   return false;
+            if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
             
             if (type === 'new') {
-                return antiquity !== null && antiquity <= 30;
+                return antiquity !== null && antiquity !== undefined && antiquity <= 30;
             } else if (type === 'old') {
-                return antiquity !== null && antiquity > 30;
+                return antiquity !== null && antiquity !== undefined && antiquity > 30;
             } else if (type === 'none') {
-                return antiquity === null;
+                return antiquity === null || antiquity === undefined;
             }
             return true;
         });
@@ -680,7 +684,7 @@ export async function renderCreatorsList(container) {
         console.log('✅ Resultados encontrados:', list.length);
 
         if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
-        if (sort === 'validDays') list = [...list].sort((a, b) => b.valid_days - a.valid_days);
+        if (sort === 'validDays') list = [...list].sort((a, b) => (b.valid_days ?? b.validDays ?? 0) - (a.valid_days ?? a.validDays ?? 0));
         if (sort === 'username')  list = [...list].sort((a, b) => a.username.localeCompare(b.username));
 
         container.querySelector('#cr-count').textContent = `${list.length} de ${data.length} creadores`;
