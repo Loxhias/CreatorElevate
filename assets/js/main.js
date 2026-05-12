@@ -137,6 +137,21 @@ function renderDashboardLayout(container, renderContentFn, role) {
     const contentArea = container.querySelector('#dashboard-content');
     safeRender(renderContentFn, contentArea);
 
+    // Badge de mensajes no leídos (managers)
+    if (role === 'manager') {
+        const userId = store.getCurrentUser()?.id;
+        const lastSeen = localStorage.getItem(`inbox_last_seen_${userId || 'anon'}`) || '1970-01-01';
+        push.getForUser(userId, 'manager').then(notifications => {
+            const unread = notifications.filter(n => n.sent_at > lastSeen).length;
+            if (!unread) return;
+            const badgeHtml = `<span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.58rem;font-weight:800;padding:0.05rem 0.35rem;margin-left:0.3rem;vertical-align:middle;display:inline-block;">${unread > 9 ? '9+' : unread}</span>`;
+            container.querySelectorAll('.nav-item[data-view="mensajes"]').forEach(el => {
+                const label = el.querySelector('span:not(.nav-icon)');
+                if (label) label.innerHTML = `Mensajes ${badgeHtml}`;
+            });
+        }).catch(() => {});
+    }
+
     // Eventos de Instalación
     container.querySelectorAll('.btn-pwa-install').forEach(btn => {
         btn.onclick = (e) => {
@@ -162,6 +177,10 @@ function renderDashboardLayout(container, renderContentFn, role) {
             }
             else if (view === 'mensajes') {
                 import('./views/inbox.js').then(m => safeRender(m.renderInboxView, contentArea));
+                // Limpiar badge al abrir
+                container.querySelectorAll('.nav-item[data-view="mensajes"] span:not(.nav-icon)').forEach(span => {
+                    span.textContent = 'Mensajes';
+                });
             }
             else if (view === 'capacitaciones') {
                 import('./views/trainings.js').then(m => safeRender(m.renderTrainingsView, contentArea));

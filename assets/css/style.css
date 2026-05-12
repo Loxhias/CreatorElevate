@@ -116,6 +116,7 @@ body {
 }
 .btn-primary { background: var(--primary); color: white; }
 .btn-ghost { background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); }
+.btn-sm { font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 600; cursor: pointer; border: 1px solid var(--glass-border); background: var(--glass-bg); color: var(--text-primary); font-family: inherit; }
 
 .input-control {
     background: rgba(0,0,0,0.2);
@@ -170,7 +171,18 @@ select.input-control optgroup {
 
 /* Tabla con scroll horizontal en móvil */
 .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.data-table { min-width: 460px; }
+.data-table { min-width: 460px; width: 100%; border-collapse: collapse; }
+.data-table th {
+    text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-muted);
+    padding: 0.85rem 1rem; border-bottom: 1px solid var(--glass-border);
+}
+.data-table td {
+    padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-secondary);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
 
 @media (max-width: 768px) {
     /* Padding lateral reducido */
