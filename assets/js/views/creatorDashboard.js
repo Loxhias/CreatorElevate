@@ -815,7 +815,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         <!-- Estimated Earnings Hero -->
         <div class="glass-panel" style="padding:1.4rem 1.5rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(0,217,166,0.07),rgba(124,110,247,0.05));border-color:rgba(0,217,166,0.2);text-align:center;">
             <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.35rem;">Ganancias Estimadas — ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
-            <div style="font-size:3rem;font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.3rem;">
+            <div style="font-size:clamp(2rem,8vw,3rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.3rem;">
                 $${Number(estimatedEarnings).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2})}
             </div>
             <div style="font-size:0.62rem;color:var(--text-muted);">
@@ -824,13 +824,13 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         </div>
 
         <!-- Tab Nav -->
-        <div id="creator-tabs" style="display:flex;gap:0.4rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-            <button class="tab-btn active" data-tab="metrics"  style="flex:1;white-space:nowrap;">📊 Métricas</button>
-            <button class="tab-btn"        data-tab="goals"    style="flex:1;white-space:nowrap;">🎯 Objetivos</button>
-            <button class="tab-btn"        data-tab="benefits" style="flex:1;white-space:nowrap;">🎁 Beneficios</button>
-            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex:1;white-space:nowrap;">🚀 Misiones</button>` : ''}
-            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex:1;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
-            <button class="tab-btn" data-tab="inbox" style="flex:1;white-space:nowrap;">🔔 Mensajes</button>
+        <div id="creator-tabs" style="display:flex;gap:0.35rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+            <button class="tab-btn active" data-tab="metrics"  style="flex-shrink:0;white-space:nowrap;">📊 Métricas</button>
+            <button class="tab-btn"        data-tab="goals"    style="flex-shrink:0;white-space:nowrap;">🎯 Objetivos</button>
+            <button class="tab-btn"        data-tab="benefits" style="flex-shrink:0;white-space:nowrap;">🎁 Beneficios</button>
+            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex-shrink:0;white-space:nowrap;">🚀 Misiones</button>` : ''}
+            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex-shrink:0;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
+            <button class="tab-btn" data-tab="inbox" style="flex-shrink:0;white-space:nowrap;">🔔 Mensajes</button>
         </div>
 
         <!-- Tab Content -->

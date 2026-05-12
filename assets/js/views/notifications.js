@@ -69,7 +69,7 @@ function renderContent(container, allProfiles, admins, managers, segments) {
 
             <div class="two-panel">
                 <!-- Formulario de Envío -->
-                <div class="glass-panel" style="padding:2rem;">
+                <div class="glass-panel" style="padding:1.5rem;">
                     <h3 style="margin-top:0;">Nuevo Mensaje</h3>
 
                     <div style="margin-bottom:1.5rem;">

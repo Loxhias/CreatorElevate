@@ -191,8 +191,8 @@ export async function renderAdminDashboard(container) {
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <div style="margin-bottom:2rem; display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="font-size:1.8rem; font-weight:800;">Panel de Administración</h1>
+            <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                <h1 style="font-weight:800;">Panel de Administración</h1>
                 ${period ? `<div class="badge" style="background:var(--primary); color:white;">${period.label}</div>` : ''}
             </div>
 
@@ -308,9 +308,9 @@ function renderManageView(container) {
             <h2 style="margin-bottom:1rem;">Gestión de Managers</h2>
             <p style="color:var(--text-secondary); margin-bottom:1.5rem; font-size:0.9rem;">Busca un usuario registrado por su email o nombre para asignarle el rol de Manager.</p>
 
-            <div style="display:flex; gap:0.8rem; margin-bottom:2rem;">
-                <input type="text" id="m-search-input" class="input-control" placeholder="Email o nombre del usuario..." style="flex:1;">
-                <button id="m-search-btn" class="btn btn-primary">Buscar</button>
+            <div style="display:flex; gap:0.8rem; margin-bottom:2rem; flex-wrap:wrap;">
+                <input type="text" id="m-search-input" class="input-control" placeholder="Email o nombre del usuario..." style="flex:1;min-width:200px;">
+                <button id="m-search-btn" class="btn btn-primary" style="white-space:nowrap;">Buscar</button>
             </div>
 
             <div id="m-search-results" style="display:flex; flex-direction:column; gap:0.8rem;"></div>
@@ -329,13 +329,13 @@ function renderManageView(container) {
         try {
             const found = await profiles.searchProfiles(q);
             results.innerHTML = found.map(p => `
-                <div class="glass-panel" style="padding:1rem; display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <div style="font-weight:700;">${p.display_name || p.email}</div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary);">${p.email}</div>
+                <div class="glass-panel" style="padding:0.85rem 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.display_name || p.email}</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.email}</div>
                     </div>
-                    <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}"
-                            style="background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
+                    <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}" style="flex-shrink:0;
+                            background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
                         ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
                     </button>
                 </div>
@@ -619,7 +619,7 @@ export async function renderCreatorsList(container) {
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.5rem;">
                 <h2 style="margin:0;">Creadores</h2>
                 <span id="cr-count" style="font-size:0.8rem; color:var(--text-secondary);"></span>
             </div>

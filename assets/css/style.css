@@ -27,13 +27,15 @@
     --font-display: 'Plus Jakarta Sans', sans-serif;
 }
 
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; min-width: 0; }
 body {
     background: var(--bg-base);
     color: var(--text-primary);
     font-family: 'Plus Jakarta Sans', sans-serif;
     line-height: 1.6;
     overflow-x: hidden;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 /* ---- Estructura ---- */
@@ -194,6 +196,9 @@ select.input-control optgroup {
     /* Metrics grid más compacto */
     .metrics-grid { gap: 0.75rem; margin-bottom: 1.25rem; }
     .metric-value { font-size: 1.5rem; }
+
+    /* Reducir padding en glass-panels con padding grande inline.
+       Solo aplica cuando NO tienen padding:0 declarado (tabla con overflow). */
     .glass-panel { padding: 1rem; }
 
     /* Prevenir zoom de iOS al enfocar inputs (requiere font-size >= 16px) */
@@ -207,6 +212,17 @@ select.input-control optgroup {
 
     /* Navegación inferior: texto más pequeño */
     .bottom-nav .nav-item { font-size: 0.65rem; }
+
+    /* Cabeceras de sección: escalar en pantallas pequeñas */
+    h1 { font-size: clamp(1.2rem, 5vw, 1.8rem) !important; }
+    h2 { font-size: clamp(1.05rem, 4.5vw, 1.5rem) !important; }
+
+    /* Evitar que listas de botones se salgan */
+    .btn-row { flex-wrap: wrap !important; }
+
+    /* El panel de tabla mantiene padding 0 usando esta clase específica */
+    .glass-panel.table-container { padding: 0 !important; }
+    .glass-panel.no-pad { padding: 0 !important; }
 }
 
 @media (max-width: 480px) {

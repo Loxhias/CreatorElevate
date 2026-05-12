@@ -166,7 +166,7 @@ function renderCard(t, isAdmin) {
     const date  = new Date(t.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
 
     return `
-        <div class="glass-panel" style="padding:0;overflow:hidden;display:flex;flex-direction:column;">
+        <div class="glass-panel no-pad" style="overflow:hidden;display:flex;flex-direction:column;">
             <a href="${t.youtube_url}" target="_blank" rel="noopener noreferrer"
                style="display:block;position:relative;background:#000;flex-shrink:0;">
                 ${thumb

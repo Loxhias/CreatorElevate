@@ -222,7 +222,7 @@ function renderEventCard(ev, isAdmin) {
     const createdLabel = new Date(ev.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
 
     return `
-        <div class="glass-panel animate-fadeIn" style="padding:0;overflow:hidden;">
+        <div class="glass-panel no-pad animate-fadeIn" style="overflow:hidden;">
             ${ev.image_url ? `
             <div style="width:100%;max-height:340px;overflow:hidden;background:#000;">
                 <img src="${ev.image_url}" alt="${ev.title}"

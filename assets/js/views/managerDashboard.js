@@ -176,7 +176,7 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
 
             <!-- Tabla de creadores -->
             <h3 style="margin:2rem 0 1rem;font-size:1rem;">Rendimiento Individual</h3>
-            <div class="glass-panel table-container" style="padding:0;">
+            <div class="glass-panel table-container no-pad">
                 <table class="data-table" style="min-width:520px;">
                     <thead>
                         <tr>
