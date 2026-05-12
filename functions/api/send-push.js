@@ -14,10 +14,13 @@ const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 const ALLOWED_ORIGINS = [
     "https://creatorelevate.pages.dev",
     "https://interactik.creatorelevate.pages.dev",
+    // Agregá tu dominio personalizado acá cuando lo configures:
+    // "https://app.interactik.com",
 ];
 
-function corsHeaders(requestOrigin) {
-    const origin = ALLOWED_ORIGINS.includes(requestOrigin) ? requestOrigin : ALLOWED_ORIGINS[0];
+function corsHeaders(requestOrigin, appOrigin) {
+    const allowed = [...ALLOWED_ORIGINS, appOrigin].filter(Boolean);
+    const origin  = allowed.includes(requestOrigin) ? requestOrigin : (appOrigin || ALLOWED_ORIGINS[0]);
     return {
         "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -27,8 +30,9 @@ function corsHeaders(requestOrigin) {
 }
 
 export async function onRequestOptions(context) {
-    const origin = context.request.headers.get("Origin") || "";
-    return new Response(null, { headers: corsHeaders(origin) });
+    const origin    = context.request.headers.get("Origin") || "";
+    const appOrigin = context.env?.APP_ORIGIN || "https://creatorelevate.pages.dev";
+    return new Response(null, { headers: corsHeaders(origin, appOrigin) });
 }
 
 export async function onRequestPost(context) {
@@ -38,6 +42,7 @@ export async function onRequestPost(context) {
     const ONESIGNAL_API_KEY  = context.env?.ONESIGNAL_API_KEY  || '';
     const SUPABASE_URL       = context.env?.SUPABASE_URL       || '';
     const SUPABASE_ANON_KEY  = context.env?.SUPABASE_ANON_KEY  || '';
+    const APP_ORIGIN         = context.env?.APP_ORIGIN         || 'https://creatorelevate.pages.dev';
 
     const logs = [];
     const log  = (msg, extra) => {
@@ -49,7 +54,7 @@ export async function onRequestPost(context) {
     };
 
     const reply = (obj, status = 200) =>
-        new Response(JSON.stringify(obj), { status, headers: { ...JSON_HEADERS, ...corsHeaders(origin) } });
+        new Response(JSON.stringify(obj), { status, headers: { ...JSON_HEADERS, ...corsHeaders(origin, APP_ORIGIN) } });
 
     try {
         // ── 1. Verificación de autenticación ────────────────────────────────
@@ -115,9 +120,9 @@ export async function onRequestPost(context) {
             app_id:   ONESIGNAL_APP_ID,
             headings: { en: title, es: title },
             contents: { en: body,  es: body  },
-            chrome_web_icon:  "https://creatorelevate.pages.dev/iconos/logo_morado.png",
-            chrome_web_badge: "https://creatorelevate.pages.dev/iconos/logo_blanco.png",
-            firefox_icon:     "https://creatorelevate.pages.dev/iconos/logo_morado.png",
+            chrome_web_icon:  `${APP_ORIGIN}/iconos/logo_morado.png`,
+            chrome_web_badge: `${APP_ORIGIN}/iconos/logo_blanco.png`,
+            firefox_icon:     `${APP_ORIGIN}/iconos/logo_morado.png`,
         };
         if (url) {
             notificationBody.url     = url;
