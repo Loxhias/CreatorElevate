@@ -39,7 +39,7 @@ function renderContent(container, items, isAdmin) {
 
             ${isAdmin ? `
             <div id="tr-form" class="glass-panel" style="padding:1.25rem;margin-bottom:1.5rem;display:none;">
-                <h3 style="margin-top:0;font-size:0.95rem;">Nueva Capacitación</h3>
+                <h3 id="tr-form-title" style="margin-top:0;font-size:0.95rem;">Nueva Capacitación</h3>
                 <div style="display:flex;flex-direction:column;gap:0.8rem;">
                     <input type="text" id="tr-title" class="input-control" placeholder="Título de la capacitación" maxlength="100">
                     <textarea id="tr-desc" class="input-control" style="height:80px;resize:none;" placeholder="Descripción breve..." maxlength="500"></textarea>
@@ -67,20 +67,35 @@ function renderContent(container, items, isAdmin) {
 
     if (!isAdmin) return;
 
+    let editingId = null;
+
     const addBtn    = container.querySelector('#add-tr-btn');
     const form      = container.querySelector('#tr-form');
+    const formTitle = container.querySelector('#tr-form-title');
     const cancelBtn = container.querySelector('#tr-cancel-btn');
     const urlInput  = container.querySelector('#tr-url');
     const preview   = container.querySelector('#tr-preview');
     const thumb     = container.querySelector('#tr-thumb');
     const saveBtn   = container.querySelector('#tr-save-btn');
 
-    addBtn.onclick = () => {
-        const open = form.style.display === 'none';
-        form.style.display = open ? 'block' : 'none';
-        if (open) form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const closeForm = () => {
+        form.style.display = 'none';
+        editingId = null;
+        formTitle.textContent = 'Nueva Capacitación';
+        saveBtn.textContent = 'Guardar';
+        container.querySelector('#tr-title').value = '';
+        container.querySelector('#tr-desc').value  = '';
+        urlInput.value = '';
+        preview.style.display = 'none';
     };
-    cancelBtn.onclick = () => { form.style.display = 'none'; };
+
+    addBtn.onclick = () => {
+        if (form.style.display !== 'none' && !editingId) { closeForm(); return; }
+        closeForm();
+        form.style.display = 'block';
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    cancelBtn.onclick = closeForm;
 
     urlInput.addEventListener('input', () => {
         const id = getYoutubeId(urlInput.value.trim());
@@ -100,14 +115,38 @@ function renderContent(container, items, isAdmin) {
         if (!getYoutubeId(url)) return appState.showToast('Ingresa una URL de YouTube válida', 'warning');
         saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
         try {
-            await api.create({ title, description: desc, youtube_url: url });
-            appState.showToast('Capacitación agregada', 'success');
+            if (editingId) {
+                await api.update(editingId, { title, description: desc, youtube_url: url });
+                appState.showToast('Capacitación actualizada', 'success');
+            } else {
+                await api.create({ title, description: desc, youtube_url: url });
+                appState.showToast('Capacitación agregada', 'success');
+            }
             renderTrainingsView(container);
         } catch (err) {
             appState.showToast('Error: ' + err.message, 'danger');
-            saveBtn.disabled = false; saveBtn.textContent = 'Guardar';
+            saveBtn.disabled = false; saveBtn.textContent = editingId ? 'Actualizar' : 'Guardar';
         }
     };
+
+    container.querySelectorAll('.tr-edit-btn').forEach(btn => {
+        btn.onclick = () => {
+            const id   = btn.dataset.id;
+            const item = items.find(t => String(t.id) === String(id));
+            if (!item) return;
+            editingId = item.id;
+            formTitle.textContent = 'Editar Capacitación';
+            saveBtn.textContent   = 'Actualizar';
+            container.querySelector('#tr-title').value = item.title || '';
+            container.querySelector('#tr-desc').value  = item.description || '';
+            urlInput.value = item.youtube_url || '';
+            const ytId = getYoutubeId(item.youtube_url);
+            if (ytId) { thumb.src = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`; preview.style.display = 'block'; }
+            else { preview.style.display = 'none'; }
+            form.style.display = 'block';
+            form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+    });
 
     container.querySelectorAll('.tr-del-btn').forEach(btn => {
         btn.onclick = async () => {
@@ -156,7 +195,12 @@ function renderCard(t, isAdmin) {
                                   background:rgba(255,0,0,0.12);color:#ff4444;text-decoration:none;font-weight:600;white-space:nowrap;">
                             ▶ YouTube
                         </a>
-                        ${isAdmin ? `<button class="tr-del-btn" data-id="${t.id}"
+                        ${isAdmin ? `
+                        <button class="tr-edit-btn" data-id="${t.id}"
+                            style="font-size:0.68rem;padding:0.2rem 0.45rem;border-radius:6px;
+                                   background:rgba(124,110,247,0.1);color:var(--primary-light);
+                                   border:none;cursor:pointer;">✏️</button>
+                        <button class="tr-del-btn" data-id="${t.id}"
                             style="font-size:0.68rem;padding:0.2rem 0.45rem;border-radius:6px;
                                    background:rgba(255,85,105,0.1);color:var(--danger);
                                    border:none;cursor:pointer;">🗑</button>` : ''}

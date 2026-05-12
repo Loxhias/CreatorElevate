@@ -455,6 +455,18 @@ export const push = {
         return payload;
     },
 
+    /** Devuelve las últimas 50 notificaciones enviadas (vista admin). */
+    async listSent() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, body, url, target_type, target_value, sent_at, delivered, failed')
+            .order('sent_at', { ascending: false })
+            .limit(50);
+        if (error) throw error;
+        return data || [];
+    },
+
     /** Guarda la notificación enviada en la tabla notifications para el historial. */
     async saveToDb(title, body, url, target) {
         if (!isSupabaseConfigured) return;
@@ -526,6 +538,14 @@ export const trainings = {
         if (error) throw error;
     },
 
+    async update(id, { title, description, youtube_url }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('trainings')
+            .update({ title: san(title), description: san(description), youtube_url: san(youtube_url) })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
     async remove(id) {
         if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
         const { error } = await supabase.from('trainings').delete().eq('id', id);
@@ -568,6 +588,15 @@ export const agencyEvents = {
             .from('media').upload(path, file, { upsert: false, contentType: file.type });
         if (error) throw error;
         return supabase.storage.from('media').getPublicUrl(data.path).data.publicUrl;
+    },
+
+    async update(id, { title, description, image_url, event_date }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('events')
+            .update({ title: san(title), description: san(description),
+                      image_url: image_url || null, event_date: event_date || null })
+            .eq('id', id);
+        if (error) throw error;
     },
 
     async remove(id) {

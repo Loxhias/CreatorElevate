@@ -128,6 +128,17 @@ body {
 }
 .input-control:focus { border-color: var(--primary); }
 
+/* Forzar colores del menú desplegable nativo en todos los SO */
+select.input-control option {
+    background: #141720;
+    color: #e2e8f0;
+}
+select.input-control optgroup {
+    background: #0d0f1a;
+    color: rgba(180,180,220,0.6);
+    font-weight: 700;
+}
+
 /* ---- Metrics Grid ---- */
 .metrics-grid {
     display: grid;

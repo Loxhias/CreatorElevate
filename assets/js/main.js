@@ -49,6 +49,9 @@ function getNavItems(role) {
         items.push({ view: 'inicio',  icon: '📊', label: 'Dashboard' });
         items.push({ view: 'normas',  icon: '📋', label: 'Normas' });
         items.push({ view: 'canales', icon: '📢', label: 'Canales' });
+    } else if (role === 'manager') {
+        items.push({ view: 'inicio',         icon: '📊', label: 'Panel' });
+        items.push({ view: 'mensajes',        icon: '🔔', label: 'Mensajes' });
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
@@ -156,6 +159,9 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'creadores') safeRender(renderCreatorsList, contentArea);
             else if (view === 'notificaciones') {
                 import('./views/notifications.js').then(m => safeRender(m.renderNotificationsView, contentArea));
+            }
+            else if (view === 'mensajes') {
+                import('./views/inbox.js').then(m => safeRender(m.renderInboxView, contentArea));
             }
             else if (view === 'capacitaciones') {
                 import('./views/trainings.js').then(m => safeRender(m.renderTrainingsView, contentArea));

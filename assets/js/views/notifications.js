@@ -169,6 +169,12 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                     </div>
                 </div>
             </div>
+
+            <!-- Historial de Enviados -->
+            <div style="margin-top:2.5rem;">
+                <h3 style="margin-bottom:1rem;font-size:0.9rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">Historial de Enviados</h3>
+                <div id="historial-wrap" style="display:flex;flex-direction:column;gap:0.6rem;"></div>
+            </div>
         </div>
     `;
 
@@ -263,6 +269,7 @@ function renderContent(container, allProfiles, admins, managers, segments) {
             titleInput.value = '';
             bodyInput.value  = '';
             updateCount();
+            loadHistorial(container);
         } catch (e) {
             console.error('[send-push] error:', e);
             appState.showToast('Error al enviar: ' + e.message, 'danger');
@@ -270,6 +277,65 @@ function renderContent(container, allProfiles, admins, managers, segments) {
             sendBtn.disabled  = false;
             sendBtn.innerText = 'Enviar Notificación';
         }
+    });
+
+    // Cargar historial al abrir
+    loadHistorial(container);
+}
+
+function loadHistorial(container) {
+    const wrap = container.querySelector('#historial-wrap');
+    if (!wrap) return;
+    wrap.innerHTML = `<div style="display:flex;flex-direction:column;gap:0.6rem;">
+        ${Array(3).fill('<div class="skel-panel" style="height:60px;"></div>').join('')}
+    </div>`;
+
+    push.listSent().then(items => {
+        if (!items.length) {
+            wrap.innerHTML = `<p style="font-size:0.8rem;color:var(--text-muted);text-align:center;padding:1.5rem 0;">Aún no se enviaron notificaciones.</p>`;
+            return;
+        }
+
+        const targetLabel = (type, value) => {
+            if (type === 'all')  return '📢 Todos';
+            if (type === 'role') return value === 'admin' ? '🔑 Admins' : value === 'manager' ? '👔 Managers' : '🎭 Creadores';
+            if (type === 'user') return '👤 1 persona';
+            if (type === 'users') {
+                try { return `👥 ${JSON.parse(value).length} creadores`; } catch { return '👥 Segmento'; }
+            }
+            return type;
+        };
+
+        const timeAgo = (iso) => {
+            const s = Math.floor((Date.now() - new Date(iso)) / 1000);
+            if (s < 60)    return 'hace un momento';
+            if (s < 3600)  return `hace ${Math.floor(s / 60)} min`;
+            if (s < 86400) return `hace ${Math.floor(s / 3600)}h`;
+            return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+        };
+
+        wrap.innerHTML = items.map(n => `
+            <div style="padding:0.75rem 1rem;border:1px solid var(--glass-border);border-radius:var(--radius-md);
+                        background:rgba(255,255,255,0.02);">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.25rem;">
+                    <span style="font-size:0.82rem;font-weight:700;color:var(--text-primary);">${n.title}</span>
+                    <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;">${timeAgo(n.sent_at)}</span>
+                </div>
+                <p style="font-size:0.73rem;color:var(--text-muted);margin:0 0 0.35rem;line-height:1.4;
+                           overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
+                    ${n.body}
+                </p>
+                <div style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap;">
+                    <span style="font-size:0.65rem;background:rgba(255,255,255,0.06);border-radius:999px;
+                                 padding:0.1rem 0.5rem;color:var(--text-secondary);">
+                        ${targetLabel(n.target_type, n.target_value)}
+                    </span>
+                    ${n.delivered != null ? `<span style="font-size:0.62rem;color:var(--accent);">✓ ${n.delivered} entregadas</span>` : ''}
+                    ${n.failed    != null && n.failed > 0 ? `<span style="font-size:0.62rem;color:var(--danger);">✗ ${n.failed} fallidas</span>` : ''}
+                </div>
+            </div>`).join('');
+    }).catch(() => {
+        wrap.innerHTML = `<p style="font-size:0.8rem;color:var(--danger);padding:1rem 0;">Error al cargar el historial.</p>`;
     });
 }
 

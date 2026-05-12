@@ -33,7 +33,7 @@ function renderContent(container, items, isAdmin) {
 
             ${isAdmin ? `
             <div id="ev-form" class="glass-panel" style="padding:1.25rem;margin-bottom:1.5rem;display:none;">
-                <h3 style="margin-top:0;font-size:0.95rem;">Nuevo Evento</h3>
+                <h3 id="ev-form-title" style="margin-top:0;font-size:0.95rem;">Nuevo Evento</h3>
                 <div style="display:flex;flex-direction:column;gap:0.8rem;">
                     <input type="text" id="ev-title" class="input-control" placeholder="Nombre del evento" maxlength="100">
                     <textarea id="ev-desc" class="input-control" style="height:100px;resize:none;" placeholder="Descripción del evento..." maxlength="1000"></textarea>
@@ -77,8 +77,12 @@ function renderContent(container, items, isAdmin) {
 
     if (!isAdmin) return;
 
+    let editingId      = null;
+    let existingImgUrl = null;
+
     const addBtn    = container.querySelector('#add-ev-btn');
     const form      = container.querySelector('#ev-form');
+    const formTitle = container.querySelector('#ev-form-title');
     const cancelBtn = container.querySelector('#ev-cancel-btn');
     const saveBtn   = container.querySelector('#ev-save-btn');
     const tabFile   = container.querySelector('#ev-tab-file');
@@ -90,28 +94,42 @@ function renderContent(container, items, isAdmin) {
     const preview   = container.querySelector('#ev-img-preview');
     const prevImg   = container.querySelector('#ev-preview-img');
 
-    addBtn.onclick = () => {
-        const open = form.style.display === 'none';
-        form.style.display = open ? 'block' : 'none';
-        if (open) form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    };
-    cancelBtn.onclick = () => { form.style.display = 'none'; };
-
-    // Tabs archivo/URL
-    tabFile.onclick = () => {
-        tabFile.classList.add('active'); tabFile.classList.remove('btn-ghost');
-        tabUrl.classList.remove('active'); tabUrl.classList.add('btn-ghost');
-        inputFile.style.display = 'block'; inputUrl.style.display = 'none';
-        preview.style.display = 'none';
-    };
-    tabUrl.onclick = () => {
+    const switchToUrlTab = () => {
         tabUrl.classList.add('active'); tabUrl.classList.remove('btn-ghost');
         tabFile.classList.remove('active'); tabFile.classList.add('btn-ghost');
         inputUrl.style.display = 'block'; inputFile.style.display = 'none';
-        preview.style.display = 'none';
+    };
+    const switchToFileTab = () => {
+        tabFile.classList.add('active'); tabFile.classList.remove('btn-ghost');
+        tabUrl.classList.remove('active'); tabUrl.classList.add('btn-ghost');
+        inputFile.style.display = 'block'; inputUrl.style.display = 'none';
     };
 
-    // Previsualización archivo
+    const closeForm = () => {
+        form.style.display = 'none';
+        editingId = null; existingImgUrl = null;
+        formTitle.textContent = 'Nuevo Evento';
+        saveBtn.textContent   = 'Publicar Evento';
+        container.querySelector('#ev-title').value = '';
+        container.querySelector('#ev-desc').value  = '';
+        container.querySelector('#ev-date').value  = '';
+        urlEl.value = '';
+        fileEl.value = '';
+        preview.style.display = 'none';
+        switchToFileTab();
+    };
+
+    addBtn.onclick = () => {
+        if (form.style.display !== 'none' && !editingId) { closeForm(); return; }
+        closeForm();
+        form.style.display = 'block';
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    cancelBtn.onclick = closeForm;
+
+    tabFile.onclick = () => { switchToFileTab(); preview.style.display = 'none'; };
+    tabUrl.onclick  = () => { switchToUrlTab();  preview.style.display = 'none'; };
+
     fileEl.addEventListener('change', () => {
         const file = fileEl.files[0];
         if (!file) return;
@@ -119,7 +137,6 @@ function renderContent(container, items, isAdmin) {
         preview.style.display = 'block';
     });
 
-    // Previsualización URL
     urlEl.addEventListener('blur', () => {
         const v = urlEl.value.trim();
         if (v) { prevImg.src = v; preview.style.display = 'block'; }
@@ -134,9 +151,9 @@ function renderContent(container, items, isAdmin) {
 
         if (!title) return appState.showToast('El nombre del evento es obligatorio', 'warning');
 
-        saveBtn.disabled = true; saveBtn.textContent = 'Publicando...';
+        saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
         try {
-            let imageUrl = null;
+            let imageUrl = existingImgUrl;
 
             if (usingFile && fileEl.files[0]) {
                 saveBtn.textContent = 'Subiendo imagen...';
@@ -145,14 +162,46 @@ function renderContent(container, items, isAdmin) {
                 imageUrl = urlEl.value.trim();
             }
 
-            await api.create({ title, description: desc, image_url: imageUrl, event_date: eventDate || null });
-            appState.showToast('Evento publicado', 'success');
+            if (editingId) {
+                await api.update(editingId, { title, description: desc, image_url: imageUrl, event_date: eventDate || null });
+                appState.showToast('Evento actualizado', 'success');
+            } else {
+                await api.create({ title, description: desc, image_url: imageUrl, event_date: eventDate || null });
+                appState.showToast('Evento publicado', 'success');
+            }
             renderEventsView(container);
         } catch (err) {
             appState.showToast('Error: ' + err.message, 'danger');
-            saveBtn.disabled = false; saveBtn.textContent = 'Publicar Evento';
+            saveBtn.disabled = false; saveBtn.textContent = editingId ? 'Actualizar' : 'Publicar Evento';
         }
     };
+
+    container.querySelectorAll('.ev-edit-btn').forEach(btn => {
+        btn.onclick = () => {
+            const id = btn.dataset.id;
+            const ev = items.find(e => String(e.id) === String(id));
+            if (!ev) return;
+            editingId = ev.id;
+            existingImgUrl = ev.image_url || null;
+            formTitle.textContent = 'Editar Evento';
+            saveBtn.textContent   = 'Actualizar';
+            container.querySelector('#ev-title').value = ev.title || '';
+            container.querySelector('#ev-desc').value  = ev.description || '';
+            container.querySelector('#ev-date').value  = ev.event_date || '';
+            // Pre-fill image URL if available
+            if (ev.image_url) {
+                switchToUrlTab();
+                urlEl.value = ev.image_url;
+                prevImg.src = ev.image_url;
+                preview.style.display = 'block';
+            } else {
+                switchToFileTab();
+                preview.style.display = 'none';
+            }
+            form.style.display = 'block';
+            form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        };
+    });
 
     container.querySelectorAll('.ev-del-btn').forEach(btn => {
         btn.onclick = async () => {
@@ -192,10 +241,17 @@ function renderEventCard(ev, isAdmin) {
 
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;flex-wrap:wrap;">
                     <h2 style="margin:0 0 0.5rem;font-size:1.05rem;line-height:1.3;flex:1;">${ev.title}</h2>
-                    ${isAdmin ? `<button class="ev-del-btn" data-id="${ev.id}"
-                        style="font-size:0.72rem;padding:0.25rem 0.5rem;border-radius:6px;
-                               background:rgba(255,85,105,0.1);color:var(--danger);
-                               border:none;cursor:pointer;flex-shrink:0;">🗑 Eliminar</button>` : ''}
+                    ${isAdmin ? `
+                    <div style="display:flex;gap:0.35rem;flex-shrink:0;">
+                        <button class="ev-edit-btn" data-id="${ev.id}"
+                            style="font-size:0.72rem;padding:0.25rem 0.5rem;border-radius:6px;
+                                   background:rgba(124,110,247,0.1);color:var(--primary-light);
+                                   border:none;cursor:pointer;">✏️ Editar</button>
+                        <button class="ev-del-btn" data-id="${ev.id}"
+                            style="font-size:0.72rem;padding:0.25rem 0.5rem;border-radius:6px;
+                                   background:rgba(255,85,105,0.1);color:var(--danger);
+                                   border:none;cursor:pointer;">🗑</button>
+                    </div>` : ''}
                 </div>
 
                 ${ev.description ? `
