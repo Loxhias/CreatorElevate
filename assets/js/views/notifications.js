@@ -74,36 +74,16 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
                     <h3 style="margin-top:0;">Nuevo Mensaje</h3>
 
                     <div style="margin-bottom:1.5rem;">
-                        <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">DESTINATARIOS</label>
-                        <select id="msg-target" class="input-control">
-                            <optgroup label="Administradores">
-                                <option value="all-admins">Todos los Administradores</option>
-                                ${admins.map(a => `<option value="user:${a.id}">${a.display_name || a.email}</option>`).join('')}
-                            </optgroup>
-                            <optgroup label="Managers">
-                                <option value="all-managers">Todos los Managers</option>
-                                ${managers.map(m => `<option value="user:${m.id}">${m.display_name || m.tiktok_username || m.email}</option>`).join('')}
-                            </optgroup>
-                            <optgroup label="Todos los Creadores">
-                                <option value="all-creators">📢 Todos los Creadores (${creatorsWithAccount} con cuenta)</option>
-                            </optgroup>
-                            <optgroup label="Creador individual">
-                                ${creators.map(c => `<option value="user:${c.id}">👤 ${c.display_name || c.tiktok_username || c.email}</option>`).join('')}
-                            </optgroup>
-                            <optgroup label="Segmentos de Rendimiento">
-                                <option value="segment:top">🏆 Top 10% — Los más rentables (${resolvedCounts.top} con cuenta)</option>
-                                <option value="segment:risk">⚠️ En Riesgo — Pocos días y bajos diamantes (${resolvedCounts.risk} con cuenta)</option>
-                                <option value="segment:inactive">🔴 Inactivos — Sin transmisiones este mes (${resolvedCounts.inactive} con cuenta)</option>
-                                <option value="segment:lowvalid">📉 Transmiten pero sin días válidos — ≤ 3 días válidos (${resolvedCounts.lowValid} con cuenta)</option>
-                                <option value="segment:effortlow">💪 Alto esfuerzo, bajo rendimiento (${resolvedCounts.effortLow} con cuenta)</option>
-                                <option value="segment:potential">⚡ Con Potencial — Muchas horas, pocos 💎 (${resolvedCounts.potential} con cuenta)</option>
-                            </optgroup>
-                            <optgroup label="Segmentos de Etapa">
-                                <option value="segment:new">🆕 Nuevos — Primer mes en la agencia (${resolvedCounts.newOnes} con cuenta)</option>
-                                <option value="segment:newinactive">🆕🔴 Nuevos sin transmitir aún (${resolvedCounts.newInactive} con cuenta)</option>
-                                <option value="segment:novice">🔰 Novatos — Nivel 1 o sin nivel (${resolvedCounts.novice} con cuenta)</option>
-                            </optgroup>
-                        </select>
+                        <label style="display:block; font-size:0.8rem; margin-bottom:0.6rem; color:var(--text-secondary);">DESTINATARIOS</label>
+                        <div id="target-pills" style="display:flex;flex-wrap:wrap;gap:0.45rem;margin-bottom:0.75rem;">
+                            <button class="tpill" data-t="all-creators">📢 Todos los Creadores</button>
+                            <button class="tpill" data-t="individual">👤 Buscar Creador</button>
+                            <button class="tpill" data-t="by-manager">👔 Por Manager</button>
+                            <button class="tpill" data-t="segment">📊 Segmento</button>
+                            <button class="tpill" data-t="all-managers">👔 Solo Managers</button>
+                            <button class="tpill" data-t="all-admins">🔑 Solo Admins</button>
+                        </div>
+                        <div id="target-sub" style="margin-bottom:0.5rem;"></div>
                         <p id="target-count" style="font-size:0.75rem; color:var(--accent); margin-top:0.4rem;"></p>
                     </div>
 
@@ -198,20 +178,40 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
         </div>
     `;
 
-    const targetSelect = container.querySelector('#msg-target');
-    const targetCount  = container.querySelector('#target-count');
-    const sendBtn      = container.querySelector('#send-btn');
+    const targetCount = container.querySelector('#target-count');
+    const sendBtn     = container.querySelector('#send-btn');
+
+    let tState = { type: 'all-creators', selectedIds: [], managerId: null, segment: null };
+
+    const pillContainer = container.querySelector('#target-pills');
+    const subEl         = container.querySelector('#target-sub');
+
+    const pillStyle = (active) =>
+        `font-size:0.75rem;padding:0.35rem 0.75rem;border-radius:999px;cursor:pointer;font-weight:600;` +
+        `background:${active ? 'rgba(124,110,247,0.2)' : 'rgba(255,255,255,0.04)'};` +
+        `border:1.5px solid ${active ? 'var(--primary)' : 'var(--glass-border)'};` +
+        `color:${active ? 'var(--primary-light)' : 'var(--text-secondary)'};`;
+
+    const updatePillStyles = () => {
+        pillContainer.querySelectorAll('.tpill').forEach(b => {
+            b.style.cssText = pillStyle(b.dataset.t === tState.type);
+        });
+    };
 
     const updateCount = () => {
-        const val = targetSelect.value;
         let text = '';
-        if (val === 'all-admins')        text = `${admins.length} administrador${admins.length !== 1 ? 'es' : ''}`;
-        else if (val === 'all-managers') text = `${managers.length} manager${managers.length !== 1 ? 's' : ''}`;
-        else if (val === 'all-creators') text = `${creatorsWithAccount} creadores con cuenta`;
-        else if (val.startsWith('user:')) text = '1 persona';
-        else if (val.startsWith('segment:')) {
-            const seg = val.split(':')[1];
-            const key = SEG_KEY[seg] || seg;
+        if (tState.type === 'all-creators')         text = `${creatorsWithAccount} creadores con cuenta`;
+        else if (tState.type === 'all-managers')     text = `${managers.length} manager${managers.length !== 1 ? 's' : ''}`;
+        else if (tState.type === 'all-admins')       text = `${admins.length} administrador${admins.length !== 1 ? 'es' : ''}`;
+        else if (tState.type === 'individual') {
+            const n = tState.selectedIds.length;
+            text = n ? `${n} creador${n !== 1 ? 'es' : ''} seleccionado${n !== 1 ? 's' : ''}` : 'Sin creadores seleccionados';
+        } else if (tState.type === 'by-manager' && tState.managerId) {
+            const mgr = managers.find(m => m.id === tState.managerId);
+            const cnt = creators.filter(c => c.manager_id === tState.managerId).length;
+            text = `${cnt} creador${cnt !== 1 ? 'es' : ''} de ${esc(mgr?.display_name || mgr?.tiktok_username || 'este manager')}`;
+        } else if (tState.type === 'segment' && tState.segment) {
+            const key = SEG_KEY[tState.segment] || tState.segment;
             const total = (segments[key] || []).length;
             const resolved = resolvedCounts[key] ?? 0;
             text = `${resolved} con cuenta (${total} en el segmento total)`;
@@ -219,8 +219,159 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
         targetCount.textContent = text ? `→ ${text}` : '';
     };
 
-    targetSelect.addEventListener('change', updateCount);
-    updateCount();
+    const renderSubIndividual = () => {
+        subEl.innerHTML = `
+            <div style="position:relative;margin-bottom:0.5rem;">
+                <input id="creator-search" type="text" class="input-control"
+                       placeholder="Buscar por nombre, @usuario o email..."
+                       autocomplete="off" style="margin-bottom:0.4rem;">
+                <div id="creator-results" style="
+                    position:absolute;left:0;right:0;z-index:10;
+                    max-height:200px;overflow-y:auto;
+                    border:1px solid var(--glass-border);border-radius:var(--radius-md);
+                    background:rgba(18,18,32,0.97);display:none;"></div>
+            </div>
+            <div id="selected-chips" style="display:flex;flex-wrap:wrap;gap:0.4rem;min-height:24px;"></div>`;
+
+        const searchInput = subEl.querySelector('#creator-search');
+        const resultsEl   = subEl.querySelector('#creator-results');
+        const chipsEl     = subEl.querySelector('#selected-chips');
+
+        const renderChips = () => {
+            chipsEl.innerHTML = tState.selectedIds.map(id => {
+                const p    = creators.find(c => c.id === id);
+                const name = esc(p?.display_name || p?.tiktok_username || id.slice(0, 8));
+                return `<span style="display:inline-flex;align-items:center;gap:0.3rem;
+                    font-size:0.72rem;padding:0.2rem 0.4rem 0.2rem 0.7rem;
+                    background:rgba(124,110,247,0.18);border:1px solid var(--primary);
+                    border-radius:999px;color:var(--primary-light);">
+                    ${name}
+                    <button data-rid="${id}" style="background:none;border:none;cursor:pointer;
+                        color:var(--primary-light);font-size:0.9rem;padding:0 0.1rem;line-height:1;">✕</button>
+                </span>`;
+            }).join('');
+            chipsEl.querySelectorAll('[data-rid]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    tState.selectedIds = tState.selectedIds.filter(id => id !== btn.dataset.rid);
+                    renderChips();
+                    updateCount();
+                });
+            });
+        };
+
+        searchInput.addEventListener('input', () => {
+            const q = searchInput.value.toLowerCase().trim();
+            if (!q) { resultsEl.style.display = 'none'; return; }
+            const matches = creators
+                .filter(c => !tState.selectedIds.includes(c.id))
+                .filter(c =>
+                    (c.display_name || '').toLowerCase().includes(q) ||
+                    (c.tiktok_username || '').toLowerCase().includes(q) ||
+                    (c.email || '').toLowerCase().includes(q)
+                ).slice(0, 8);
+
+            if (!matches.length) {
+                resultsEl.innerHTML = `<p style="font-size:0.75rem;color:var(--text-muted);padding:0.5rem 0.8rem;">Sin resultados</p>`;
+            } else {
+                resultsEl.innerHTML = matches.map(c => `
+                    <div data-pid="${c.id}" style="padding:0.45rem 0.8rem;cursor:pointer;font-size:0.78rem;
+                         border-bottom:1px solid var(--glass-border);">
+                        <span style="font-weight:600;color:var(--text-primary);">
+                            ${esc(c.display_name || c.tiktok_username || 'Sin nombre')}
+                        </span>
+                        ${c.tiktok_username ? `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:0.4rem;">@${esc(c.tiktok_username)}</span>` : ''}
+                    </div>`).join('');
+                resultsEl.querySelectorAll('[data-pid]').forEach(row => {
+                    row.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        const id = row.dataset.pid;
+                        if (!tState.selectedIds.includes(id)) {
+                            tState.selectedIds.push(id);
+                            renderChips();
+                            updateCount();
+                        }
+                        searchInput.value = '';
+                        resultsEl.style.display = 'none';
+                    });
+                });
+            }
+            resultsEl.style.display = 'block';
+        });
+        searchInput.addEventListener('blur', () => {
+            setTimeout(() => { resultsEl.style.display = 'none'; }, 150);
+        });
+        renderChips();
+    };
+
+    const renderSubManager = () => {
+        if (!managers.length) {
+            subEl.innerHTML = `<p style="font-size:0.78rem;color:var(--text-muted);">No hay managers registrados.</p>`;
+            return;
+        }
+        subEl.innerHTML = managers.map(m => {
+            const cnt    = creators.filter(c => c.manager_id === m.id).length;
+            const active = tState.managerId === m.id;
+            return `<button class="mgr-pill" data-mid="${m.id}"
+                style="${pillStyle(active)}margin:0 0.4rem 0.4rem 0;">
+                👔 ${esc(m.display_name || m.tiktok_username || m.email)}
+                <span style="opacity:0.65;">(${cnt})</span>
+            </button>`;
+        }).join('');
+        subEl.querySelectorAll('.mgr-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tState.managerId = btn.dataset.mid;
+                renderSubManager();
+                updateCount();
+            });
+        });
+    };
+
+    const renderSubSegment = () => {
+        const SEGS = [
+            { key:'top',         val:'top',         label:'🏆 Top 10%' },
+            { key:'risk',        val:'risk',        label:'⚠️ En Riesgo' },
+            { key:'inactive',    val:'inactive',    label:'🔴 Inactivos' },
+            { key:'lowValid',    val:'lowvalid',    label:'📉 Sin días válidos' },
+            { key:'effortLow',   val:'effortlow',   label:'💪 Alto esf. / bajo 💎' },
+            { key:'potential',   val:'potential',   label:'⚡ Con Potencial' },
+            { key:'newOnes',     val:'new',         label:'🆕 Nuevos' },
+            { key:'newInactive', val:'newinactive', label:'🆕🔴 Sin transmitir aún' },
+            { key:'novice',      val:'novice',      label:'🔰 Novatos' },
+        ];
+        subEl.innerHTML = SEGS.map(s => {
+            const active   = tState.segment === s.val;
+            const resolved = resolvedCounts[s.key] ?? 0;
+            return `<button class="seg-pill" data-sval="${s.val}"
+                style="${pillStyle(active)}margin:0 0.4rem 0.4rem 0;">
+                ${s.label} <span style="opacity:0.65;">(${resolved}✓)</span>
+            </button>`;
+        }).join('');
+        subEl.querySelectorAll('.seg-pill').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tState.segment = btn.dataset.sval;
+                renderSubSegment();
+                updateCount();
+            });
+        });
+    };
+
+    const renderSub = () => {
+        subEl.innerHTML = '';
+        if (tState.type === 'individual')       renderSubIndividual();
+        else if (tState.type === 'by-manager')  renderSubManager();
+        else if (tState.type === 'segment')     renderSubSegment();
+        updatePillStyles();
+        updateCount();
+    };
+
+    pillContainer.querySelectorAll('.tpill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            tState = { type: btn.dataset.t, selectedIds: [], managerId: null, segment: null };
+            renderSub();
+        });
+    });
+
+    renderSub();
 
     // Contadores de caracteres
     const titleInput   = container.querySelector('#msg-title');
@@ -264,8 +415,7 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
     sendBtn.addEventListener('click', async () => {
         const title  = titleInput.value.trim();
         const body   = bodyInput.value.trim();
-        const dest   = destSelect.value;
-        const target = targetSelect.value;
+        const dest = destSelect.value;
 
         if (!title) return appState.showToast('El título es obligatorio', 'warning');
         if (!body)  return appState.showToast('El mensaje es obligatorio', 'warning');
@@ -288,20 +438,28 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
             pushUrl = raw || undefined;
         }
 
-        let finalTarget = { type: 'all', value: null };
-
-        if (target === 'all-admins')        finalTarget = { type: 'role', value: 'admin' };
-        else if (target === 'all-managers') finalTarget = { type: 'role', value: 'manager' };
-        else if (target === 'all-creators') finalTarget = { type: 'role', value: 'creator' };
-        else if (target.startsWith('user:')) finalTarget = { type: 'user', value: target.split(':')[1] };
-        else if (target.startsWith('segment:')) {
-            const seg  = target.split(':')[1];
-            const key  = SEG_KEY[seg] || seg;
-            const ids  = resolveSegmentToIds(segments[key] || [], allProfiles);
-            if (!ids.length) {
-                return appState.showToast('Ningún creador de este segmento tiene cuenta registrada', 'warning');
-            }
+        let finalTarget;
+        if (tState.type === 'all-creators')        finalTarget = { type: 'role', value: 'creator' };
+        else if (tState.type === 'all-managers')   finalTarget = { type: 'role', value: 'manager' };
+        else if (tState.type === 'all-admins')     finalTarget = { type: 'role', value: 'admin' };
+        else if (tState.type === 'individual') {
+            if (!tState.selectedIds.length) return appState.showToast('Seleccioná al menos un creador', 'warning');
+            finalTarget = tState.selectedIds.length === 1
+                ? { type: 'user',  value: tState.selectedIds[0] }
+                : { type: 'users', value: tState.selectedIds };
+        } else if (tState.type === 'by-manager') {
+            if (!tState.managerId) return appState.showToast('Seleccioná un manager', 'warning');
+            const ids = creators.filter(c => c.manager_id === tState.managerId).map(c => c.id).filter(Boolean);
+            if (!ids.length) return appState.showToast('Este manager no tiene creadores registrados', 'warning');
             finalTarget = { type: 'users', value: ids };
+        } else if (tState.type === 'segment') {
+            if (!tState.segment) return appState.showToast('Seleccioná un segmento', 'warning');
+            const key = SEG_KEY[tState.segment] || tState.segment;
+            const ids = resolveSegmentToIds(segments[key] || [], allProfiles);
+            if (!ids.length) return appState.showToast('Ningún creador de este segmento tiene cuenta registrada', 'warning');
+            finalTarget = { type: 'users', value: ids };
+        } else {
+            finalTarget = { type: 'all', value: null };
         }
 
         sendBtn.disabled  = true;
@@ -315,7 +473,8 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
             bodyInput.value  = '';
             destSelect.value = '';
             urlWrap.style.display = 'none';
-            updateCount();
+            tState = { type: 'all-creators', selectedIds: [], managerId: null, segment: null };
+            renderSub();
             loadHistorial(container);
         } catch (e) {
             console.error('[send-push] error:', e);
