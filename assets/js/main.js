@@ -42,17 +42,19 @@ export const appState = {
 function getNavItems(role) {
     const items = [];
     if (role === 'admin') {
-        items.push({ view: 'inicio', icon: '📊', label: 'Admin Dashboard' });
-        items.push({ view: 'creadores', icon: '👥', label: 'Creadores' });
-        items.push({ view: 'notificaciones', icon: '🔔', label: 'Notificaciones' });
+        items.push({ view: 'inicio',          icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'creadores',       icon: '👥', label: 'Creadores' });
+        items.push({ view: 'notificaciones',  icon: '🔔', label: 'Mensajes' });
     } else if (role === 'creator') {
-        items.push({ view: 'inicio', icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'normas', icon: '📋', label: 'Normas' });
+        items.push({ view: 'inicio',  icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'normas',  icon: '📋', label: 'Normas' });
         items.push({ view: 'canales', icon: '📢', label: 'Canales' });
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
-    items.push({ view: 'perfil', icon: '👤', label: 'Mi Perfil' });
+    items.push({ view: 'capacitaciones', icon: '🎓', label: 'Capacitaciones' });
+    items.push({ view: 'eventos',        icon: '📅', label: 'Eventos' });
+    items.push({ view: 'perfil',         icon: '👤', label: 'Perfil' });
     return items;
 }
 
@@ -154,6 +156,12 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'creadores') safeRender(renderCreatorsList, contentArea);
             else if (view === 'notificaciones') {
                 import('./views/notifications.js').then(m => safeRender(m.renderNotificationsView, contentArea));
+            }
+            else if (view === 'capacitaciones') {
+                import('./views/trainings.js').then(m => safeRender(m.renderTrainingsView, contentArea));
+            }
+            else if (view === 'eventos') {
+                import('./views/events.js').then(m => safeRender(m.renderEventsView, contentArea));
             }
             else if (view === 'perfil') safeRender(renderProfile, contentArea);
         };

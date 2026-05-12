@@ -1,6 +1,7 @@
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements } from '../config.js';
+import { push } from '../api.js';
 
 
 function getIdx(d, tiers) {
@@ -829,6 +830,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             <button class="tab-btn"        data-tab="benefits" style="flex:1;white-space:nowrap;">🎁 Beneficios</button>
             ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex:1;white-space:nowrap;">🚀 Misiones</button>` : ''}
             ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex:1;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
+            <button class="tab-btn" data-tab="inbox" style="flex:1;white-space:nowrap;">🔔 Mensajes</button>
         </div>
 
         <!-- Tab Content -->
@@ -856,7 +858,8 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     }
 
     const tabContent = container.querySelector('#tab-content');
-    const tabs = { metrics: null, goals: null, benefits: null, missions: null, challenge: null };
+    const tabs = { metrics: null, goals: null, benefits: null, missions: null, challenge: null, inbox: null };
+    const inboxLastSeenKey = `inbox_last_seen_${user?.id || 'anon'}`;
 
     // ── Last month benefit calculation ────────────────────────────────────
     // Solo tenemos diamonds_last_month de la BD; horas y días del mes anterior
@@ -881,6 +884,23 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const meetsDiamLast = diamAmtLast > 0;
 
     function renderTab(name) {
+        if (name === 'inbox') {
+            tabContent.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">Cargando mensajes...</div>';
+            const userId   = user?.id;
+            const userRole = user?.role || 'creator';
+            push.getForUser(userId, userRole).then(notifications => {
+                const lastSeen = localStorage.getItem(inboxLastSeenKey) || '1970-01-01';
+                localStorage.setItem(inboxLastSeenKey, new Date().toISOString());
+                // Quitar badge del botón
+                const inboxBtn = container.querySelector('[data-tab="inbox"]');
+                if (inboxBtn) inboxBtn.innerHTML = '🔔 Mensajes';
+                tabContent.innerHTML = `<div class="animate-fade-in">${renderInbox(notifications, lastSeen)}</div>`;
+            }).catch(() => {
+                tabContent.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--danger);font-size:0.85rem;">Error al cargar los mensajes.</div>';
+            });
+            return;
+        }
+
         if (!tabs[name]) {
             if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
             if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
@@ -901,6 +921,18 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     renderTab('metrics');
 
+    // Cargar badge de no leídos en background
+    if (user?.id) {
+        push.getForUser(user.id, user.role || 'creator').then(notifications => {
+            const lastSeen = localStorage.getItem(inboxLastSeenKey) || '1970-01-01';
+            const unread = notifications.filter(n => n.sent_at > lastSeen).length;
+            if (unread > 0) {
+                const inboxBtn = container.querySelector('[data-tab="inbox"]');
+                if (inboxBtn) inboxBtn.innerHTML = `🔔 Mensajes <span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;margin-left:0.2rem;vertical-align:middle;">${unread}</span>`;
+            }
+        }).catch(() => {});
+    }
+
     // Manejar botón de volver
     container.querySelector('#back-to-list')?.addEventListener('click', () => {
         const role = store.getCurrentUser().role;
@@ -918,4 +950,63 @@ function emptyState(title, sub) {
         <h3 style="margin-bottom:0.5rem;">${title}</h3>
         <p class="text-sm text-muted">${sub}</p>
     </div>`;
+}
+
+function renderInbox(notifications, lastSeen) {
+    if (!notifications.length) {
+        return `
+            <div class="glass-panel" style="padding:3rem 2rem;text-align:center;">
+                <div style="font-size:2.5rem;margin-bottom:1rem;">🔔</div>
+                <h3 style="margin-bottom:0.5rem;">Sin mensajes</h3>
+                <p style="font-size:0.8rem;color:var(--text-muted);">Aquí verás los mensajes que te envíe tu equipo de Interactik.</p>
+            </div>`;
+    }
+
+    const timeAgo = (isoStr) => {
+        const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+        if (diff < 60)    return 'hace un momento';
+        if (diff < 3600)  return `hace ${Math.floor(diff/60)} min`;
+        if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`;
+        const d = new Date(isoStr);
+        return d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const items = notifications.map(n => {
+        const isUnread = n.sent_at > lastSeen;
+        return `
+            <div style="
+                display:flex;gap:0.9rem;padding:1rem 1.1rem;
+                background:${isUnread ? 'rgba(124,110,247,0.07)' : 'rgba(255,255,255,0.02)'};
+                border:1px solid ${isUnread ? 'rgba(124,110,247,0.25)' : 'var(--glass-border)'};
+                border-radius:var(--radius-md);
+                margin-bottom:0.6rem;
+            ">
+                <div style="flex-shrink:0;margin-top:0.2rem;">
+                    <div style="
+                        width:8px;height:8px;border-radius:50%;margin-top:0.35rem;
+                        background:${isUnread ? 'var(--primary)' : 'transparent'};
+                        border:${isUnread ? 'none' : '1.5px solid rgba(255,255,255,0.15)'};
+                    "></div>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.3rem;">
+                        <span style="font-size:0.88rem;font-weight:${isUnread ? '700' : '600'};color:${isUnread ? 'var(--text-primary)' : 'var(--text-secondary)'};">
+                            ${n.title}
+                        </span>
+                        <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;flex-shrink:0;">${timeAgo(n.sent_at)}</span>
+                    </div>
+                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${n.body}</p>
+                    ${n.url ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">Ver más →</a>` : ''}
+                </div>
+            </div>`;
+    }).join('');
+
+    return `
+        <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 style="margin:0;font-size:0.95rem;">Mensajes del equipo</h3>
+                <span style="font-size:0.72rem;color:var(--text-muted);">${notifications.length} mensaje${notifications.length !== 1 ? 's' : ''}</span>
+            </div>
+            ${items}
+        </div>`;
 }

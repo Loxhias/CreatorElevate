@@ -430,7 +430,6 @@ export const push = {
         let payload = null;
         try { payload = await response.json(); } catch { /* respuesta no-JSON */ }
 
-        // Volcamos siempre los logs del servidor (incluso en error) para poder diagnosticar.
         if (payload && Array.isArray(payload.server_logs) && payload.server_logs.length) {
             console.group(`🚀 REGISTROS DE ENVÍO (SERVIDOR) — HTTP ${response.status}`);
             payload.server_logs.forEach(l => console.log(l));
@@ -454,6 +453,127 @@ export const push = {
         }
 
         return payload;
+    },
+
+    /** Guarda la notificación enviada en la tabla notifications para el historial. */
+    async saveToDb(title, body, url, target) {
+        if (!isSupabaseConfigured) return;
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('notifications').insert({
+            sent_by:      user?.id || null,
+            title:        san(title),
+            body:         san(body),
+            url:          url || null,
+            target_type:  target.type,
+            target_value: Array.isArray(target.value)
+                ? JSON.stringify(target.value)
+                : (target.value || null),
+            sent_at:      new Date().toISOString(),
+        });
+        if (error) console.warn('[push.saveToDb] error al guardar en BD:', error.message);
+    },
+
+    /**
+     * Devuelve las notificaciones relevantes para un usuario concreto.
+     * Filtra por: all, por rol, por ID individual, y por array de IDs.
+     */
+    async getForUser(userId, userRole) {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, body, url, target_type, target_value, sent_at')
+            .order('sent_at', { ascending: false })
+            .limit(100);
+        if (error) throw error;
+
+        return (data || []).filter(n => {
+            if (n.target_type === 'all') return true;
+            if (n.target_type === 'role' && n.target_value === userRole) return true;
+            if (n.target_type === 'user' && n.target_value === userId) return true;
+            if (n.target_type === 'users') {
+                try {
+                    const ids = JSON.parse(n.target_value);
+                    return Array.isArray(ids) && ids.includes(userId);
+                } catch { return false; }
+            }
+            return false;
+        });
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  CAPACITACIONES
+// ────────────────────────────────────────────────────────────────────────────
+
+export const trainings = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('trainings').select('*')
+            .eq('published', true)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async create({ title, description, youtube_url }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('trainings').insert({
+            title: san(title), description: san(description),
+            youtube_url: san(youtube_url), created_by: user?.id,
+        });
+        if (error) throw error;
+    },
+
+    async remove(id) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('trainings').delete().eq('id', id);
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  EVENTOS
+// ────────────────────────────────────────────────────────────────────────────
+
+export const agencyEvents = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('events').select('*')
+            .eq('published', true)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async create({ title, description, image_url, event_date }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('events').insert({
+            title: san(title), description: san(description),
+            image_url: image_url || null,
+            event_date: event_date || null,
+            created_by: user?.id,
+        });
+        if (error) throw error;
+    },
+
+    async uploadImage(file) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const ext  = file.name.split('.').pop().toLowerCase();
+        const path = `events/${Date.now()}.${ext}`;
+        const { data, error } = await supabase.storage
+            .from('media').upload(path, file, { upsert: false, contentType: file.type });
+        if (error) throw error;
+        return supabase.storage.from('media').getPublicUrl(data.path).data.publicUrl;
+    },
+
+    async remove(id) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('events').delete().eq('id', id);
+        if (error) throw error;
     },
 };
 

@@ -8,7 +8,7 @@ export async function renderNotificationsView(container) {
             <div class="skel" style="height:32px;width:220px;margin-bottom:2rem;"></div>
             <div style="display:grid;grid-template-columns:1fr 320px;gap:2rem;">
                 <div class="skel-panel" style="height:420px;"></div>
-                <div class="skel-panel" style="height:260px;"></div>
+                <div class="skel-panel" style="height:320px;"></div>
             </div>
         </div>`;
 
@@ -31,11 +31,19 @@ export async function renderNotificationsView(container) {
     }
 }
 
-/**
- * Cruza un array de filas de métricas con los perfiles de Supabase
- * para obtener los IDs reales (external_user_ids de OneSignal).
- * Solo los creadores con cuenta registrada son resolvibles.
- */
+// Mapea nombre de segmento (valor del select) → clave en el objeto segments
+const SEG_KEY = {
+    top:          'top',
+    potential:    'potential',
+    risk:         'risk',
+    inactive:     'inactive',
+    newinactive:  'newInactive',
+    lowvalid:     'lowValid',
+    effortlow:    'effortLow',
+    novice:       'novice',
+    new:          'newOnes',
+};
+
 function resolveSegmentToIds(segmentRows, allProfiles) {
     const byUsername = new Map(
         allProfiles
@@ -48,14 +56,12 @@ function resolveSegmentToIds(segmentRows, allProfiles) {
 }
 
 function renderContent(container, allProfiles, admins, managers, segments) {
-    // Pre-calcular IDs resolvibles por segmento para mostrar en el panel
-    const resolvedCounts = {
-        top:       resolveSegmentToIds(segments.top,       allProfiles).length,
-        potential: resolveSegmentToIds(segments.potential, allProfiles).length,
-        risk:      resolveSegmentToIds(segments.risk,      allProfiles).length,
-        novice:    resolveSegmentToIds(segments.novice,    allProfiles).length,
-        newOnes:   resolveSegmentToIds(segments.newOnes,   allProfiles).length,
-    };
+    const resolvedCounts = {};
+    for (const [seg, key] of Object.entries(SEG_KEY)) {
+        resolvedCounts[key] = resolveSegmentToIds(segments[key] || [], allProfiles).length;
+    }
+
+    const creatorsWithAccount = allProfiles.filter(p => p.role === 'creator').length;
 
     container.innerHTML = `
         <div class="animate-fadeIn">
@@ -77,13 +83,21 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                                 <option value="all-managers">Todos los Managers</option>
                                 ${managers.map(m => `<option value="user:${m.id}">${m.display_name || m.email}</option>`).join('')}
                             </optgroup>
-                            <optgroup label="Creadores">
-                                <option value="all-creators">Todos los Creadores</option>
-                                <option value="segment:top">🏆 Top (${resolvedCounts.top} con cuenta)</option>
-                                <option value="segment:potential">⚡ Con Potencial (${resolvedCounts.potential} con cuenta)</option>
-                                <option value="segment:risk">⚠️ En Riesgo (${resolvedCounts.risk} con cuenta)</option>
-                                <option value="segment:novice">🔰 Novatos (${resolvedCounts.novice} con cuenta)</option>
-                                <option value="segment:new">🆕 Nuevos (${resolvedCounts.newOnes} con cuenta)</option>
+                            <optgroup label="Todos los Creadores">
+                                <option value="all-creators">📢 Todos los Creadores (${creatorsWithAccount} con cuenta)</option>
+                            </optgroup>
+                            <optgroup label="Segmentos de Rendimiento">
+                                <option value="segment:top">🏆 Top 10% — Los más rentables (${resolvedCounts.top} con cuenta)</option>
+                                <option value="segment:risk">⚠️ En Riesgo — Pocos días y bajos diamantes (${resolvedCounts.risk} con cuenta)</option>
+                                <option value="segment:inactive">🔴 Inactivos — Sin transmisiones este mes (${resolvedCounts.inactive} con cuenta)</option>
+                                <option value="segment:lowvalid">📉 Transmiten pero sin días válidos — ≤ 3 días válidos (${resolvedCounts.lowValid} con cuenta)</option>
+                                <option value="segment:effortlow">💪 Alto esfuerzo, bajo rendimiento (${resolvedCounts.effortLow} con cuenta)</option>
+                                <option value="segment:potential">⚡ Con Potencial — Muchas horas, pocos 💎 (${resolvedCounts.potential} con cuenta)</option>
+                            </optgroup>
+                            <optgroup label="Segmentos de Etapa">
+                                <option value="segment:new">🆕 Nuevos — Primer mes en la agencia (${resolvedCounts.newOnes} con cuenta)</option>
+                                <option value="segment:newinactive">🆕🔴 Nuevos sin transmitir aún (${resolvedCounts.newInactive} con cuenta)</option>
+                                <option value="segment:novice">🔰 Novatos — Nivel 1 o sin nivel (${resolvedCounts.novice} con cuenta)</option>
                             </optgroup>
                         </select>
                         <p id="target-count" style="font-size:0.75rem; color:var(--accent); margin-top:0.4rem;"></p>
@@ -94,7 +108,7 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                             <label style="font-size:0.8rem;color:var(--text-secondary);">TÍTULO</label>
                             <span id="title-counter" style="font-size:0.65rem;color:var(--text-muted);">0/100</span>
                         </div>
-                        <input type="text" id="msg-title" class="input-control" maxlength="100" placeholder="Ej: Nueva actualización de normas">
+                        <input type="text" id="msg-title" class="input-control" maxlength="100" placeholder="Ej: ¡Hora de transmitir! Tu equipo te espera">
                     </div>
 
                     <div style="margin-bottom:1.5rem;">
@@ -118,16 +132,40 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                 <div style="display:flex; flex-direction:column; gap:1.5rem;">
                     <div class="glass-panel" style="padding:1.5rem;">
                         <h4 style="margin-top:0; font-size:0.8rem; color:var(--text-secondary); letter-spacing:0.05em;">SEGMENTOS CALCULADOS</h4>
-                        <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:1rem;">
-                            ${renderSegmentStat('🏆 Top 10%',     segments.top.length,       resolvedCounts.top,       'var(--accent)')}
-                            ${renderSegmentStat('⚡ Potencial',   segments.potential.length,  resolvedCounts.potential,  '#6366f1')}
-                            ${renderSegmentStat('⚠️ Riesgo',      segments.risk.length,       resolvedCounts.risk,       'var(--danger)')}
-                            ${renderSegmentStat('🔰 Novatos',     segments.novice.length,     resolvedCounts.novice,     'var(--text-secondary)')}
-                            ${renderSegmentStat('🆕 Nuevos',      segments.newOnes.length,    resolvedCounts.newOnes,    'var(--primary)')}
+
+                        <div style="margin:1rem 0 0.5rem; font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Rendimiento</div>
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            ${renderSegmentStat('🏆 Top 10%',           segments.top.length,       resolvedCounts.top,       'var(--accent)')}
+                            ${renderSegmentStat('⚠️ En Riesgo',         segments.risk.length,      resolvedCounts.risk,      'var(--danger)')}
+                            ${renderSegmentStat('🔴 Inactivos',             segments.inactive.length,  resolvedCounts.inactive,  '#ef4444')}
+                            ${renderSegmentStat('📉 Transmiten / sin días', segments.lowValid.length,  resolvedCounts.lowValid,  '#a78bfa')}
+                            ${renderSegmentStat('💪 Alto esf. / bajo 💎',   segments.effortLow.length, resolvedCounts.effortLow, '#f59e0b')}
+                            ${renderSegmentStat('⚡ Con Potencial',      segments.potential.length, resolvedCounts.potential, '#6366f1')}
                         </div>
+
+                        <div style="margin:1.2rem 0 0.5rem; font-size:0.65rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em;">Etapa</div>
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            ${renderSegmentStat('🆕 Nuevos',              segments.newOnes.length,    resolvedCounts.newOnes,    'var(--primary)')}
+                            ${renderSegmentStat('🆕🔴 Nuevos sin transmitir', segments.newInactive.length, resolvedCounts.newInactive, '#f97316')}
+                            ${renderSegmentStat('🔰 Novatos',             segments.novice.length,     resolvedCounts.novice,     'var(--text-secondary)')}
+                        </div>
+
                         <p style="font-size:0.65rem; color:var(--text-muted); margin-top:1rem; line-height:1.4;">
-                            "Con cuenta" = creadores que tienen perfil registrado en Supabase y pueden recibir push.
+                            ✓ = creadores con perfil registrado que pueden recibir push.
                         </p>
+                    </div>
+
+                    <div class="glass-panel" style="padding:1.25rem;">
+                        <h4 style="margin-top:0; font-size:0.8rem; color:var(--text-secondary); letter-spacing:0.05em;">CRITERIOS</h4>
+                        <div style="display:flex; flex-direction:column; gap:0.6rem; font-size:0.7rem; color:var(--text-muted); line-height:1.4;">
+                            <div><strong style="color:var(--danger);">En Riesgo</strong> — Menos de 5 días válidos y diamantes &lt; 50% del promedio</div>
+                            <div><strong style="color:#ef4444;">Inactivos</strong> — 0 días válidos de emisión este período</div>
+                            <div><strong style="color:#f59e0b;">Alto esf. / bajo 💎</strong> — Por encima del promedio de horas, por debajo del 60% del promedio de diamantes</div>
+                            <div><strong style="color:#6366f1;">Con Potencial</strong> — Top 25% en horas, pero por debajo del promedio de diamantes</div>
+                            <div><strong style="color:#f97316;">Nuevos sin transmitir</strong> — Primer mes y 0 días válidos</div>
+                            <div><strong style="color:#a78bfa;">Transmiten sin días válidos</strong> — Tienen horas de LIVE pero ≤ 3 días válidos</div>
+                            <div><strong style="color:var(--primary);">Nuevos</strong> — Menos de 30 días en la agencia</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -143,12 +181,14 @@ function renderContent(container, allProfiles, admins, managers, segments) {
         let text = '';
         if (val === 'all-admins')        text = `${admins.length} administrador${admins.length !== 1 ? 'es' : ''}`;
         else if (val === 'all-managers') text = `${managers.length} manager${managers.length !== 1 ? 's' : ''}`;
-        else if (val === 'all-creators') text = `${allProfiles.filter(p => p.role === 'creator').length} creadores con cuenta`;
+        else if (val === 'all-creators') text = `${creatorsWithAccount} creadores con cuenta`;
         else if (val.startsWith('user:')) text = '1 persona';
         else if (val.startsWith('segment:')) {
             const seg = val.split(':')[1];
-            const key = seg === 'new' ? 'newOnes' : seg;
-            text = `${resolvedCounts[key]} creadores con cuenta (${segments[key].length} en el segmento)`;
+            const key = SEG_KEY[seg] || seg;
+            const total = (segments[key] || []).length;
+            const resolved = resolvedCounts[key] ?? 0;
+            text = `${resolved} con cuenta (${total} en el segmento total)`;
         }
         targetCount.textContent = text ? `→ ${text}` : '';
     };
@@ -156,7 +196,7 @@ function renderContent(container, allProfiles, admins, managers, segments) {
     targetSelect.addEventListener('change', updateCount);
     updateCount();
 
-    // Char counters
+    // Contadores de caracteres
     const titleInput   = container.querySelector('#msg-title');
     const bodyInput    = container.querySelector('#msg-body');
     const titleCounter = container.querySelector('#title-counter');
@@ -173,9 +213,9 @@ function renderContent(container, allProfiles, admins, managers, segments) {
         bodyCounter.style.color = n > 220 ? 'var(--danger)' : n > 180 ? '#f59e0b' : 'var(--text-muted)';
     });
 
-    // URL validation on blur
-    const urlInput  = container.querySelector('#msg-url');
-    const urlError  = container.querySelector('#url-error');
+    // Validación URL
+    const urlInput = container.querySelector('#msg-url');
+    const urlError = container.querySelector('#url-error');
     urlInput.addEventListener('blur', () => {
         const v = urlInput.value.trim();
         urlError.style.display = v && !v.startsWith('https://') ? 'block' : 'none';
@@ -205,8 +245,8 @@ function renderContent(container, allProfiles, admins, managers, segments) {
         else if (target.startsWith('user:')) finalTarget = { type: 'user', value: target.split(':')[1] };
         else if (target.startsWith('segment:')) {
             const seg  = target.split(':')[1];
-            const key  = seg === 'new' ? 'newOnes' : seg;
-            const ids  = resolveSegmentToIds(segments[key], allProfiles);
+            const key  = SEG_KEY[seg] || seg;
+            const ids  = resolveSegmentToIds(segments[key] || [], allProfiles);
             if (!ids.length) {
                 return appState.showToast('Ningún creador de este segmento tiene cuenta registrada', 'warning');
             }
@@ -218,9 +258,11 @@ function renderContent(container, allProfiles, admins, managers, segments) {
 
         try {
             await push.send({ title, body, url: url || undefined, target: finalTarget });
+            await push.saveToDb(title, body, url || null, finalTarget);
             appState.showToast('¡Notificación enviada!', 'success');
-            container.querySelector('#msg-title').value = '';
-            container.querySelector('#msg-body').value  = '';
+            titleInput.value = '';
+            bodyInput.value  = '';
+            updateCount();
         } catch (e) {
             console.error('[send-push] error:', e);
             appState.showToast('Error al enviar: ' + e.message, 'danger');
@@ -244,24 +286,52 @@ function renderSegmentStat(label, total, resolved, color) {
 }
 
 function calculateSegments(metrics) {
-    if (!metrics || !metrics.length) return { top: [], potential: [], risk: [], novice: [], newOnes: [] };
+    const empty = { top: [], potential: [], risk: [], inactive: [], newInactive: [], lowValid: [], effortLow: [], novice: [], newOnes: [] };
+    if (!metrics || !metrics.length) return empty;
 
+    const avg        = metrics.reduce((s, c) => s + Number(c.diamonds), 0)    / metrics.length;
+    const avgSeconds = metrics.reduce((s, c) => s + Number(c.liveSeconds), 0) / metrics.length;
+
+    // Top 10% por diamantes
     const sorted = [...metrics].sort((a, b) => b.diamonds - a.diamonds);
-    const top    = sorted.slice(0, Math.max(1, Math.ceil(metrics.length * 0.1)));
+    const top = sorted.slice(0, Math.max(1, Math.ceil(metrics.length * 0.1)));
 
-    const avg         = metrics.reduce((s, c) => s + Number(c.diamonds), 0) / metrics.length;
-    const byHours     = [...metrics].sort((a, b) => b.liveSeconds - a.liveSeconds);
-    const highHours   = byHours.slice(0, Math.ceil(metrics.length * 0.25));
-    const potential   = highHours.filter(c => c.diamonds < avg);
+    // En Riesgo: pocos días válidos Y diamantes por debajo del 50% del promedio
+    const risk = metrics.filter(c => c.validDays < 5 && Number(c.diamonds) < avg * 0.5);
 
-    const risk   = metrics.filter(c => c.validDays < 5 && c.diamonds < avg * 0.5);
+    // Inactivos: 0 días válidos de emisión en el período
+    const inactive = metrics.filter(c => c.validDays === 0);
 
+    // Nuevos sin transmitir: primer mes en la agencia y sin ningún día válido
+    const newInactive = metrics.filter(c =>
+        c.daysSinceJoining != null && c.daysSinceJoining < 30 && c.validDays === 0
+    );
+
+    // Transmiten pero sin días válidos: tienen horas de LIVE pero ≤ 3 días válidos
+    // (están transmitiendo pero sin cumplir requisitos mínimos de validez)
+    const lowValid = metrics.filter(c =>
+        Number(c.liveSeconds) > 0 && c.validDays <= 3
+    );
+
+    // Alto esfuerzo, bajo rendimiento: más horas que el promedio pero <60% del promedio de diamantes
+    const effortLow = metrics.filter(c =>
+        Number(c.liveSeconds) > avgSeconds &&
+        Number(c.diamonds) < avg * 0.6
+    );
+
+    // Con Potencial: top 25% en horas pero por debajo del promedio de diamantes
+    const byHours  = [...metrics].sort((a, b) => b.liveSeconds - a.liveSeconds);
+    const topHours = byHours.slice(0, Math.ceil(metrics.length * 0.25));
+    const potential = topHours.filter(c => Number(c.diamonds) < avg);
+
+    // Novatos: nivel 1 o sin nivel asignado
     const novice = metrics.filter(c => {
         const r = (c.statusRank || '').toLowerCase();
         return r.includes('nivel 1') || r === '' || r.includes('sin nivel');
     });
 
+    // Nuevos: menos de 30 días en la agencia
     const newOnes = metrics.filter(c => c.daysSinceJoining != null && c.daysSinceJoining < 30);
 
-    return { top, potential, risk, novice, newOnes };
+    return { top, potential, risk, inactive, newInactive, lowValid, effortLow, novice, newOnes };
 }
