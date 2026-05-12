@@ -769,9 +769,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const rank  = getRanking(me, data);
 
     const isAdmin       = store.getCurrentUser()?.role === 'admin';
-    // Ambas pestañas siempre visibles — days_since_joining no tiene datos reales en la BD
-    const showMissions  = true;
-    const showChallenge = true;
+    const dsj = me.daysSinceJoining;
+    // Misiones: creadores que aún no completaron su primer mes (<30 días en la agencia)
+    // Reto 90d: creadores con menos de 3 meses (<90 días). Si dsj es null, se muestran ambas por defecto.
+    const showMissions  = dsj == null || dsj < 30;
+    const showChallenge = dsj == null || dsj < 90;
 
     // Estimated earnings: $1 per 200 diamonds
     const DIAMONDS_PER_USD = 200;

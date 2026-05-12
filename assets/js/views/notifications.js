@@ -261,7 +261,7 @@ function calculateSegments(metrics) {
         return r.includes('nivel 1') || r === '' || r.includes('sin nivel');
     });
 
-    const newOnes = metrics.filter(c => c.is_new === true || c.is_new === 'true');
+    const newOnes = metrics.filter(c => c.daysSinceJoining != null && c.daysSinceJoining < 30);
 
     return { top, potential, risk, novice, newOnes };
 }
