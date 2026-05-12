@@ -118,6 +118,20 @@ function normalizeRow(row) {
     const username = String(get(EXCEL_COLUMNS.username) || '').trim().replace(/^@/, '');
     if (!username) return null;
 
+    // Intenta leer el ID estable del creador (columna varía según versión del export de TikTok)
+    const getCreatorId = () => {
+        const candidates = [
+            'ID de usuario del creador', 'ID de creador', 'Creator user ID',
+            'Creator ID', 'UID del creador', 'ID', 'User ID',
+        ];
+        for (const name of candidates) {
+            const val = get(name);
+            if (val != null && val !== '') return String(val).trim();
+        }
+        return null;
+    };
+    const creatorId = getCreatorId();
+
     const now = new Date();
     const safeInt = (val, max = 2147483647) => {
         if (val == null || val === '') return 0;
@@ -151,6 +165,7 @@ function normalizeRow(row) {
 
     return {
         username,
+        creatorId,
         diamonds:           Number(get(EXCEL_COLUMNS.diamonds) || 0),
         diamondsLastMonth:  Number(get(EXCEL_COLUMNS.diamondsLastMonth) || 0),
         liveDuration:       String(get(EXCEL_COLUMNS.liveDuration) || '0s'),

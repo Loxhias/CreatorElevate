@@ -156,6 +156,7 @@ export const auth = {
 function rowFromDb(r) {
     return {
         username:           r.username,
+        tiktokId:           r.tiktok_id || null,
         diamonds:           Number(r.diamonds || 0),
         diamondsLastMonth:  Number(r.diamonds_last_month || 0),
         liveDuration:       r.live_duration || '0s',
@@ -266,6 +267,44 @@ export const metrics = {
             p_rows:   safePayload,
         });
         if (error) throw error;
+
+        // Post-upsert: guardar tiktok_id en creator_metrics y sincronizar profiles
+        const withId = rows.filter(r => r.creatorId);
+        if (withId.length > 0) {
+            try {
+                const { data: period } = await supabase
+                    .from('report_periods').select('id').eq('period', periodDate).maybeSingle();
+
+                if (period?.id) {
+                    // 1. Actualizar tiktok_id en creator_metrics (match por username + período)
+                    await Promise.all(withId.map(r =>
+                        supabase.from('creator_metrics')
+                            .update({ tiktok_id: san(String(r.creatorId)) })
+                            .eq('period_id', period.id)
+                            .ilike('username', r.username)
+                    ));
+                }
+
+                // 2. Primera vez: asignar tiktok_id al perfil que coincide por username
+                await Promise.all(withId.map(r =>
+                    supabase.from('profiles')
+                        .update({ tiktok_id: san(String(r.creatorId)) })
+                        .ilike('tiktok_username', r.username)
+                        .is('tiktok_id', null)
+                ));
+
+                // 3. Cambio de username: si el tiktok_id ya existe en profiles, actualizar username
+                await Promise.all(withId.map(r =>
+                    supabase.from('profiles')
+                        .update({ tiktok_username: san(r.username) })
+                        .eq('tiktok_id', san(String(r.creatorId)))
+                        .not('tiktok_username', 'ilike', r.username)
+                ));
+            } catch (e) {
+                console.warn('[upsertPeriod] tiktok_id sync parcialmente fallido:', e.message);
+            }
+        }
+
         return data;
     },
 };

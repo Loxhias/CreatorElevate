@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
-import { profiles } from '../api.js';
+import { profiles, push } from '../api.js';
 
 function fmt(n) { return Number(n).toLocaleString('es'); }
 
@@ -132,8 +132,36 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
                         Manager: <strong style="color:var(--text-primary);">${labelManager}</strong>
                     </p>
                 </div>
-                ${isAuditing ? `<button id="back-to-admin" class="btn btn-sm" style="background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);">← Volver</button>` : ''}
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    ${!isAuditing && myCreators.length ? `<button id="msg-toggle-btn" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;">✉️ Redactar mensaje</button>` : ''}
+                    ${isAuditing ? `<button id="back-to-admin" class="btn btn-sm" style="background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);">← Volver</button>` : ''}
+                </div>
             </div>
+
+            <!-- Formulario redactar mensaje -->
+            ${!isAuditing && myCreators.length ? `
+            <div id="msg-form" class="glass-panel" style="padding:1.25rem;margin-bottom:1.5rem;display:none;">
+                <h3 style="margin-top:0;font-size:0.95rem;">Mensaje para mis creadores <span style="font-size:0.72rem;font-weight:400;color:var(--text-muted);">(${myCreators.length} destinatarios)</span></h3>
+                <div style="display:flex;flex-direction:column;gap:0.8rem;">
+                    <div class="input-group" style="margin-bottom:0;">
+                        <label>Asunto</label>
+                        <input type="text" id="msg-title" class="input-control" placeholder="Ej: Recordatorio de transmisión" maxlength="80">
+                    </div>
+                    <div class="input-group" style="margin-bottom:0;">
+                        <label>Mensaje</label>
+                        <textarea id="msg-body" class="input-control" rows="3" placeholder="Escribe tu mensaje aquí..." maxlength="300" style="resize:vertical;font-family:inherit;"></textarea>
+                    </div>
+                    <div class="input-group" style="margin-bottom:0;">
+                        <label>Enlace (opcional)</label>
+                        <input type="url" id="msg-url" class="input-control" placeholder="https://...">
+                    </div>
+                    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+                        <button id="msg-send-btn" class="btn btn-primary" style="flex:1;min-width:140px;">Enviar mensaje</button>
+                        <button id="msg-cancel-btn" class="btn btn-ghost">Cancelar</button>
+                    </div>
+                </div>
+            </div>` : ''}
+
 
             <!-- Métricas resumen -->
             <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
@@ -208,4 +236,72 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
             import('../main.js').then(m => m.appState.navigate('admin'));
         }
     });
+
+    // ── Compose form wiring ──────────────────────────────────────────────────
+    const toggleBtn = container.querySelector('#msg-toggle-btn');
+    const msgForm   = container.querySelector('#msg-form');
+    if (!toggleBtn || !msgForm) return;
+
+    const cancelBtn = container.querySelector('#msg-cancel-btn');
+    const sendBtn   = container.querySelector('#msg-send-btn');
+    const titleEl   = container.querySelector('#msg-title');
+    const bodyEl    = container.querySelector('#msg-body');
+    const urlEl     = container.querySelector('#msg-url');
+
+    const { appState } = await import('../main.js');
+
+    toggleBtn.onclick = () => {
+        const visible = msgForm.style.display !== 'none';
+        msgForm.style.display = visible ? 'none' : 'block';
+        if (!visible) {
+            msgForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            titleEl.focus();
+        }
+    };
+
+    cancelBtn.onclick = () => {
+        msgForm.style.display = 'none';
+        titleEl.value = '';
+        bodyEl.value  = '';
+        urlEl.value   = '';
+    };
+
+    sendBtn.onclick = async () => {
+        const title = titleEl.value.trim();
+        const body  = bodyEl.value.trim();
+        const url   = urlEl.value.trim() || null;
+
+        if (!title) return appState.showToast('El asunto es obligatorio', 'warning');
+        if (!body)  return appState.showToast('El mensaje no puede estar vacío', 'warning');
+
+        sendBtn.disabled    = true;
+        sendBtn.textContent = 'Enviando...';
+
+        try {
+            const list       = await profiles.listCreatorsForManager(activeManagerId);
+            const creatorIds = list.map(c => c.id).filter(Boolean);
+
+            if (!creatorIds.length) {
+                appState.showToast('No hay creadores asignados a tu cuenta en la base de datos', 'warning');
+                sendBtn.disabled    = false;
+                sendBtn.textContent = 'Enviar mensaje';
+                return;
+            }
+
+            const target = { type: 'users', value: creatorIds };
+            await push.saveToDb(title, body, url, target);
+
+            try { await push.send({ title, body, url, target }); } catch (pushErr) {
+                console.warn('[manager send] push notification falló (mensaje guardado):', pushErr.message);
+            }
+
+            appState.showToast(`Mensaje enviado a ${creatorIds.length} creador${creatorIds.length !== 1 ? 'es' : ''}`, 'success');
+            cancelBtn.onclick();
+        } catch (err) {
+            appState.showToast('Error: ' + err.message, 'danger');
+        } finally {
+            sendBtn.disabled    = false;
+            sendBtn.textContent = 'Enviar mensaje';
+        }
+    };
 }

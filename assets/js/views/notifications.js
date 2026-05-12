@@ -15,11 +15,12 @@ export async function renderNotificationsView(container) {
     try {
         const allProfiles = store.getProfiles().length ? store.getProfiles() : (await profiles.listAll() || []);
         const metricsData = store.getMetricsData() || [];
-        const admins   = allProfiles.filter(p => p.role === 'admin');
-        const managers = allProfiles.filter(p => p.role === 'manager');
-        const segments = calculateSegments(metricsData);
+        const admins    = allProfiles.filter(p => p.role === 'admin');
+        const managers  = allProfiles.filter(p => p.role === 'manager');
+        const creators  = allProfiles.filter(p => p.role === 'creator');
+        const segments  = calculateSegments(metricsData);
 
-        renderContent(container, allProfiles, admins, managers, segments);
+        renderContent(container, allProfiles, admins, managers, creators, segments);
     } catch (error) {
         console.error('Error al cargar notificaciones:', error);
         container.innerHTML = `
@@ -55,7 +56,7 @@ function resolveSegmentToIds(segmentRows, allProfiles) {
         .filter(Boolean);
 }
 
-function renderContent(container, allProfiles, admins, managers, segments) {
+function renderContent(container, allProfiles, admins, managers, creators, segments) {
     const resolvedCounts = {};
     for (const [seg, key] of Object.entries(SEG_KEY)) {
         resolvedCounts[key] = resolveSegmentToIds(segments[key] || [], allProfiles).length;
@@ -81,10 +82,13 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                             </optgroup>
                             <optgroup label="Managers">
                                 <option value="all-managers">Todos los Managers</option>
-                                ${managers.map(m => `<option value="user:${m.id}">${m.display_name || m.email}</option>`).join('')}
+                                ${managers.map(m => `<option value="user:${m.id}">${m.display_name || m.tiktok_username || m.email}</option>`).join('')}
                             </optgroup>
                             <optgroup label="Todos los Creadores">
                                 <option value="all-creators">📢 Todos los Creadores (${creatorsWithAccount} con cuenta)</option>
+                            </optgroup>
+                            <optgroup label="Creador individual">
+                                ${creators.map(c => `<option value="user:${c.id}">👤 ${c.display_name || c.tiktok_username || c.email}</option>`).join('')}
                             </optgroup>
                             <optgroup label="Segmentos de Rendimiento">
                                 <option value="segment:top">🏆 Top 10% — Los más rentables (${resolvedCounts.top} con cuenta)</option>
@@ -120,9 +124,25 @@ function renderContent(container, allProfiles, admins, managers, segments) {
                     </div>
 
                     <div style="margin-bottom:1.5rem;">
-                        <label style="display:block;font-size:0.8rem;margin-bottom:0.5rem;color:var(--text-secondary);">URL DE ACCIÓN (OPCIONAL)</label>
-                        <input type="url" id="msg-url" class="input-control" placeholder="https://...">
-                        <p id="url-error" style="font-size:0.7rem;color:var(--danger);margin-top:0.3rem;display:none;">Debe comenzar con https://</p>
+                        <label style="display:block;font-size:0.8rem;margin-bottom:0.5rem;color:var(--text-secondary);">DESTINO AL HACER CLIC</label>
+                        <select id="msg-dest" class="input-control" style="margin-bottom:0.6rem;">
+                            <option value="">Sin acción al hacer clic</option>
+                            <optgroup label="Secciones de la app">
+                                <option value="goto:capacitaciones">🎓 Capacitaciones</option>
+                                <option value="goto:eventos">📅 Eventos</option>
+                                <option value="goto:canales">📢 Canales oficiales</option>
+                                <option value="goto:normas">📋 Normas</option>
+                                <option value="goto:mensajes">🔔 Mensajes / Bandeja</option>
+                                <option value="goto:perfil">👤 Perfil</option>
+                            </optgroup>
+                            <optgroup label="Enlace externo">
+                                <option value="external">🔗 URL personalizada...</option>
+                            </optgroup>
+                        </select>
+                        <div id="url-wrap" style="display:none;">
+                            <input type="url" id="msg-url" class="input-control" placeholder="https://...">
+                            <p id="url-error" style="font-size:0.7rem;color:var(--danger);margin-top:0.3rem;display:none;">Debe comenzar con https://</p>
+                        </div>
                     </div>
 
                     <button id="send-btn" class="btn" style="width:100%; padding:1rem; font-weight:700;">Enviar Notificación</button>
@@ -219,28 +239,53 @@ function renderContent(container, allProfiles, admins, managers, segments) {
         bodyCounter.style.color = n > 220 ? 'var(--danger)' : n > 180 ? '#f59e0b' : 'var(--text-muted)';
     });
 
-    // Validación URL
-    const urlInput = container.querySelector('#msg-url');
-    const urlError = container.querySelector('#url-error');
-    urlInput.addEventListener('blur', () => {
-        const v = urlInput.value.trim();
-        urlError.style.display = v && !v.startsWith('https://') ? 'block' : 'none';
+    // Selector de destino — mostrar/ocultar input de URL externa
+    const destSelect = container.querySelector('#msg-dest');
+    const urlWrap    = container.querySelector('#url-wrap');
+    const urlInput   = container.querySelector('#msg-url');
+    const urlError   = container.querySelector('#url-error');
+
+    destSelect.addEventListener('change', () => {
+        const isExt = destSelect.value === 'external';
+        urlWrap.style.display = isExt ? 'block' : 'none';
+        if (!isExt && urlInput) { urlInput.value = ''; }
     });
-    urlInput.addEventListener('input', () => {
-        if (urlError.style.display !== 'none') urlError.style.display = 'none';
-    });
+
+    if (urlInput) {
+        urlInput.addEventListener('blur', () => {
+            const v = urlInput.value.trim();
+            urlError.style.display = v && !v.startsWith('https://') ? 'block' : 'none';
+        });
+        urlInput.addEventListener('input', () => {
+            if (urlError.style.display !== 'none') urlError.style.display = 'none';
+        });
+    }
 
     sendBtn.addEventListener('click', async () => {
         const title  = titleInput.value.trim();
         const body   = bodyInput.value.trim();
-        const url    = urlInput.value.trim();
+        const dest   = destSelect.value;
         const target = targetSelect.value;
 
         if (!title) return appState.showToast('El título es obligatorio', 'warning');
         if (!body)  return appState.showToast('El mensaje es obligatorio', 'warning');
-        if (url && !url.startsWith('https://')) {
-            urlError.style.display = 'block';
-            return appState.showToast('La URL debe comenzar con https://', 'warning');
+
+        // Construir URLs: dbUrl se guarda en BD (goto:X ó https://...), pushUrl va a OneSignal (siempre http o null)
+        let dbUrl   = null;
+        let pushUrl = undefined;
+
+        if (dest.startsWith('goto:')) {
+            const route = dest.slice(5);
+            dbUrl   = dest;
+            pushUrl = `${location.origin}${location.pathname}?goto=${route}`;
+        } else if (dest === 'external') {
+            const raw = urlInput?.value.trim() || '';
+            if (raw && !raw.startsWith('https://')) {
+                if (urlError) urlError.style.display = 'block';
+                return appState.showToast('La URL debe comenzar con https://', 'warning');
+            }
+            dbUrl   = raw || null;
+            pushUrl = raw || undefined;
         }
 
         let finalTarget = { type: 'all', value: null };
@@ -263,11 +308,13 @@ function renderContent(container, allProfiles, admins, managers, segments) {
         sendBtn.innerText = 'Enviando...';
 
         try {
-            await push.send({ title, body, url: url || undefined, target: finalTarget });
-            await push.saveToDb(title, body, url || null, finalTarget);
+            await push.send({ title, body, url: pushUrl, target: finalTarget });
+            await push.saveToDb(title, body, dbUrl, finalTarget);
             appState.showToast('¡Notificación enviada!', 'success');
             titleInput.value = '';
             bodyInput.value  = '';
+            destSelect.value = '';
+            urlWrap.style.display = 'none';
             updateCount();
             loadHistorial(container);
         } catch (e) {
@@ -314,6 +361,16 @@ function loadHistorial(container) {
             return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
         };
 
+        const GOTO_NAMES = {
+            capacitaciones: '🎓 Capacitaciones', eventos: '📅 Eventos', canales: '📢 Canales',
+            normas: '📋 Normas', mensajes: '🔔 Mensajes', perfil: '👤 Perfil',
+        };
+        const destLabel = (url) => {
+            if (!url) return null;
+            if (url.startsWith('goto:')) return GOTO_NAMES[url.slice(5)] || url.slice(5);
+            return '🔗 Enlace externo';
+        };
+
         wrap.innerHTML = items.map(n => `
             <div style="padding:0.75rem 1rem;border:1px solid var(--glass-border);border-radius:var(--radius-md);
                         background:rgba(255,255,255,0.02);">
@@ -330,6 +387,7 @@ function loadHistorial(container) {
                                  padding:0.1rem 0.5rem;color:var(--text-secondary);">
                         ${targetLabel(n.target_type, n.target_value)}
                     </span>
+                    ${destLabel(n.url) ? `<span style="font-size:0.65rem;background:rgba(124,110,247,0.1);border-radius:999px;padding:0.1rem 0.5rem;color:var(--primary-light);">${destLabel(n.url)}</span>` : ''}
                     ${n.delivered != null ? `<span style="font-size:0.62rem;color:var(--accent);">✓ ${n.delivered} entregadas</span>` : ''}
                     ${n.failed    != null && n.failed > 0 ? `<span style="font-size:0.62rem;color:var(--danger);">✗ ${n.failed} fallidas</span>` : ''}
                 </div>

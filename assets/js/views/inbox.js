@@ -1,7 +1,17 @@
 import { store } from '../store.js';
 import { push } from '../api.js';
+import { appState } from '../main.js';
 
 const LAST_SEEN_KEY = (id) => `inbox_last_seen_${id || 'anon'}`;
+
+const GOTO_LABELS = {
+    capacitaciones: '🎓 Capacitaciones',
+    eventos:        '📅 Eventos',
+    canales:        '📢 Canales',
+    normas:         '📋 Normas',
+    mensajes:       '🔔 Mensajes',
+    perfil:         '👤 Perfil',
+};
 
 export async function renderInboxView(container) {
     const user   = store.getCurrentUser();
@@ -41,6 +51,11 @@ function renderContent(container, notifications, lastSeen) {
             </div>
             ${renderList(notifications, lastSeen)}
         </div>`;
+
+    // Wire goto: links — navegan dentro de la app en vez de abrir tab externa
+    container.querySelectorAll('[data-goto]').forEach(btn => {
+        btn.addEventListener('click', () => appState.navigateTo(btn.dataset.goto));
+    });
 }
 
 function renderList(notifications, lastSeen) {
@@ -59,6 +74,23 @@ function renderList(notifications, lastSeen) {
         if (s < 3600)  return `hace ${Math.floor(s / 60)} min`;
         if (s < 86400) return `hace ${Math.floor(s / 3600)}h`;
         return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const actionHtml = (url) => {
+        if (!url) return '';
+        if (url.startsWith('goto:')) {
+            const route = url.slice(5);
+            const label = GOTO_LABELS[route] || 'Ir a la sección';
+            return `<button data-goto="${route}"
+                style="font-size:0.72rem;color:var(--primary);background:none;border:none;
+                       padding:0;cursor:pointer;font-weight:600;text-align:left;">
+                ${label} →
+            </button>`;
+        }
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer"
+            style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">
+            Ver más →
+        </a>`;
     };
 
     return notifications.map(n => {
@@ -83,8 +115,7 @@ function renderList(notifications, lastSeen) {
                         <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;">${timeAgo(n.sent_at)}</span>
                     </div>
                     <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${n.body}</p>
-                    ${n.url ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer"
-                        style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">Ver más →</a>` : ''}
+                    ${actionHtml(n.url)}
                 </div>
             </div>`;
     }).join('');

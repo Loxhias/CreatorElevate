@@ -693,10 +693,14 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     if (!data?.length) { container.innerHTML = emptyState('Sin datos', 'Aún no se cargó el reporte del mes.'); return; }
 
-    // Buscamos a la creadora (limpiando @ y espacios, e insensible a mayúsculas)
+    // Buscamos al creador: primero por tiktok_id estable, luego por username
     const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
     const searchName = cleanMatch(myUsername);
-    const me = data.find(c => cleanMatch(c.username) === searchName);
+    const profileTiktokId = store.getProfile?.()?.tiktok_id || null;
+    const me = data.find(c =>
+        (profileTiktokId && c.tiktokId && profileTiktokId === c.tiktokId) ||
+        cleanMatch(c.username) === searchName
+    );
 
     if (!me) { 
         container.innerHTML = emptyState(

@@ -23,6 +23,12 @@ export const appState = {
         }
     },
 
+    // Navega a una sub-vista dentro del dashboard ya montado (para deep links desde inbox/push).
+    navigateTo: (view) => {
+        const navLink = document.querySelector(`.nav-item[data-view="${view}"]`);
+        if (navLink) navLink.click();
+    },
+
     showToast: (message, type = 'success') => {
         let container = document.querySelector('.toast-container');
         if (!container) {
@@ -48,9 +54,10 @@ function getNavItems(role) {
         items.push({ view: 'creadores',       icon: '👥', label: 'Creadores' });
         items.push({ view: 'notificaciones',  icon: '🔔', label: 'Mensajes' });
     } else if (role === 'creator') {
-        items.push({ view: 'inicio',  icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'normas',  icon: '📋', label: 'Normas' });
-        items.push({ view: 'canales', icon: '📢', label: 'Canales' });
+        items.push({ view: 'inicio',    icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'mensajes',  icon: '🔔', label: 'Mensajes' });
+        items.push({ view: 'normas',    icon: '📋', label: 'Normas' });
+        items.push({ view: 'canales',   icon: '📢', label: 'Canales' });
     } else if (role === 'manager') {
         items.push({ view: 'inicio',         icon: '📊', label: 'Panel' });
         items.push({ view: 'mensajes',        icon: '🔔', label: 'Mensajes' });
@@ -139,11 +146,11 @@ function renderDashboardLayout(container, renderContentFn, role) {
     const contentArea = container.querySelector('#dashboard-content');
     safeRender(renderContentFn, contentArea);
 
-    // Badge de mensajes no leídos (managers)
-    if (role === 'manager') {
+    // Badge de mensajes no leídos (managers y creadores)
+    if (role === 'manager' || role === 'creator') {
         const userId = store.getCurrentUser()?.id;
         const lastSeen = localStorage.getItem(`inbox_last_seen_${userId || 'anon'}`) || '1970-01-01';
-        push.getForUser(userId, 'manager').then(notifications => {
+        push.getForUser(userId, role).then(notifications => {
             const unread = notifications.filter(n => n.sent_at > lastSeen).length;
             if (!unread) return;
             const badgeHtml = `<span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.58rem;font-weight:800;padding:0.05rem 0.35rem;margin-left:0.3rem;vertical-align:middle;display:inline-block;">${unread > 9 ? '9+' : unread}</span>`;
@@ -179,7 +186,6 @@ function renderDashboardLayout(container, renderContentFn, role) {
             }
             else if (view === 'mensajes') {
                 import('./views/inbox.js').then(m => safeRender(m.renderInboxView, contentArea));
-                // Limpiar badge al abrir
                 container.querySelectorAll('.nav-item[data-view="mensajes"] span:not(.nav-icon)').forEach(span => {
                     span.textContent = 'Mensajes';
                 });
@@ -201,6 +207,14 @@ function renderDashboardLayout(container, renderContentFn, role) {
             appState.navigate('login');
         };
     });
+
+    // Deep link desde push notification: ?goto=X en la URL
+    const gotoView = new URLSearchParams(location.search).get('goto');
+    if (gotoView) {
+        history.replaceState(null, '', location.pathname);
+        const navLink = container.querySelector(`.nav-item[data-view="${gotoView}"]`);
+        if (navLink) setTimeout(() => navLink.click(), 0);
+    }
 }
 
 
