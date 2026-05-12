@@ -1,11 +1,13 @@
 import { env, isSupabaseConfigured } from './env.js';
 import { store } from './store.js';
-import { auth, push, content } from './api.js';
+import { auth, push } from './api.js';
 import { renderLogin } from './views/login.js';
 import { renderAdminDashboard, renderCreatorsList } from './views/adminDashboard.js';
 import { renderManagerDashboard } from './views/managerDashboard.js';
 import { renderCreatorDashboard } from './views/creatorDashboard.js';
 import { renderProfile } from './views/profile.js';
+import { renderNormas } from './views/normas.js';
+import { renderCanales } from './views/canales.js';
 
 export const appState = {
     navigate: (route) => {
@@ -201,50 +203,6 @@ function renderDashboardLayout(container, renderContentFn, role) {
     });
 }
 
-// ── Normas / Canales ──────────────────────────────────────────────────────────
-function renderAgencyBody(text) {
-    if (!text) return '<p style="color:var(--text-muted);">Sin contenido todavía.</p>';
-    return text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .map(line => `<p style="margin-bottom:0.6rem;">${line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`)
-        .join('');
-}
-
-async function renderNormas(container) {
-    container.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2>
-        <div class="glass-panel skel-panel" style="min-height:120px;"></div>`;
-    try {
-        const page = await content.getPage('normas');
-        container.innerHTML = `
-            <h2 style="margin-bottom:1.5rem;">📋 ${page?.title || 'Normas de la Agencia'}</h2>
-            <div class="glass-panel animate-fadeIn" style="line-height:1.8;">
-                ${renderAgencyBody(page?.body)}
-            </div>`;
-    } catch (err) {
-        container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2>
-            <div class="glass-panel" style="color:var(--danger);">Error al cargar: ${err.message}</div>`;
-    }
-}
-
-async function renderCanales(container) {
-    container.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2>
-        <div class="glass-panel skel-panel" style="min-height:120px;"></div>`;
-    try {
-        const page = await content.getPage('canales');
-        container.innerHTML = `
-            <h2 style="margin-bottom:1.5rem;">📢 ${page?.title || 'Canales Oficiales'}</h2>
-            <div class="glass-panel animate-fadeIn" style="line-height:1.8;">
-                ${renderAgencyBody(page?.body)}
-            </div>`;
-    } catch (err) {
-        container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2>
-            <div class="glass-panel" style="color:var(--danger);">Error al cargar: ${err.message}</div>`;
-    }
-}
 
 /**
  * Identifica al usuario en OneSignal para que los envíos por external_id

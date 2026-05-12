@@ -607,7 +607,7 @@ export const agencyEvents = {
 };
 
 // ────────────────────────────────────────────────────────────────────────────
-//  CONTENIDOS — Normas y Canales editables por el admin
+//  CONTENIDOS — páginas editables por el admin
 // ────────────────────────────────────────────────────────────────────────────
 
 const CONTENT_DEFAULTS = {
@@ -633,6 +633,37 @@ export const content = {
             .from('agency_content')
             .upsert({ slug, title: san(title), body: san(body), updated_at: new Date().toISOString() },
                     { onConflict: 'slug' });
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  CANALES OFICIALES — lista gestionada por el admin, guardada como JSON
+// ────────────────────────────────────────────────────────────────────────────
+
+export const channels = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('agency_content')
+            .select('body')
+            .eq('slug', 'channels_v2')
+            .maybeSingle();
+        if (error) throw error;
+        if (!data?.body) return [];
+        try { return JSON.parse(data.body); } catch { return []; }
+    },
+
+    async save(items) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('agency_content')
+            .upsert({
+                slug:       'channels_v2',
+                title:      'Canales Oficiales',
+                body:       JSON.stringify(items),
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'slug' });
         if (error) throw error;
     },
 };
