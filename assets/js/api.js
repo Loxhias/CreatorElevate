@@ -460,9 +460,16 @@ export const push = {
      * target = { type: 'all' | 'role' | 'user' | 'users', value: string|string[]|null }
      */
     async send({ title, body, url, target }) {
+        // Enviamos el JWT de la sesión activa para que el servidor pueda verificar identidad
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || '';
+
         const response = await fetch('/api/send-push', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify({ title: san(title), body: san(body), url: san(url), target: sanDeep(target) }),
         });
 
