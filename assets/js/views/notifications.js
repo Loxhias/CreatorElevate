@@ -330,6 +330,10 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
     loadHistorial(container);
 }
 
+function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function loadHistorial(container) {
     const wrap = container.querySelector('#historial-wrap');
     if (!wrap) return;
@@ -375,12 +379,12 @@ function loadHistorial(container) {
             <div style="padding:0.75rem 1rem;border:1px solid var(--glass-border);border-radius:var(--radius-md);
                         background:rgba(255,255,255,0.02);">
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.25rem;">
-                    <span style="font-size:0.82rem;font-weight:700;color:var(--text-primary);">${n.title}</span>
+                    <span style="font-size:0.82rem;font-weight:700;color:var(--text-primary);">${esc(n.title)}</span>
                     <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;">${timeAgo(n.sent_at)}</span>
                 </div>
                 <p style="font-size:0.73rem;color:var(--text-muted);margin:0 0 0.35rem;line-height:1.4;
                            overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
-                    ${n.body}
+                    ${esc(n.body)}
                 </p>
                 <div style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap;">
                     <span style="font-size:0.65rem;background:rgba(255,255,255,0.06);border-radius:999px;

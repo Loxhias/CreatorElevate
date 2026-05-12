@@ -4,6 +4,10 @@ import { appState } from '../main.js';
 
 const LAST_SEEN_KEY = (id) => `inbox_last_seen_${id || 'anon'}`;
 
+function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 const GOTO_LABELS = {
     capacitaciones: '🎓 Capacitaciones',
     eventos:        '📅 Eventos',
@@ -110,11 +114,11 @@ function renderList(notifications, lastSeen) {
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.3rem;flex-wrap:wrap;">
                         <span style="font-size:0.88rem;font-weight:${isUnread ? '700' : '600'};
                             color:${isUnread ? 'var(--text-primary)' : 'var(--text-secondary)'};">
-                            ${n.title}
+                            ${esc(n.title)}
                         </span>
                         <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;">${timeAgo(n.sent_at)}</span>
                     </div>
-                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${n.body}</p>
+                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${esc(n.body)}</p>
                     ${actionHtml(n.url)}
                 </div>
             </div>`;
