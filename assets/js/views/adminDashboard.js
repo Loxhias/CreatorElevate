@@ -6,6 +6,37 @@ import { visualTiers } from '../config.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
 
+// ── Estado de agencia seleccionada (persiste entre navegaciones) ──────────────
+let selectedAgency = localStorage.getItem('ce_agency') || 'latam';
+const AGENCY_OPTS = [
+    { id: 'latam', label: '🌎 LATAM' },
+    { id: 'usa',   label: '🇺🇸 USA'  },
+];
+
+function agencyToggleHtml() {
+    return `<div style="display:flex;gap:0.3rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.2rem;">
+        ${AGENCY_OPTS.map(a => `
+            <button class="ag-btn ${selectedAgency === a.id ? 'ag-active' : ''}" data-ag="${a.id}"
+                style="background:${selectedAgency === a.id ? 'var(--bg-elevated,#141720)' : 'transparent'};
+                       border:none;color:${selectedAgency === a.id ? 'var(--text-primary)' : 'var(--text-muted)'};
+                       font-size:0.82rem;font-weight:700;padding:0.38rem 0.9rem;border-radius:var(--radius-sm);
+                       cursor:pointer;transition:all 0.2s;white-space:nowrap;
+                       ${selectedAgency === a.id ? 'box-shadow:0 2px 6px rgba(0,0,0,0.3);' : ''}">
+                ${a.label}
+            </button>`).join('')}
+    </div>`;
+}
+
+function wireAgencyToggle(container, onSwitch) {
+    container.querySelectorAll('.ag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectedAgency = btn.dataset.ag;
+            localStorage.setItem('ce_agency', selectedAgency);
+            onSwitch();
+        });
+    });
+}
+
 // ── Skeleton helpers ──────────────────────────────────────────────────────────
 const skelAdmin = () => `
     <div style="padding:0;">
@@ -120,17 +151,23 @@ export async function renderAdminDashboard(container) {
         }
     }
 
-    const data = store.getMetricsData() || [];
-    const profs = store.getProfiles() || [];
-    const managers = profs.filter(p => p.is_manager);
-    const creators = profs.filter(p => p.is_creator);
+    const allData  = store.getMetricsData() || [];
+    const allProfs = store.getProfiles()    || [];
+
+    // Filtrar por agencia seleccionada
+    const data     = allData.filter(d => (d.agency  || 'latam') === selectedAgency);
+    const managers = allProfs.filter(p => p.is_manager && (p.agency || 'latam') === selectedAgency);
+    const creators = allProfs.filter(p => p.is_creator && (p.agency || 'latam') === selectedAgency);
     const period = store.getPeriod();
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-                <h1 style="font-weight:800;">Panel de Administración</h1>
-                ${period ? `<div class="badge" style="background:var(--primary); color:white;">${period.label}</div>` : ''}
+            <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                <h1 style="font-weight:800;margin:0;">Panel de Administración</h1>
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    ${period ? `<div class="badge" style="background:var(--primary); color:white;">${period.label}</div>` : ''}
+                    ${agencyToggleHtml()}
+                </div>
             </div>
 
             <div class="metrics-grid" style="margin-bottom:2.5rem;">
@@ -182,11 +219,13 @@ export async function renderAdminDashboard(container) {
 
     const viewContent = container.querySelector('#admin-view-content');
 
+    wireAgencyToggle(container, () => renderAdminDashboard(container));
+
     container.querySelector('#nav-audit').onclick   = () => renderAuditView(viewContent, managers, creators, data);
-    container.querySelector('#nav-manage').onclick   = () => renderManageView(viewContent);
-    container.querySelector('#nav-upload').onclick   = () => renderUploadView(viewContent, container);
-    container.querySelector('#nav-history').onclick  = () => renderHistoryView(viewContent);
-    container.querySelector('#nav-content').onclick  = () => renderContentEditor(viewContent);
+    container.querySelector('#nav-manage').onclick  = () => renderManageView(viewContent);
+    container.querySelector('#nav-upload').onclick  = () => renderUploadView(viewContent, container, selectedAgency);
+    container.querySelector('#nav-history').onclick = () => renderHistoryView(viewContent);
+    container.querySelector('#nav-content').onclick = () => renderContentEditor(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────
@@ -265,20 +304,41 @@ function renderManageView(container) {
         results.innerHTML = 'Buscando...';
         try {
             const found = await profiles.searchProfiles(q);
-            results.innerHTML = found.map(p => `
+            results.innerHTML = found.map(p => {
+                const ag = p.agency || 'latam';
+                return `
                 <div class="glass-panel" style="padding:0.85rem 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
                     <div style="flex:1;min-width:0;">
                         <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.display_name || p.email}</div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.email}</div>
+                        <div style="font-size:0.72rem; color:var(--text-secondary);display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.15rem;">
+                            <span style="overflow:hidden;text-overflow:ellipsis;">${p.email}</span>
+                            <span style="background:rgba(124,110,247,0.12);border-radius:999px;padding:0.05rem 0.55rem;font-weight:700;color:var(--primary-light);flex-shrink:0;">${ag === 'usa' ? '🇺🇸 USA' : '🌎 LATAM'}</span>
+                        </div>
                     </div>
-                    <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}" style="flex-shrink:0;
-                            background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
-                        ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
-                    </button>
-                </div>
-            `).join('') || '<p style="text-align:center; padding:1rem;">No se encontraron usuarios.</p>';
+                    <div style="display:flex;gap:0.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+                        <select class="input-control btn-agency-select" data-id="${p.id}"
+                            style="padding:0.3rem 0.5rem;font-size:0.72rem;border-radius:var(--radius-sm);width:auto;">
+                            <option value="latam" ${ag==='latam'?'selected':''}>🌎 LATAM</option>
+                            <option value="usa"   ${ag==='usa'  ?'selected':''}>🇺🇸 USA</option>
+                        </select>
+                        <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}"
+                            style="background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
+                            ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
+                        </button>
+                    </div>
+                </div>`; }).join('') || '<p style="text-align:center; padding:1rem;">No se encontraron usuarios.</p>';
 
-            // Re-vincular botones de resultado
+            // Selector de agencia
+            results.querySelectorAll('.btn-agency-select').forEach(sel => {
+                sel.onchange = async () => {
+                    try {
+                        await profiles.setAgency(sel.dataset.id, sel.value);
+                        appState.showToast('Agencia actualizada', 'success');
+                    } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
+                };
+            });
+
+            // Botón de rol
             results.querySelectorAll('.btn-role-toggle').forEach(rBtn => {
                 rBtn.onclick = async () => {
                     const uid = rBtn.dataset.id;
@@ -301,10 +361,14 @@ function renderManageView(container) {
 }
 
 // ── VISTA: CARGA DE DATOS MENSUALES ─────────────────────────────────────────
-function renderUploadView(container, mainContainer) {
+function renderUploadView(container, mainContainer, agency = 'latam') {
+    const agencyLabel = agency === 'usa' ? '🇺🇸 USA' : '🌎 LATAM';
     container.innerHTML = `
         <div class="glass-panel animate-fadeIn" style="max-width:600px; margin:0 auto;">
-            <h2 style="margin-bottom:0.5rem;">Cargar Datos Mensuales</h2>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
+                <h2 style="margin:0;">Cargar Datos Mensuales</h2>
+                <span style="background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);border-radius:999px;padding:0.2rem 0.8rem;font-size:0.75rem;font-weight:700;color:var(--primary-light);">${agencyLabel}</span>
+            </div>
             <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
                 Sube un Excel con tres columnas: <strong>Usuario</strong>, <strong>Días desde la incorporación</strong> y <strong>Partidas</strong>.
                 Los diamantes, horas y días válidos los cargan los propios creadores.
@@ -372,7 +436,7 @@ function renderUploadView(container, mainContainer) {
         uBtn.textContent = 'Publicando...';
 
         try {
-            await metrics.upsertJoiningData(`${m}-01`, lbl, rows);
+            await metrics.upsertJoiningData(`${m}-01`, lbl, rows, agency);
             appState.showToast('Datos publicados con éxito', 'success');
             await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
@@ -513,7 +577,8 @@ export async function renderCreatorsList(container) {
             store.refreshAdminLists(),
         ]).catch(console.warn);
     }
-    const data = store.getMetricsData() || [];
+    const allData = store.getMetricsData() || [];
+    const data = allData.filter(d => (d.agency || 'latam') === selectedAgency);
 
     // Construir lista de managers únicos presentes en las métricas
     const managersInData = [];
@@ -533,7 +598,10 @@ export async function renderCreatorsList(container) {
     container.innerHTML = `
         <div class="animate-fadeIn">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.5rem;">
-                <h2 style="margin:0;">Creadores</h2>
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <h2 style="margin:0;">Creadores</h2>
+                    ${agencyToggleHtml()}
+                </div>
                 <span id="cr-count" style="font-size:0.8rem; color:var(--text-secondary);"></span>
             </div>
 
@@ -652,6 +720,8 @@ export async function renderCreatorsList(container) {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });
+
+    wireAgencyToggle(container, () => renderCreatorsList(container));
 
     applyFilters();
 

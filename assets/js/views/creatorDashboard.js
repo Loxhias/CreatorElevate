@@ -555,6 +555,188 @@ function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, hasSubLast, 
         </div>`;
 }
 
+// ── Daily tracker helpers ──────────────────────────────────────────────────
+function dtKey(uid, ym) { return `dt_${uid || 'anon'}_${ym}`; }
+function currentYM() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+function loadDt(uid) {
+    const key = dtKey(uid, currentYM());
+    try { return { entries: JSON.parse(localStorage.getItem(key) || '{}'), key }; }
+    catch { return { entries: {}, key }; }
+}
+
+function dtTotals(entries) {
+    const vals = Object.values(entries);
+    return {
+        validDays: vals.filter(e => e.streamed).length,
+        diamonds:  vals.reduce((s, e) => s + (Number(e.diamonds) || 0), 0),
+        minutes:   vals.reduce((s, e) => s + (Number(e.minutes)  || 0), 0),
+    };
+}
+
+function minsToHM(mins) {
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return `${h}:${String(m).padStart(2,'0')}`;
+}
+
+function renderDailyTracker(placeholder, uid, mode) {
+    if (!placeholder) return;
+
+    const diamGoal = mode === 'missions'
+        ? Math.ceil(20000 / daysInMonth())
+        : Math.ceil(80000 / daysInMonth());
+    const minsGoal = mode === 'missions' ? 60 : 180;
+
+    const today = todayISO();
+    const { entries, key } = loadDt(uid);
+    const todayE = entries[today] || null;
+    const totals = dtTotals(entries);
+
+    const dayFmt = (iso) => new Date(iso + 'T12:00:00')
+        .toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    const logDays = Object.entries(entries)
+        .filter(([d]) => d !== today)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .slice(0, 7);
+
+    const hitDiam  = (todayE?.diamonds || 0) >= diamGoal;
+    const hitTime  = (todayE?.minutes  || 0) >= minsGoal;
+
+    placeholder.innerHTML = `
+        <div style="margin-top:1.25rem;padding-top:1.1rem;border-top:1px solid var(--glass-border);">
+            <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.85rem;text-transform:uppercase;letter-spacing:0.07em;">📅 Seguimiento diario</div>
+
+            <!-- Today card -->
+            <div class="glass-panel" style="padding:1rem 1.1rem;margin-bottom:0.75rem;${todayE?.streamed ? 'border-color:rgba(0,217,166,0.3);background:rgba(0,217,166,0.04);' : ''}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+                    <span style="font-size:0.82rem;font-weight:700;">Hoy — ${dayFmt(today)}</span>
+                    ${todayE ? `<span style="font-size:0.63rem;background:rgba(0,217,166,0.15);color:var(--accent);border-radius:999px;padding:0.15rem 0.55rem;font-weight:700;">✓ Guardado</span>` : ''}
+                </div>
+
+                <label style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.75rem;cursor:pointer;">
+                    <input type="checkbox" id="dt-streamed" ${todayE?.streamed ? 'checked' : ''}
+                        style="width:17px;height:17px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">
+                    <span style="font-size:0.82rem;">Transmití hoy <span style="color:var(--text-muted);font-size:0.72rem;">(cuenta como día válido)</span></span>
+                </label>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.75rem;">
+                    <div>
+                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">💎 Diamantes de hoy</label>
+                        <input id="dt-diamonds" type="number" min="0" placeholder="ej: 1200"
+                            value="${todayE?.diamonds || ''}"
+                            class="input-control" style="padding:0.45rem 0.6rem;font-size:0.82rem;">
+                        <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitDiam ? 'var(--accent)' : 'var(--text-muted)'};">
+                            Meta: ${fmt(diamGoal)} 💎${hitDiam ? ' ✅' : ''}
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">⏱ Tiempo live (HH:MM)</label>
+                        <input id="dt-time" type="text" placeholder="ej: 1:30"
+                            value="${todayE?.minutes ? minsToHM(todayE.minutes) : ''}"
+                            class="input-control" style="padding:0.45rem 0.6rem;font-size:0.82rem;letter-spacing:0.05em;">
+                        <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitTime ? 'var(--accent)' : 'var(--text-muted)'};">
+                            Meta: ${minsToHM(minsGoal)}${hitTime ? ' ✅' : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="dt-error" style="margin-bottom:0.5rem;color:var(--danger);font-size:0.72rem;display:none;"></div>
+
+                <div style="display:flex;gap:0.5rem;">
+                    <button id="dt-save" class="btn btn-primary" style="flex:1;padding:0.5rem 0.6rem;font-size:0.78rem;">
+                        ${todayE ? '✏️ Actualizar hoy' : '+ Guardar día'}
+                    </button>
+                    ${totals.validDays > 0 ? `
+                    <button id="dt-sync" class="btn" style="padding:0.5rem 0.75rem;font-size:0.72rem;background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);color:var(--primary-light);white-space:nowrap;">
+                        📤 Cargar al perfil
+                    </button>` : ''}
+                </div>
+            </div>
+
+            <!-- Accumulated totals (only if there are entries) -->
+            ${totals.validDays > 0 ? `
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.75rem;">
+                <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-size:1.1rem;font-weight:800;">${totals.validDays}</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">días válidos</div>
+                </div>
+                <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-size:1rem;font-weight:800;color:var(--primary-light);">${fmt(totals.diamonds)}</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">💎 total</div>
+                </div>
+                <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-size:1.1rem;font-weight:800;color:var(--accent);">${minsToHM(totals.minutes)}</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">en live</div>
+                </div>
+            </div>` : ''}
+
+            <!-- Log of past days -->
+            ${logDays.length > 0 ? `
+            <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Días anteriores</div>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                ${logDays.map(([d, e]) => `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.02);border:1px solid var(--glass-border);border-radius:var(--radius-sm);">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span>${e.streamed ? '✅' : '⬜'}</span>
+                            <span style="font-size:0.72rem;color:var(--text-secondary);">${dayFmt(d)}</span>
+                        </div>
+                        <div style="display:flex;gap:0.75rem;font-size:0.68rem;color:var(--text-muted);">
+                            ${e.diamonds ? `<span>${fmt(e.diamonds)} 💎</span>` : ''}
+                            ${e.minutes  ? `<span>${minsToHM(e.minutes)}</span>` : ''}
+                        </div>
+                    </div>`).join('')}
+            </div>` : ''}
+        </div>
+    `;
+
+    const errDiv = placeholder.querySelector('#dt-error');
+
+    placeholder.querySelector('#dt-save')?.addEventListener('click', () => {
+        const streamed = placeholder.querySelector('#dt-streamed').checked;
+        const diamonds = Number(placeholder.querySelector('#dt-diamonds').value) || 0;
+        const timeRaw  = placeholder.querySelector('#dt-time').value.trim();
+
+        let minutes = 0;
+        if (timeRaw) {
+            const parsed = parseHHMM(timeRaw);
+            if (parsed === null) {
+                errDiv.textContent = 'Formato inválido. Usá HH:MM (ej: 1:30).';
+                errDiv.style.display = 'block';
+                return;
+            }
+            minutes = Math.round(parsed * 60);
+        }
+        errDiv.style.display = 'none';
+        entries[today] = { streamed, diamonds, minutes };
+        localStorage.setItem(key, JSON.stringify(entries));
+        renderDailyTracker(placeholder, uid, mode);
+    });
+
+    placeholder.querySelector('#dt-sync')?.addEventListener('click', async () => {
+        const t      = dtTotals(entries);
+        const syncBtn = placeholder.querySelector('#dt-sync');
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Guardando...';
+        try {
+            await metrics.submitSelf(t.validDays, t.minutes / 60, t.diamonds);
+            await store.refreshMetrics();
+            syncBtn.textContent = '✓ Guardado';
+            syncBtn.style.color = 'var(--accent)';
+            setTimeout(() => { syncBtn.disabled = false; syncBtn.textContent = '📤 Cargar al perfil'; syncBtn.style.color = ''; }, 2500);
+        } catch (err) {
+            syncBtn.disabled = false;
+            syncBtn.textContent = '📤 Cargar al perfil';
+            errDiv.textContent = err.message || 'Error al guardar.';
+            errDiv.style.display = 'block';
+        }
+    });
+}
+
 // ── Missions tab (new creators ≤ 30 days, with grace period) ──────────────
 function tabMissions(me) {
     const m1 = me.validDays >= 5;
@@ -598,7 +780,9 @@ function tabMissions(me) {
         ${!allDone ? `
         <div style="padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(124,110,247,0.4);margin-top:0.25rem;">
             <p style="font-size:0.73rem;color:var(--text-muted);">Las misiones se renuevan con cada reporte mensual. ¡Completa las 3 para desbloquear la Insignia Galaxy 🌌!</p>
-        </div>` : ''}`;
+        </div>` : ''}
+
+        <div id="dt-missions"></div>`;
 }
 
 // ── Reto 90 días (growing creators 30-90 days) ─────────────────────────────
@@ -656,7 +840,9 @@ function tabChallenge90(me, h, dy) {
         ${!allDone ? `
         <div style="padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(255,181,71,0.4);margin-top:0.25rem;">
             <p style="font-size:0.73rem;color:var(--text-muted);">Supera los 4 objetivos en un mismo mes para obtener el estatus de <strong style="color:var(--warning);">Creador Maduro</strong> 🏆</p>
-        </div>` : ''}`;
+        </div>` : ''}
+
+        <div id="dt-challenge"></div>`;
 }
 
 // ── Main render ────────────────────────────────────────────────────────────
@@ -918,6 +1104,9 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             if (name === 'challenge') tabs[name] = tabChallenge90(me, h, dy);
         }
         tabContent.innerHTML = `<div class="animate-fade-in">${tabs[name]}</div>`;
+
+        if (name === 'missions')  renderDailyTracker(tabContent.querySelector('#dt-missions'),  user?.id, 'missions');
+        if (name === 'challenge') renderDailyTracker(tabContent.querySelector('#dt-challenge'), user?.id, 'challenge');
     }
 
     container.querySelectorAll('.tab-btn').forEach(btn => {
@@ -953,9 +1142,26 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     });
 }
 
+function secsToHHMM(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+function parseHHMM(val) {
+    const parts = String(val).trim().split(':');
+    if (parts.length < 2) return null;
+    const h = Number(parts[0]);
+    const m = Number(parts[1]);
+    const s = parts[2] !== undefined ? Number(parts[2]) : 0;
+    if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) return null;
+    if (h < 0 || m < 0 || m >= 60 || s < 0 || s >= 60) return null;
+    return h + m / 60 + s / 3600;
+}
+
 function renderSubmitMetricsView(container, prefill = null) {
-    const liveSecs = Number(prefill?.live_seconds || 0);
-    const prefillHours    = prefill ? (liveSecs / 3600).toFixed(1) : '';
+    const liveSecs        = Number(prefill?.live_seconds || 0);
+    const prefillHours    = prefill && liveSecs > 0 ? secsToHHMM(liveSecs) : '';
     const prefillDays     = prefill ? (prefill.validDays ?? '') : '';
     const prefillDiamonds = prefill ? (prefill.diamonds ?? '') : '';
 
@@ -971,8 +1177,10 @@ function renderSubmitMetricsView(container, prefill = null) {
                     <input id="sm-days" type="number" class="input-control" min="0" max="31" placeholder="ej: 18" value="${prefillDays}">
                 </div>
                 <div class="input-group">
-                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">HORAS DE LIVE (ej: 4.5 = 4h 30min)</label>
-                    <input id="sm-hours" type="number" class="input-control" min="0" step="0.5" placeholder="ej: 42.5" value="${prefillHours}">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">HORAS DE LIVE (HH:MM o HH:MM:SS)</label>
+                    <input id="sm-hours" type="text" class="input-control" placeholder="ej: 42:30" value="${prefillHours}"
+                        inputmode="numeric" pattern="[0-9]+:[0-5][0-9](:[0-5][0-9])?"
+                        style="font-variant-numeric:tabular-nums;letter-spacing:0.05em;">
                 </div>
                 <div class="input-group">
                     <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">DIAMANTES TOTALES DEL MES</label>
@@ -989,7 +1197,8 @@ function renderSubmitMetricsView(container, prefill = null) {
 
     btn.onclick = async () => {
         const days     = Number(container.querySelector('#sm-days').value);
-        const hours    = Number(container.querySelector('#sm-hours').value);
+        const hoursRaw = container.querySelector('#sm-hours').value;
+        const hours    = parseHHMM(hoursRaw);
         const diamonds = Number(container.querySelector('#sm-diamonds').value);
 
         errDiv.style.display = 'none';
@@ -998,8 +1207,8 @@ function renderSubmitMetricsView(container, prefill = null) {
             errDiv.style.display = 'block';
             return;
         }
-        if (isNaN(hours) || hours < 0) {
-            errDiv.textContent = 'Horas de live no puede ser negativo.';
+        if (hours === null) {
+            errDiv.textContent = 'Formato de horas inválido. Usá HH:MM o HH:MM:SS (ej: 42:30).';
             errDiv.style.display = 'block';
             return;
         }

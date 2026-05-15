@@ -178,6 +178,7 @@ function rowFromDb(r) {
         manager:            r.manager_name_legacy || null,
         managerId:          r.manager_id || null,
         daysSinceJoining:   r.days_since_joining != null ? Number(r.days_since_joining) : null,
+        agency:             r.agency || 'latam',
     };
 }
 
@@ -313,7 +314,7 @@ export const metrics = {
     },
 
     /** Admin: sube solo días_desde_incorporación + partidas (NO pisa métricas del creador). */
-    async upsertJoiningData(periodDate, label, rows) {
+    async upsertJoiningData(periodDate, label, rows, agency = 'latam') {
         if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
         const payload = rows
             .map(r => ({
@@ -327,6 +328,7 @@ export const metrics = {
             p_period_date:  periodDate,
             p_period_label: san(label),
             p_rows:         sanDeep(payload),
+            p_agency:       agency,
         });
         if (error) throw error;
         return data;
@@ -391,6 +393,16 @@ export const profiles = {
                 is_creator: roles.isCreator ?? true,
                 role: roles.isAdmin ? 'admin' : (roles.isManager ? 'manager' : 'creator')
             })
+            .eq('id', userId)
+            .select();
+        if (error) throw error;
+        return data[0];
+    },
+
+    async setAgency(userId, agency) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({ agency })
             .eq('id', userId)
             .select();
         if (error) throw error;
