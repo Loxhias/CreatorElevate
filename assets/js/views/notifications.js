@@ -611,11 +611,8 @@ function calculateSegments(metrics) {
     const topHours = byHours.slice(0, Math.ceil(metrics.length * 0.25));
     const potential = topHours.filter(c => Number(c.diamonds) < avg);
 
-    // Novatos: nivel 1 o sin nivel asignado
-    const novice = metrics.filter(c => {
-        const r = (c.statusRank || '').toLowerCase();
-        return r.includes('nivel 1') || r === '' || r.includes('sin nivel');
-    });
+    // Novatos: menos de 60 días en la agencia
+    const novice = metrics.filter(c => c.daysSinceJoining != null && c.daysSinceJoining < 60);
 
     // Nuevos: menos de 30 días en la agencia
     const newOnes = metrics.filter(c => c.daysSinceJoining != null && c.daysSinceJoining < 30);

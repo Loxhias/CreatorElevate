@@ -3,7 +3,8 @@
     "allow": [
       "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\PatricioSalgueroFría\\\\Desktop\\\\CreatorElevate\" -Recurse -Directory | Select-Object -First 30 | ForEach-Object { $_.FullName })",
       "Bash(npx wrangler *)",
-      "WebFetch(domain:www.tiktok.com)"
+      "WebFetch(domain:www.tiktok.com)",
+      "Bash(node -e ' *)"
     ]
   }
 }

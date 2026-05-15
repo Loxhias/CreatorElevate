@@ -28,6 +28,10 @@
 /assets/icons/*
   Cache-Control: public, max-age=604800, immutable
 
-# La Pages Function no debe cachearse
+# La config de agencia puede cachearse 5 minutos (cambia poco)
+/api/config
+  Cache-Control: public, max-age=300
+
+# Las demás Pages Functions no deben cachearse
 /api/*
   Cache-Control: no-store

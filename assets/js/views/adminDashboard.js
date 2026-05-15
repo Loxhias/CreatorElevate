@@ -66,46 +66,18 @@ const skelHistory = () => `
         <div class="skel-panel" style="height:200px;"></div>
     </div>`;
 
-function parseLiveSeconds(str) {
-    if (!str) return 0;
-    if (typeof str === 'number') return Math.round(str * 3600);
-    const s = String(str);
-    const h = +(s.match(/(\d+)h/)   || [0,0])[1];
-    const m = +(s.match(/(\d+)min/) || [0,0])[1];
-    const sec = +(s.match(/(\d+)s/) || [0,0])[1];
-    return h * 3600 + m * 60 + sec;
-}
-
-// Nombres exactos de columnas del Excel de TikTok (en español)
+// Columnas del archivo mensual simplificado (3 columnas)
 const EXCEL_COLUMNS = {
-    username:           'Nombre de usuario del creador',
-    groupName:          'Grupo',
-    manager:            'Agente',
-    daysSinceJoining:   'Días desde la incorporación',
-    diamonds:           'Diamantes',
-    liveDuration:       'Duración de LIVE',
-    validDays:          'Días válidos de emisiones LIVE',
-    newFollowers:       'Nuevos seguidores',
-    emisionesLive:      'Emisiones LIVE',
-    diamondsLastMonth:  'Diamantes en el último mes',
-    battles:            'Partidas',
-    battleDiamonds:     'Diamantes de partidas',
-    multiGuestDiamonds: 'Diamantes del modo de varios invitados',
-    statusGraduation:   'Estado de graduación',
-    statusRank:         'Estado del rango',
-    statusActive:       'Estado',
+    username:         'Usuario',
+    daysSinceJoining: 'Días desde la incorporación',
+    battles:          'Partidas',
 };
 
 function normalizeRow(row) {
-    // Normaliza una cadena: NFC, minúsculas, espacios no-break → espacio, colapsa espacios
     const nc = (s) => String(s)
-        .normalize('NFC')
-        .toLowerCase()
-        .replace(/[ ​‌‍   ⁠﻿]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+        .normalize('NFC').toLowerCase()
+        .replace(/s+/g, ' ').trim();
 
-    // Busca el valor de una columna: primero propiedad directa, luego comparación normalizada
     const get = (colName) => {
         if (Object.prototype.hasOwnProperty.call(row, colName)) return row[colName];
         const target = nc(colName);
@@ -115,73 +87,23 @@ function normalizeRow(row) {
         return null;
     };
 
-    const username = String(get(EXCEL_COLUMNS.username) || '').trim().replace(/^@/, '');
+    const rawUser = get(EXCEL_COLUMNS.username)
+        || get('Nombre de usuario del creador')
+        || get('username');
+    const username = String(rawUser || '').trim().replace(/^@/, '');
     if (!username) return null;
 
-    // Intenta leer el ID estable del creador (columna varía según versión del export de TikTok)
-    const getCreatorId = () => {
-        const candidates = [
-            'ID de usuario del creador', 'ID de creador', 'Creator user ID',
-            'Creator ID', 'UID del creador', 'ID', 'User ID',
-        ];
-        for (const name of candidates) {
-            const val = get(name);
-            if (val != null && val !== '') return String(val).trim();
-        }
-        return null;
-    };
-    const creatorId = getCreatorId();
-
-    const now = new Date();
-    const safeInt = (val, max = 2147483647) => {
+    const safeInt = (val, max = 10000) => {
         if (val == null || val === '') return 0;
-        const parsed = parseInt(String(val).replace(/[^\d]/g, ''));
-        if (isNaN(parsed)) return 0;
-        if (parsed > 2000000000000) {
-            try {
-                const s = String(parsed);
-                const d = new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8));
-                if (!isNaN(d.getTime())) {
-                    const diff = Math.floor((now - d) / 86400000);
-                    return diff > 0 && diff < 10000 ? diff : 0;
-                }
-            } catch (_) {}
-            return 0;
-        }
+        const parsed = parseInt(String(val).replace(/[^d]/g, ''));
+        if (isNaN(parsed) || parsed < 0) return 0;
         return parsed < max ? parsed : 0;
     };
 
-    if (!normalizeRow._diagDone) {
-        normalizeRow._diagDone = true;
-        console.group(`🔍 [normalizeRow] @${username} — valores leídos del Excel`);
-        Object.entries(EXCEL_COLUMNS).forEach(([field, col]) => {
-            const val = get(col);
-            console.log(`  ${field.padEnd(20)} ← "${col}" = ${JSON.stringify(val)}`);
-        });
-        console.groupEnd();
-    }
-
-    const rawDays = get(EXCEL_COLUMNS.daysSinceJoining);
-
     return {
         username,
-        creatorId,
-        diamonds:           Number(get(EXCEL_COLUMNS.diamonds) || 0),
-        diamondsLastMonth:  Number(get(EXCEL_COLUMNS.diamondsLastMonth) || 0),
-        liveDuration:       String(get(EXCEL_COLUMNS.liveDuration) || '0s'),
-        liveSeconds:        safeInt(parseLiveSeconds(get(EXCEL_COLUMNS.liveDuration)), 1000000),
-        validDays:          safeInt(get(EXCEL_COLUMNS.validDays), 32),
-        newFollowers:       safeInt(get(EXCEL_COLUMNS.newFollowers), 1000000),
-        emisionesLive:      safeInt(get(EXCEL_COLUMNS.emisionesLive), 5000),
-        battles:            safeInt(get(EXCEL_COLUMNS.battles), 10000),
-        battleDiamonds:     Number(get(EXCEL_COLUMNS.battleDiamonds) || 0),
-        multiGuestDiamonds: Number(get(EXCEL_COLUMNS.multiGuestDiamonds) || 0),
-        statusGraduation:   String(get(EXCEL_COLUMNS.statusGraduation) || ''),
-        statusRank:         String(get(EXCEL_COLUMNS.statusRank) || ''),
-        statusActive:       String(get(EXCEL_COLUMNS.statusActive) || ''),
-        groupName:          String(get(EXCEL_COLUMNS.groupName) || ''),
-        manager:            String(get(EXCEL_COLUMNS.manager) || ''),
-        daysSinceJoining:   rawDays != null && rawDays !== '' ? safeInt(rawDays, 10000) : null,
+        daysSinceJoining: safeInt(get(EXCEL_COLUMNS.daysSinceJoining)),
+        battles:          safeInt(get(EXCEL_COLUMNS.battles)),
     };
 }
 
@@ -224,8 +146,8 @@ export async function renderAdminDashboard(container) {
                 </div>
                 <div class="glass-panel action-card" id="nav-upload">
                     <div style="font-size:1.5rem; margin-bottom:0.5rem;">📥</div>
-                    <h3 style="font-size:0.95rem;">Cargar Reporte TikTok</h3>
-                    <p style="font-size:0.75rem; color:var(--text-secondary);">Subir Excel de métricas mensual.</p>
+                    <h3 style="font-size:0.95rem;">Cargar Datos Mensuales</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Subir incorporación y partidas.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-history">
                     <div style="font-size:1.5rem; margin-bottom:0.5rem;">📈</div>
@@ -378,13 +300,17 @@ function renderManageView(container) {
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') doSearch(); });
 }
 
-// ── VISTA: CARGA DE REPORTE TIKTOK ──────────────────────────────────────────
+// ── VISTA: CARGA DE DATOS MENSUALES ─────────────────────────────────────────
 function renderUploadView(container, mainContainer) {
     container.innerHTML = `
         <div class="glass-panel animate-fadeIn" style="max-width:600px; margin:0 auto;">
-            <h2 style="margin-bottom:1rem;">Cargar Reporte TikTok</h2>
+            <h2 style="margin-bottom:0.5rem;">Cargar Datos Mensuales</h2>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
+                Sube un Excel con tres columnas: <strong>Usuario</strong>, <strong>Días desde la incorporación</strong> y <strong>Partidas</strong>.
+                Los diamantes, horas y días válidos los cargan los propios creadores.
+            </p>
             <div class="input-group" style="margin-bottom:1.5rem;">
-                <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">MES DEL REPORTE</label>
+                <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">MES</label>
                 <input type="month" id="up-month" class="input-control" value="${new Date().toISOString().slice(0,7)}">
             </div>
             <div class="input-group" style="margin-bottom:1.5rem;">
@@ -392,7 +318,7 @@ function renderUploadView(container, mainContainer) {
                 <input type="file" id="up-file" class="input-control" accept=".xlsx,.xls,.csv" style="padding:2rem; border:2px dashed var(--glass-border); text-align:center;">
             </div>
             <div id="up-preview" style="margin-bottom:1.5rem; font-size:0.9rem;"></div>
-            <button id="up-btn" class="btn btn-primary" disabled style="width:100%;">PUBLICAR MÉTRICAS</button>
+            <button id="up-btn" class="btn btn-primary" disabled style="width:100%;">PUBLICAR DATOS</button>
         </div>
     `;
 
@@ -415,48 +341,21 @@ function renderUploadView(container, mainContainer) {
                 return;
             }
 
-            // Columnas exactas del Excel (para diagnóstico y rediseño)
-            const cols = Object.keys(rawData[0]);
-            const firstRow = rawData[0];
-
             rows = rawData.map(normalizeRow).filter(Boolean);
 
-            // Mostrar tabla de columnas en pantalla para poder copiarlas
-            const colsHtml = cols.map((col, i) => {
-                const val = firstRow[col];
-                return `<tr>
-                    <td style="padding:0.3rem 0.5rem;color:var(--text-muted);font-size:0.7rem;">[${i}]</td>
-                    <td style="padding:0.3rem 0.5rem;font-size:0.72rem;word-break:break-all;">${col}</td>
-                    <td style="padding:0.3rem 0.5rem;color:var(--accent);font-size:0.72rem;">${val != null ? String(val).slice(0, 40) : '—'}</td>
-                </tr>`;
-            }).join('');
-
-            const withValidDays = rows.filter(r => r.validDays > 0).length;
+            const withDays     = rows.filter(r => r.daysSinceJoining > 0).length;
+            const withBattles  = rows.filter(r => r.battles > 0).length;
 
             preview.innerHTML = `
-                <div style="margin-bottom:0.75rem;">
-                    <span style="color:var(--accent);">✓ ${rows.length} creadores detectados</span>
-                    ${withValidDays > 0
-                        ? `<span style="color:var(--accent);margin-left:0.5rem;">· ${withValidDays} con días válidos ✓</span>`
-                        : `<span style="color:var(--danger);margin-left:0.5rem;">· 0 con días válidos ⚠</span>`}
-                </div>
-                <details open>
-                    <summary style="cursor:pointer;font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.5rem;">
-                        📋 Columnas del Excel (${cols.length}) — primera fila de muestra
-                    </summary>
-                    <div style="overflow-x:auto;max-height:300px;overflow-y:auto;border:1px solid var(--glass-border);border-radius:6px;">
-                        <table style="width:100%;border-collapse:collapse;font-family:monospace;">
-                            <thead>
-                                <tr style="background:rgba(255,255,255,0.05);position:sticky;top:0;">
-                                    <th style="padding:0.3rem 0.5rem;font-size:0.7rem;text-align:left;color:var(--text-muted);">#</th>
-                                    <th style="padding:0.3rem 0.5rem;font-size:0.7rem;text-align:left;color:var(--text-muted);">Nombre de columna</th>
-                                    <th style="padding:0.3rem 0.5rem;font-size:0.7rem;text-align:left;color:var(--text-muted);">Valor muestra</th>
-                                </tr>
-                            </thead>
-                            <tbody>${colsHtml}</tbody>
-                        </table>
-                    </div>
-                </details>`;
+                <div style="display:flex;flex-direction:column;gap:0.35rem;">
+                    <span style="color:var(--accent);">✓ ${rows.length} usuario${rows.length !== 1 ? 's' : ''} detectados</span>
+                    <span style="color:${withDays > 0 ? 'var(--accent)' : 'var(--text-muted)'};">
+                        · ${withDays} con días desde incorporación
+                    </span>
+                    <span style="color:${withBattles > 0 ? 'var(--accent)' : 'var(--text-muted)'};">
+                        · ${withBattles} con partidas
+                    </span>
+                </div>`;
 
             uBtn.disabled = false;
         } catch (err) {
@@ -473,15 +372,14 @@ function renderUploadView(container, mainContainer) {
         uBtn.textContent = 'Publicando...';
 
         try {
-            await metrics.upsertPeriod(`${m}-01`, lbl, rows);
+            await metrics.upsertJoiningData(`${m}-01`, lbl, rows);
             appState.showToast('Datos publicados con éxito', 'success');
-            // Refrescamos los datos en el store antes de volver
             await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
         } catch (err) {
             appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error');
             uBtn.disabled = false;
-            uBtn.textContent = 'PUBLICAR MÉTRICAS';
+            uBtn.textContent = 'PUBLICAR DATOS';
         }
     };
 }

@@ -1,7 +1,7 @@
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements } from '../config.js';
-import { push } from '../api.js';
+import { push, metrics } from '../api.js';
 
 
 function getIdx(d, tiers) {
@@ -691,23 +691,22 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const isAuditing = !!targetUsername;
     const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || user?.username || '').toLowerCase();
 
-    if (!data?.length) { container.innerHTML = emptyState('Sin datos', 'Aún no se cargó el reporte del mes.'); return; }
-
     // Buscamos al creador: primero por tiktok_id estable, luego por username
     const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
     const searchName = cleanMatch(myUsername);
     const profileTiktokId = store.getProfile?.()?.tiktok_id || null;
-    const me = data.find(c =>
+    const me = data?.find(c =>
         (profileTiktokId && c.tiktokId && profileTiktokId === c.tiktokId) ||
         cleanMatch(c.username) === searchName
     );
 
-    if (!me) { 
+    if (!me) {
+        if (!isAuditing) { renderSubmitMetricsView(container); return; }
         container.innerHTML = emptyState(
-            `No se encontraron métricas para @${myUsername}`, 
-            'Asegúrate de que el usuario de TikTok en el perfil coincida exactamente con el del reporte Excel.'
-        ); 
-        return; 
+            `No se encontraron métricas para @${myUsername}`,
+            'El creador aún no ha cargado sus métricas este mes.'
+        );
+        return;
     }
 
     // Calculations
@@ -835,6 +834,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex-shrink:0;white-space:nowrap;">🚀 Misiones</button>` : ''}
             ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex-shrink:0;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
             <button class="tab-btn" data-tab="inbox" style="flex-shrink:0;white-space:nowrap;">🔔 Mensajes</button>
+            ${!isAuditing ? `<button class="tab-btn" data-tab="update" style="flex-shrink:0;white-space:nowrap;">✏️ Actualizar</button>` : ''}
         </div>
 
         <!-- Tab Content -->
@@ -905,6 +905,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             return;
         }
 
+        if (name === 'update') {
+            renderSubmitMetricsView(tabContent, me);
+            return;
+        }
+
         if (!tabs[name]) {
             if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
             if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
@@ -946,6 +951,79 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             import('./adminDashboard.js').then(m => m.renderCreatorsList(container));
         }
     });
+}
+
+function renderSubmitMetricsView(container, prefill = null) {
+    const liveSecs = Number(prefill?.live_seconds || 0);
+    const prefillHours    = prefill ? (liveSecs / 3600).toFixed(1) : '';
+    const prefillDays     = prefill ? (prefill.validDays ?? '') : '';
+    const prefillDiamonds = prefill ? (prefill.diamonds ?? '') : '';
+
+    container.innerHTML = `
+        <div class="glass-panel animate-fadeIn" style="max-width:480px;margin:0 auto;">
+            <h2 style="margin-bottom:0.4rem;">📊 Mis métricas del mes</h2>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
+                Cargá tus métricas de TikTok del mes actual. Podés actualizar estos valores cuando quieras hasta el cierre del período.
+            </p>
+            <div style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;">
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">DÍAS VÁLIDOS (0–31)</label>
+                    <input id="sm-days" type="number" class="input-control" min="0" max="31" placeholder="ej: 18" value="${prefillDays}">
+                </div>
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">HORAS DE LIVE (ej: 4.5 = 4h 30min)</label>
+                    <input id="sm-hours" type="number" class="input-control" min="0" step="0.5" placeholder="ej: 42.5" value="${prefillHours}">
+                </div>
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">DIAMANTES TOTALES DEL MES</label>
+                    <input id="sm-diamonds" type="number" class="input-control" min="0" placeholder="ej: 125000" value="${prefillDiamonds}">
+                </div>
+            </div>
+            <div id="sm-error" style="margin-bottom:0.75rem;color:var(--danger);font-size:0.8rem;display:none;"></div>
+            <button id="sm-submit" class="btn btn-primary" style="width:100%;">Guardar métricas</button>
+        </div>
+    `;
+
+    const btn    = container.querySelector('#sm-submit');
+    const errDiv = container.querySelector('#sm-error');
+
+    btn.onclick = async () => {
+        const days     = Number(container.querySelector('#sm-days').value);
+        const hours    = Number(container.querySelector('#sm-hours').value);
+        const diamonds = Number(container.querySelector('#sm-diamonds').value);
+
+        errDiv.style.display = 'none';
+        if (isNaN(days) || days < 0 || days > 31) {
+            errDiv.textContent = 'Días válidos debe estar entre 0 y 31.';
+            errDiv.style.display = 'block';
+            return;
+        }
+        if (isNaN(hours) || hours < 0) {
+            errDiv.textContent = 'Horas de live no puede ser negativo.';
+            errDiv.style.display = 'block';
+            return;
+        }
+        if (isNaN(diamonds) || diamonds < 0) {
+            errDiv.textContent = 'Los diamantes no pueden ser negativos.';
+            errDiv.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Guardando...';
+
+        try {
+            await metrics.submitSelf(days, hours, diamonds);
+            await store.refreshMetrics();
+            const mainContainer = container.closest('#dashboard-content') || container;
+            renderCreatorDashboard(mainContainer);
+        } catch (err) {
+            errDiv.textContent = err.message || 'Error al guardar. Intenta de nuevo.';
+            errDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Guardar métricas';
+        }
+    };
 }
 
 function emptyState(title, sub) {

@@ -154,13 +154,17 @@ export const auth = {
 // ────────────────────────────────────────────────────────────────────────────
 
 function rowFromDb(r) {
+    const liveSecs = Number(r.live_seconds || 0);
+    const liveDurFallback = liveSecs > 0
+        ? `${Math.floor(liveSecs / 3600)}h ${Math.floor((liveSecs % 3600) / 60)}min`
+        : '0h';
     return {
         username:           r.username,
         tiktokId:           r.tiktok_id || null,
         diamonds:           Number(r.diamonds || 0),
         diamondsLastMonth:  Number(r.diamonds_last_month || 0),
-        liveDuration:       r.live_duration || '0s',
-        liveSeconds:        Number(r.live_seconds || 0),
+        liveDuration:       r.live_duration || liveDurFallback,
+        liveSeconds:        liveSecs,
         validDays:          Number(r.valid_days || 0),
         newFollowers:       Number(r.new_followers || 0),
         emisionesLive:      Number(r.emisiones_live || 0),
@@ -306,6 +310,60 @@ export const metrics = {
         }
 
         return data;
+    },
+
+    /** Admin: sube solo días_desde_incorporación + partidas (NO pisa métricas del creador). */
+    async upsertJoiningData(periodDate, label, rows) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const payload = rows
+            .map(r => ({
+                username:           san(String(r.username || '').trim().replace(/^@/, '')),
+                days_since_joining: Number(r.daysSinceJoining || 0),
+                battles:            Number(r.battles || 0),
+            }))
+            .filter(r => r.username);
+        if (!payload.length) throw new Error('No se encontraron filas válidas en el archivo.');
+        const { data, error } = await supabase.rpc('admin_update_joining_data', {
+            p_period_date:  periodDate,
+            p_period_label: san(label),
+            p_rows:         sanDeep(payload),
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    /** Creador: envía sus propias métricas del mes actual. */
+    async submitSelf(validDays, liveHours, diamonds) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { data, error } = await supabase.rpc('creator_submit_metrics', {
+            p_valid_days: Number(validDays),
+            p_live_hours: Number(liveHours),
+            p_diamonds:   Number(diamonds),
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    /** Creador: obtiene sus propias métricas del período actual (null si no envió aún). */
+    async getMyMetrics() {
+        if (!isSupabaseConfigured) return null;
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
+        const now = new Date();
+        const periodDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        const { data: period } = await supabase
+            .from('report_periods').select('id').eq('period', periodDate).maybeSingle();
+        if (!period) return null;
+        const { data: profile } = await supabase
+            .from('profiles').select('tiktok_username').eq('id', user.id).maybeSingle();
+        if (!profile?.tiktok_username) return null;
+        const { data } = await supabase
+            .from('creator_metrics')
+            .select('valid_days, live_seconds, live_duration, diamonds')
+            .eq('period_id', period.id)
+            .ilike('username', profile.tiktok_username)
+            .maybeSingle();
+        return data || null;
     },
 };
 

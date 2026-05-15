@@ -50,17 +50,17 @@ export const appState = {
 function getNavItems(role) {
     const items = [];
     if (role === 'admin') {
-        items.push({ view: 'inicio',          icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'creadores',       icon: '👥', label: 'Creadores' });
-        items.push({ view: 'notificaciones',  icon: '🔔', label: 'Mensajes' });
+        items.push({ view: 'inicio',         icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'creadores',      icon: '👥', label: 'Creadores' });
+        items.push({ view: 'notificaciones', icon: '🔔', label: 'Mensajes' });
     } else if (role === 'creator') {
-        items.push({ view: 'inicio',    icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'mensajes',  icon: '🔔', label: 'Mensajes' });
-        items.push({ view: 'normas',    icon: '📋', label: 'Normas' });
-        items.push({ view: 'canales',   icon: '📢', label: 'Canales' });
+        items.push({ view: 'inicio',   icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
+        items.push({ view: 'normas',   icon: '📋', label: 'Normas' });
+        items.push({ view: 'canales',  icon: '📢', label: 'Canales' });
     } else if (role === 'manager') {
-        items.push({ view: 'inicio',         icon: '📊', label: 'Panel' });
-        items.push({ view: 'mensajes',        icon: '🔔', label: 'Mensajes' });
+        items.push({ view: 'inicio',   icon: '📊', label: 'Panel' });
+        items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
@@ -294,6 +294,8 @@ async function boot() {
             }
         } catch (e) { console.warn('Limpieza de SW falló:', e); }
     }
+
+    document.title = 'Creator Elevate';
 
     await store.init().catch(console.warn);
 

@@ -8,15 +8,6 @@ function esc(str) {
     return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-const GOTO_LABELS = {
-    capacitaciones: '🎓 Capacitaciones',
-    eventos:        '📅 Eventos',
-    canales:        '📢 Canales',
-    normas:         '📋 Normas',
-    mensajes:       '🔔 Mensajes',
-    perfil:         '👤 Perfil',
-};
-
 export async function renderInboxView(container) {
     const user   = store.getCurrentUser();
     const userId = user?.id;
@@ -61,6 +52,15 @@ function renderContent(container, notifications, lastSeen) {
         btn.addEventListener('click', () => appState.navigateTo(btn.dataset.goto));
     });
 }
+
+const GOTO_LABELS = {
+    capacitaciones: '🎓 Capacitaciones',
+    eventos:        '📅 Eventos',
+    canales:        '📢 Canales',
+    normas:         '📋 Normas',
+    mensajes:       '🔔 Mensajes',
+    perfil:         '👤 Perfil',
+};
 
 function renderList(notifications, lastSeen) {
     if (!notifications.length) {
