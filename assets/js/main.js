@@ -1,6 +1,7 @@
 import { env, isSupabaseConfigured } from './env.js';
 import { store } from './store.js';
-import { auth, push } from './api.js';
+import { auth, push, profiles } from './api.js';
+import { setupLocale, detectAgency, t } from './i18n.js';
 import { renderLogin } from './views/login.js';
 import { renderAdminDashboard, renderCreatorsList } from './views/adminDashboard.js';
 import { renderManagerDashboard } from './views/managerDashboard.js';
@@ -54,19 +55,20 @@ function getNavItems(role) {
         items.push({ view: 'creadores',      icon: '👥', label: 'Creadores' });
         items.push({ view: 'notificaciones', icon: '🔔', label: 'Mensajes' });
     } else if (role === 'creator') {
-        items.push({ view: 'inicio',   icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
-        items.push({ view: 'normas',   icon: '📋', label: 'Normas' });
-        items.push({ view: 'canales',  icon: '📢', label: 'Canales' });
+        items.push({ view: 'inicio',   icon: '📊', label: t('nav.dashboard') });
+        items.push({ view: 'mensajes', icon: '🔔', label: t('nav.messages') });
+        items.push({ view: 'normas',   icon: '📋', label: t('nav.rules') });
+        items.push({ view: 'canales',  icon: '📢', label: t('nav.channels') });
     } else if (role === 'manager') {
         items.push({ view: 'inicio',   icon: '📊', label: 'Panel' });
         items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
-    items.push({ view: 'capacitaciones', icon: '🎓', label: 'Capacitaciones' });
-    items.push({ view: 'eventos',        icon: '📅', label: 'Eventos' });
-    items.push({ view: 'perfil',         icon: '👤', label: 'Perfil' });
+    const isCreator = role === 'creator';
+    items.push({ view: 'capacitaciones', icon: '🎓', label: isCreator ? t('nav.trainings') : 'Capacitaciones' });
+    items.push({ view: 'eventos',        icon: '📅', label: isCreator ? t('nav.events')    : 'Eventos' });
+    items.push({ view: 'perfil',         icon: '👤', label: isCreator ? t('nav.profile')   : 'Perfil' });
     return items;
 }
 
@@ -116,14 +118,14 @@ function renderDashboardLayout(container, renderContentFn, role) {
                     <!-- Botón de Instalación (Sidebar) -->
                     <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} margin-top:1rem; border:1px dashed var(--primary); border-radius:var(--radius-md); background:rgba(124,110,247,0.05);">
                         <span class="nav-icon">📲</span>
-                        <span style="color:var(--primary-light);">Instalar App</span>
+                        <span style="color:var(--primary-light);">${t('nav.install')}</span>
                     </a>
                 </nav>
 
                 <div style="margin-top:auto; padding-top:1.5rem; border-top:1px solid var(--glass-border);">
                     <div style="font-size:0.85rem; font-weight:700;">@${user.username}</div>
                     <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">${role}</div>
-                    <button class="btn-logout" style="margin-top:1rem; background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Cerrar Sesión</button>
+                    <button class="btn-logout" style="margin-top:1rem; background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">${t('nav.logout')}</button>
                 </div>
             </aside>
 
@@ -134,10 +136,10 @@ function renderDashboardLayout(container, renderContentFn, role) {
             <nav class="bottom-nav">
                 ${navHtml}
                 <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} color:var(--primary-light); font-weight:700;">
-                    <span>📲</span><span>Instalar</span>
+                    <span>📲</span><span>${t('nav.install_mob')}</span>
                 </a>
                 <a href="#" class="nav-item btn-logout" style="color:var(--danger);">
-                    <span>🚪</span><span>Salir</span>
+                    <span>🚪</span><span>${t('nav.logout_mob')}</span>
                 </a>
             </nav>
         </div>
@@ -187,7 +189,7 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'mensajes') {
                 import('./views/inbox.js').then(m => safeRender(m.renderInboxView, contentArea));
                 container.querySelectorAll('.nav-item[data-view="mensajes"] span:not(.nav-icon)').forEach(span => {
-                    span.textContent = 'Mensajes';
+                    span.textContent = t('nav.messages');
                 });
             }
             else if (view === 'capacitaciones') {
@@ -312,7 +314,18 @@ async function boot() {
         const profile = store.getProfile();
         const u = store.getCurrentUser();
         if (profile) identifyOneSignalUser(profile);
-        
+
+        // Auto-assign agency from browser locale on first login per device
+        if (profile?.id && profile.role === 'creator') {
+            const agencyFlag = `ce_agency_set_${profile.id}`;
+            if (!localStorage.getItem(agencyFlag)) {
+                try {
+                    await profiles.setAgency(profile.id, detectAgency());
+                    localStorage.setItem(agencyFlag, '1');
+                } catch {}
+            }
+        }
+
         // Si estamos en flujo de recuperación de contraseña, NO navegamos al dashboard
         // para permitir que el usuario vea el formulario de "Nueva Contraseña".
         if (u && !isRecovery) appState.navigate(u.role);
@@ -333,7 +346,7 @@ window.installPWA = async () => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
     if (isIOS && !isStandalone) {
-        appState.showToast('En iOS: pulsa el botón "Compartir" (abajo) y luego "Añadir a pantalla de inicio" 📲', 'info');
+        appState.showToast(t('nav.install_ios'), 'info');
         return;
     }
 
@@ -356,4 +369,5 @@ window.addEventListener('load', () => {
     }
 });
 
+setupLocale();
 boot();

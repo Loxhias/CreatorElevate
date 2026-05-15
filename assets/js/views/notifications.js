@@ -181,10 +181,44 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
     const targetCount = container.querySelector('#target-count');
     const sendBtn     = container.querySelector('#send-btn');
 
-    let tState = { type: 'all-creators', selectedIds: [], managerId: null, segment: null };
+    let tState = { type: 'all-creators', selectedIds: [], managerId: null, segment: null, agency: null };
 
     const pillContainer = container.querySelector('#target-pills');
     const subEl         = container.querySelector('#target-sub');
+
+    // Helper: filtra perfiles por agencia según tState.agency (null = todas)
+    const agencyProfiles = (list) => tState.agency
+        ? list.filter(p => (p.agency || 'latam') === tState.agency)
+        : list;
+
+    // Render del toggle de agencia (se inserta encima de las pills)
+    const agencyRow = document.createElement('div');
+    agencyRow.style.cssText = 'display:flex;gap:0.3rem;margin-bottom:0.6rem;';
+    const agencyOpts = [
+        { val: null,    label: '🌐 Todas' },
+        { val: 'latam', label: '🌎 LATAM' },
+        { val: 'usa',   label: '🇺🇸 USA'  },
+    ];
+    const agPillStyle = (active) =>
+        `font-size:0.72rem;padding:0.25rem 0.65rem;border-radius:999px;cursor:pointer;font-weight:600;` +
+        `background:${active ? 'rgba(124,110,247,0.2)' : 'rgba(255,255,255,0.03)'};` +
+        `border:1.5px solid ${active ? 'var(--primary)' : 'var(--glass-border)'};` +
+        `color:${active ? 'var(--primary-light)' : 'var(--text-muted)'};`;
+    const renderAgencyRow = () => {
+        agencyRow.innerHTML = agencyOpts.map(o =>
+            `<button class="ag-filter" data-ag="${o.val ?? ''}"
+                style="${agPillStyle(tState.agency === o.val)}">${o.label}</button>`
+        ).join('');
+        agencyRow.querySelectorAll('.ag-filter').forEach(btn => {
+            btn.addEventListener('click', () => {
+                tState.agency = btn.dataset.ag || null;
+                renderAgencyRow();
+                renderSub();
+            });
+        });
+    };
+    renderAgencyRow();
+    pillContainer.insertAdjacentElement('beforebegin', agencyRow);
 
     const pillStyle = (active) =>
         `font-size:0.75rem;padding:0.35rem 0.75rem;border-radius:999px;cursor:pointer;font-weight:600;` +
@@ -199,22 +233,28 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
     };
 
     const updateCount = () => {
+        const agLabel = tState.agency === 'usa' ? ' · USA' : tState.agency === 'latam' ? ' · LATAM' : '';
         let text = '';
-        if (tState.type === 'all-creators')         text = `${creatorsWithAccount} creadores con cuenta`;
-        else if (tState.type === 'all-managers')     text = `${managers.length} manager${managers.length !== 1 ? 's' : ''}`;
-        else if (tState.type === 'all-admins')       text = `${admins.length} administrador${admins.length !== 1 ? 'es' : ''}`;
-        else if (tState.type === 'individual') {
+        if (tState.type === 'all-creators') {
+            const n = agencyProfiles(allProfiles.filter(p => p.role === 'creator')).length;
+            text = `${n} creador${n !== 1 ? 'es' : ''} con cuenta${agLabel}`;
+        } else if (tState.type === 'all-managers') {
+            const n = agencyProfiles(managers).length;
+            text = `${n} manager${n !== 1 ? 's' : ''}${agLabel}`;
+        } else if (tState.type === 'all-admins') {
+            text = `${admins.length} administrador${admins.length !== 1 ? 'es' : ''}`;
+        } else if (tState.type === 'individual') {
             const n = tState.selectedIds.length;
             text = n ? `${n} creador${n !== 1 ? 'es' : ''} seleccionado${n !== 1 ? 's' : ''}` : 'Sin creadores seleccionados';
         } else if (tState.type === 'by-manager' && tState.managerId) {
-            const mgr = managers.find(m => m.id === tState.managerId);
-            const cnt = creators.filter(c => c.manager_id === tState.managerId).length;
+            const mgr = agencyProfiles(managers).find(m => m.id === tState.managerId);
+            const cnt = agencyProfiles(creators).filter(c => c.manager_id === tState.managerId).length;
             text = `${cnt} creador${cnt !== 1 ? 'es' : ''} de ${esc(mgr?.display_name || mgr?.tiktok_username || 'este manager')}`;
         } else if (tState.type === 'segment' && tState.segment) {
             const key = SEG_KEY[tState.segment] || tState.segment;
             const total = (segments[key] || []).length;
-            const resolved = resolvedCounts[key] ?? 0;
-            text = `${resolved} con cuenta (${total} en el segmento total)`;
+            const resolved = resolveSegmentToIds(segments[key] || [], agencyProfiles(allProfiles)).length;
+            text = `${resolved} con cuenta (${total} en segmento total)${agLabel}`;
         }
         targetCount.textContent = text ? `→ ${text}` : '';
     };
@@ -304,12 +344,13 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
     };
 
     const renderSubManager = () => {
-        if (!managers.length) {
-            subEl.innerHTML = `<p style="font-size:0.78rem;color:var(--text-muted);">No hay managers registrados.</p>`;
+        const filteredMgrs = agencyProfiles(managers);
+        if (!filteredMgrs.length) {
+            subEl.innerHTML = `<p style="font-size:0.78rem;color:var(--text-muted);">No hay managers${tState.agency ? ' en esta agencia' : ''} registrados.</p>`;
             return;
         }
-        subEl.innerHTML = managers.map(m => {
-            const cnt    = creators.filter(c => c.manager_id === m.id).length;
+        subEl.innerHTML = filteredMgrs.map(m => {
+            const cnt    = agencyProfiles(creators).filter(c => c.manager_id === m.id).length;
             const active = tState.managerId === m.id;
             return `<button class="mgr-pill" data-mid="${m.id}"
                 style="${pillStyle(active)}margin:0 0.4rem 0.4rem 0;">
@@ -366,7 +407,7 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
 
     pillContainer.querySelectorAll('.tpill').forEach(btn => {
         btn.addEventListener('click', () => {
-            tState = { type: btn.dataset.t, selectedIds: [], managerId: null, segment: null };
+            tState = { type: btn.dataset.t, selectedIds: [], managerId: null, segment: null, agency: tState.agency };
             renderSub();
         });
     });
@@ -439,23 +480,39 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
         }
 
         let finalTarget;
-        if (tState.type === 'all-creators')        finalTarget = { type: 'role', value: 'creator' };
-        else if (tState.type === 'all-managers')   finalTarget = { type: 'role', value: 'manager' };
-        else if (tState.type === 'all-admins')     finalTarget = { type: 'role', value: 'admin' };
-        else if (tState.type === 'individual') {
+        if (tState.type === 'all-creators') {
+            if (tState.agency) {
+                // Con agencia: resuelve a lista de IDs filtrada
+                const ids = agencyProfiles(allProfiles.filter(p => p.role === 'creator')).map(p => p.id).filter(Boolean);
+                if (!ids.length) return appState.showToast('No hay creadores en esta agencia con cuenta registrada', 'warning');
+                finalTarget = { type: 'users', value: ids };
+            } else {
+                finalTarget = { type: 'role', value: 'creator' };
+            }
+        } else if (tState.type === 'all-managers') {
+            if (tState.agency) {
+                const ids = agencyProfiles(managers).map(m => m.id).filter(Boolean);
+                if (!ids.length) return appState.showToast('No hay managers en esta agencia', 'warning');
+                finalTarget = { type: 'users', value: ids };
+            } else {
+                finalTarget = { type: 'role', value: 'manager' };
+            }
+        } else if (tState.type === 'all-admins') {
+            finalTarget = { type: 'role', value: 'admin' };
+        } else if (tState.type === 'individual') {
             if (!tState.selectedIds.length) return appState.showToast('Seleccioná al menos un creador', 'warning');
             finalTarget = tState.selectedIds.length === 1
                 ? { type: 'user',  value: tState.selectedIds[0] }
                 : { type: 'users', value: tState.selectedIds };
         } else if (tState.type === 'by-manager') {
             if (!tState.managerId) return appState.showToast('Seleccioná un manager', 'warning');
-            const ids = creators.filter(c => c.manager_id === tState.managerId).map(c => c.id).filter(Boolean);
+            const ids = agencyProfiles(creators).filter(c => c.manager_id === tState.managerId).map(c => c.id).filter(Boolean);
             if (!ids.length) return appState.showToast('Este manager no tiene creadores registrados', 'warning');
             finalTarget = { type: 'users', value: ids };
         } else if (tState.type === 'segment') {
             if (!tState.segment) return appState.showToast('Seleccioná un segmento', 'warning');
             const key = SEG_KEY[tState.segment] || tState.segment;
-            const ids = resolveSegmentToIds(segments[key] || [], allProfiles);
+            const ids = resolveSegmentToIds(segments[key] || [], agencyProfiles(allProfiles));
             if (!ids.length) return appState.showToast('Ningún creador de este segmento tiene cuenta registrada', 'warning');
             finalTarget = { type: 'users', value: ids };
         } else {
@@ -473,7 +530,8 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
             bodyInput.value  = '';
             destSelect.value = '';
             urlWrap.style.display = 'none';
-            tState = { type: 'all-creators', selectedIds: [], managerId: null, segment: null };
+            tState = { type: 'all-creators', selectedIds: [], managerId: null, segment: null, agency: tState.agency };
+            renderAgencyRow();
             renderSub();
             loadHistorial(container);
         } catch (e) {

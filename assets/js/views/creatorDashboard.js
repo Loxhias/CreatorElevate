@@ -2,6 +2,7 @@ import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements } from '../config.js';
 import { push, metrics } from '../api.js';
+import { t, getLang } from '../i18n.js';
 
 
 function getIdx(d, tiers) {
@@ -609,38 +610,38 @@ function renderDailyTracker(placeholder, uid, mode) {
 
     placeholder.innerHTML = `
         <div style="margin-top:1.25rem;padding-top:1.1rem;border-top:1px solid var(--glass-border);">
-            <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.85rem;text-transform:uppercase;letter-spacing:0.07em;">📅 Seguimiento diario</div>
+            <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.85rem;text-transform:uppercase;letter-spacing:0.07em;">📅 ${t('daily.section')}</div>
 
             <!-- Today card -->
             <div class="glass-panel" style="padding:1rem 1.1rem;margin-bottom:0.75rem;${todayE?.streamed ? 'border-color:rgba(0,217,166,0.3);background:rgba(0,217,166,0.04);' : ''}">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
-                    <span style="font-size:0.82rem;font-weight:700;">Hoy — ${dayFmt(today)}</span>
-                    ${todayE ? `<span style="font-size:0.63rem;background:rgba(0,217,166,0.15);color:var(--accent);border-radius:999px;padding:0.15rem 0.55rem;font-weight:700;">✓ Guardado</span>` : ''}
+                    <span style="font-size:0.82rem;font-weight:700;">${t('daily.today')} — ${dayFmt(today)}</span>
+                    ${todayE ? `<span style="font-size:0.63rem;background:rgba(0,217,166,0.15);color:var(--accent);border-radius:999px;padding:0.15rem 0.55rem;font-weight:700;">✓ ${t('daily.saved')}</span>` : ''}
                 </div>
 
                 <label style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.75rem;cursor:pointer;">
                     <input type="checkbox" id="dt-streamed" ${todayE?.streamed ? 'checked' : ''}
                         style="width:17px;height:17px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">
-                    <span style="font-size:0.82rem;">Transmití hoy <span style="color:var(--text-muted);font-size:0.72rem;">(cuenta como día válido)</span></span>
+                    <span style="font-size:0.82rem;">${t('daily.streamed')} <span style="color:var(--text-muted);font-size:0.72rem;">${t('daily.valid_note')}</span></span>
                 </label>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.75rem;">
                     <div>
-                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">💎 Diamantes de hoy</label>
+                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">💎 ${t('daily.diamonds')}</label>
                         <input id="dt-diamonds" type="number" min="0" placeholder="ej: 1200"
                             value="${todayE?.diamonds || ''}"
                             class="input-control" style="padding:0.45rem 0.6rem;font-size:0.82rem;">
                         <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitDiam ? 'var(--accent)' : 'var(--text-muted)'};">
-                            Meta: ${fmt(diamGoal)} 💎${hitDiam ? ' ✅' : ''}
+                            ${t('daily.goal')}: ${fmt(diamGoal)} 💎${hitDiam ? ' ✅' : ''}
                         </div>
                     </div>
                     <div>
-                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">⏱ Tiempo live (HH:MM)</label>
+                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">⏱ ${t('daily.time')}</label>
                         <input id="dt-time" type="text" placeholder="ej: 1:30"
                             value="${todayE?.minutes ? minsToHM(todayE.minutes) : ''}"
                             class="input-control" style="padding:0.45rem 0.6rem;font-size:0.82rem;letter-spacing:0.05em;">
                         <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitTime ? 'var(--accent)' : 'var(--text-muted)'};">
-                            Meta: ${minsToHM(minsGoal)}${hitTime ? ' ✅' : ''}
+                            ${t('daily.goal')}: ${minsToHM(minsGoal)}${hitTime ? ' ✅' : ''}
                         </div>
                     </div>
                 </div>
@@ -649,11 +650,11 @@ function renderDailyTracker(placeholder, uid, mode) {
 
                 <div style="display:flex;gap:0.5rem;">
                     <button id="dt-save" class="btn btn-primary" style="flex:1;padding:0.5rem 0.6rem;font-size:0.78rem;">
-                        ${todayE ? '✏️ Actualizar hoy' : '+ Guardar día'}
+                        ${todayE ? t('daily.update_day') : t('daily.save_day')}
                     </button>
                     ${totals.validDays > 0 ? `
                     <button id="dt-sync" class="btn" style="padding:0.5rem 0.75rem;font-size:0.72rem;background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);color:var(--primary-light);white-space:nowrap;">
-                        📤 Cargar al perfil
+                        ${t('daily.sync')}
                     </button>` : ''}
                 </div>
             </div>
@@ -663,7 +664,7 @@ function renderDailyTracker(placeholder, uid, mode) {
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.75rem;">
                 <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
                     <div style="font-size:1.1rem;font-weight:800;">${totals.validDays}</div>
-                    <div style="font-size:0.6rem;color:var(--text-muted);">días válidos</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">${t('daily.valid_days')}</div>
                 </div>
                 <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
                     <div style="font-size:1rem;font-weight:800;color:var(--primary-light);">${fmt(totals.diamonds)}</div>
@@ -671,13 +672,13 @@ function renderDailyTracker(placeholder, uid, mode) {
                 </div>
                 <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
                     <div style="font-size:1.1rem;font-weight:800;color:var(--accent);">${minsToHM(totals.minutes)}</div>
-                    <div style="font-size:0.6rem;color:var(--text-muted);">en live</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">${t('daily.live')}</div>
                 </div>
             </div>` : ''}
 
             <!-- Log of past days -->
             ${logDays.length > 0 ? `
-            <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">Días anteriores</div>
+            <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">${t('daily.past')}</div>
             <div style="display:flex;flex-direction:column;gap:0.3rem;">
                 ${logDays.map(([d, e]) => `
                     <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.02);border:1px solid var(--glass-border);border-radius:var(--radius-sm);">
@@ -705,7 +706,7 @@ function renderDailyTracker(placeholder, uid, mode) {
         if (timeRaw) {
             const parsed = parseHHMM(timeRaw);
             if (parsed === null) {
-                errDiv.textContent = 'Formato inválido. Usá HH:MM (ej: 1:30).';
+                errDiv.textContent = t('daily.time_err');
                 errDiv.style.display = 'block';
                 return;
             }
@@ -718,16 +719,16 @@ function renderDailyTracker(placeholder, uid, mode) {
     });
 
     placeholder.querySelector('#dt-sync')?.addEventListener('click', async () => {
-        const t      = dtTotals(entries);
+        const totals  = dtTotals(entries);
         const syncBtn = placeholder.querySelector('#dt-sync');
         syncBtn.disabled = true;
-        syncBtn.textContent = 'Guardando...';
+        syncBtn.textContent = t('daily.syncing');
         try {
-            await metrics.submitSelf(t.validDays, t.minutes / 60, t.diamonds);
+            await metrics.submitSelf(totals.validDays, totals.minutes / 60, totals.diamonds);
             await store.refreshMetrics();
-            syncBtn.textContent = '✓ Guardado';
+            syncBtn.textContent = t('daily.synced');
             syncBtn.style.color = 'var(--accent)';
-            setTimeout(() => { syncBtn.disabled = false; syncBtn.textContent = '📤 Cargar al perfil'; syncBtn.style.color = ''; }, 2500);
+            setTimeout(() => { syncBtn.disabled = false; syncBtn.textContent = t('daily.sync'); syncBtn.style.color = ''; }, 2500);
         } catch (err) {
             syncBtn.disabled = false;
             syncBtn.textContent = '📤 Cargar al perfil';
@@ -969,7 +970,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const DIAMONDS_PER_USD = 200;
     const estimatedEarnings = (me.diamonds / DIAMONDS_PER_USD).toFixed(2);
     const now = new Date();
-    const monthName = now.toLocaleString('es', { month: 'long' });
+    const monthName = now.toLocaleString(getLang() === 'en' ? 'en' : 'es', { month: 'long' });
     const year = now.getFullYear();
 
     // Inject shell with tab nav
@@ -1014,13 +1015,13 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
         <!-- Tab Nav -->
         <div id="creator-tabs" style="display:flex;gap:0.35rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-            <button class="tab-btn active" data-tab="metrics"  style="flex-shrink:0;white-space:nowrap;">📊 Métricas</button>
-            <button class="tab-btn"        data-tab="goals"    style="flex-shrink:0;white-space:nowrap;">🎯 Objetivos</button>
-            <button class="tab-btn"        data-tab="benefits" style="flex-shrink:0;white-space:nowrap;">🎁 Beneficios</button>
-            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex-shrink:0;white-space:nowrap;">🚀 Misiones</button>` : ''}
-            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex-shrink:0;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
-            <button class="tab-btn" data-tab="inbox" style="flex-shrink:0;white-space:nowrap;">🔔 Mensajes</button>
-            ${!isAuditing ? `<button class="tab-btn" data-tab="update" style="flex-shrink:0;white-space:nowrap;">✏️ Actualizar</button>` : ''}
+            <button class="tab-btn active" data-tab="metrics"  style="flex-shrink:0;white-space:nowrap;">${t('tab.metrics')}</button>
+            <button class="tab-btn"        data-tab="goals"    style="flex-shrink:0;white-space:nowrap;">${t('tab.goals')}</button>
+            <button class="tab-btn"        data-tab="benefits" style="flex-shrink:0;white-space:nowrap;">${t('tab.benefits')}</button>
+            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex-shrink:0;white-space:nowrap;">${t('tab.missions')}</button>` : ''}
+            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex-shrink:0;white-space:nowrap;">${t('tab.challenge')}</button>` : ''}
+            <button class="tab-btn" data-tab="inbox" style="flex-shrink:0;white-space:nowrap;">${t('tab.inbox')}</button>
+            ${!isAuditing ? `<button class="tab-btn" data-tab="update" style="flex-shrink:0;white-space:nowrap;">${t('tab.update')}</button>` : ''}
         </div>
 
         <!-- Tab Content -->
@@ -1083,7 +1084,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
                 localStorage.setItem(inboxLastSeenKey, new Date().toISOString());
                 // Quitar badge del botón
                 const inboxBtn = container.querySelector('[data-tab="inbox"]');
-                if (inboxBtn) inboxBtn.innerHTML = '🔔 Mensajes';
+                if (inboxBtn) inboxBtn.innerHTML = t('tab.inbox');
                 tabContent.innerHTML = `<div class="animate-fade-in">${renderInbox(notifications, lastSeen)}</div>`;
             }).catch(() => {
                 tabContent.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--danger);font-size:0.85rem;">Error al cargar los mensajes.</div>';
@@ -1126,7 +1127,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             const unread = notifications.filter(n => n.sent_at > lastSeen).length;
             if (unread > 0) {
                 const inboxBtn = container.querySelector('[data-tab="inbox"]');
-                if (inboxBtn) inboxBtn.innerHTML = `🔔 Mensajes <span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;margin-left:0.2rem;vertical-align:middle;">${unread}</span>`;
+                if (inboxBtn) inboxBtn.innerHTML = `${t('tab.inbox')} <span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;margin-left:0.2rem;vertical-align:middle;">${unread}</span>`;
             }
         }).catch(() => {});
     }
@@ -1167,28 +1168,28 @@ function renderSubmitMetricsView(container, prefill = null) {
 
     container.innerHTML = `
         <div class="glass-panel animate-fadeIn" style="max-width:480px;margin:0 auto;">
-            <h2 style="margin-bottom:0.4rem;">📊 Mis métricas del mes</h2>
+            <h2 style="margin-bottom:0.4rem;">📊 ${t('metrics.title')}</h2>
             <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
-                Cargá tus métricas de TikTok del mes actual. Podés actualizar estos valores cuando quieras hasta el cierre del período.
+                ${t('metrics.desc')}
             </p>
             <div style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;">
                 <div class="input-group">
-                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">DÍAS VÁLIDOS (0–31)</label>
-                    <input id="sm-days" type="number" class="input-control" min="0" max="31" placeholder="ej: 18" value="${prefillDays}">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.valid_days')}</label>
+                    <input id="sm-days" type="number" class="input-control" min="0" max="31" placeholder="${t('metrics.ph_days')}" value="${prefillDays}">
                 </div>
                 <div class="input-group">
-                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">HORAS DE LIVE (HH:MM o HH:MM:SS)</label>
-                    <input id="sm-hours" type="text" class="input-control" placeholder="ej: 42:30" value="${prefillHours}"
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.live_hours')}</label>
+                    <input id="sm-hours" type="text" class="input-control" placeholder="${t('metrics.ph_hours')}" value="${prefillHours}"
                         inputmode="numeric" pattern="[0-9]+:[0-5][0-9](:[0-5][0-9])?"
                         style="font-variant-numeric:tabular-nums;letter-spacing:0.05em;">
                 </div>
                 <div class="input-group">
-                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">DIAMANTES TOTALES DEL MES</label>
-                    <input id="sm-diamonds" type="number" class="input-control" min="0" placeholder="ej: 125000" value="${prefillDiamonds}">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.diamonds')}</label>
+                    <input id="sm-diamonds" type="number" class="input-control" min="0" placeholder="${t('metrics.ph_diamonds')}" value="${prefillDiamonds}">
                 </div>
             </div>
             <div id="sm-error" style="margin-bottom:0.75rem;color:var(--danger);font-size:0.8rem;display:none;"></div>
-            <button id="sm-submit" class="btn btn-primary" style="width:100%;">Guardar métricas</button>
+            <button id="sm-submit" class="btn btn-primary" style="width:100%;">${t('metrics.save')}</button>
         </div>
     `;
 
@@ -1203,23 +1204,23 @@ function renderSubmitMetricsView(container, prefill = null) {
 
         errDiv.style.display = 'none';
         if (isNaN(days) || days < 0 || days > 31) {
-            errDiv.textContent = 'Días válidos debe estar entre 0 y 31.';
+            errDiv.textContent = t('metrics.err_days');
             errDiv.style.display = 'block';
             return;
         }
         if (hours === null) {
-            errDiv.textContent = 'Formato de horas inválido. Usá HH:MM o HH:MM:SS (ej: 42:30).';
+            errDiv.textContent = t('metrics.err_hours');
             errDiv.style.display = 'block';
             return;
         }
         if (isNaN(diamonds) || diamonds < 0) {
-            errDiv.textContent = 'Los diamantes no pueden ser negativos.';
+            errDiv.textContent = t('metrics.err_diamonds');
             errDiv.style.display = 'block';
             return;
         }
 
         btn.disabled = true;
-        btn.textContent = 'Guardando...';
+        btn.textContent = t('metrics.saving');
 
         try {
             await metrics.submitSelf(days, hours, diamonds);
@@ -1227,10 +1228,10 @@ function renderSubmitMetricsView(container, prefill = null) {
             const mainContainer = container.closest('#dashboard-content') || container;
             renderCreatorDashboard(mainContainer);
         } catch (err) {
-            errDiv.textContent = err.message || 'Error al guardar. Intenta de nuevo.';
+            errDiv.textContent = err.message || t('metrics.err_generic');
             errDiv.style.display = 'block';
             btn.disabled = false;
-            btn.textContent = 'Guardar métricas';
+            btn.textContent = t('metrics.save');
         }
     };
 }
@@ -1248,18 +1249,18 @@ function renderInbox(notifications, lastSeen) {
         return `
             <div class="glass-panel" style="padding:3rem 2rem;text-align:center;">
                 <div style="font-size:2.5rem;margin-bottom:1rem;">🔔</div>
-                <h3 style="margin-bottom:0.5rem;">Sin mensajes</h3>
-                <p style="font-size:0.8rem;color:var(--text-muted);">Aquí verás los mensajes que te envíe tu equipo de Interactik.</p>
+                <h3 style="margin-bottom:0.5rem;">${t('inbox.empty_title')}</h3>
+                <p style="font-size:0.8rem;color:var(--text-muted);">${t('inbox.empty_sub')}</p>
             </div>`;
     }
 
     const timeAgo = (isoStr) => {
         const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
-        if (diff < 60)    return 'hace un momento';
-        if (diff < 3600)  return `hace ${Math.floor(diff/60)} min`;
-        if (diff < 86400) return `hace ${Math.floor(diff/3600)}h`;
+        if (diff < 60)    return t('inbox.just_now');
+        if (diff < 3600)  return t('inbox.min_ago', { n: Math.floor(diff/60) });
+        if (diff < 86400) return t('inbox.h_ago', { n: Math.floor(diff/3600) });
         const d = new Date(isoStr);
-        return d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+        return d.toLocaleDateString(getLang() === 'en' ? 'en' : 'es', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     const items = notifications.map(n => {
@@ -1287,7 +1288,7 @@ function renderInbox(notifications, lastSeen) {
                         <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;flex-shrink:0;">${timeAgo(n.sent_at)}</span>
                     </div>
                     <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${n.body}</p>
-                    ${n.url ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">Ver más →</a>` : ''}
+                    ${n.url ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">${t('inbox.view_more')}</a>` : ''}
                 </div>
             </div>`;
     }).join('');
@@ -1295,8 +1296,8 @@ function renderInbox(notifications, lastSeen) {
     return `
         <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-                <h3 style="margin:0;font-size:0.95rem;">Mensajes del equipo</h3>
-                <span style="font-size:0.72rem;color:var(--text-muted);">${notifications.length} mensaje${notifications.length !== 1 ? 's' : ''}</span>
+                <h3 style="margin:0;font-size:0.95rem;">${t('inbox.section')}</h3>
+                <span style="font-size:0.72rem;color:var(--text-muted);">${notifications.length} ${getLang() === 'en' ? `message${notifications.length !== 1 ? 's' : ''}` : `mensaje${notifications.length !== 1 ? 's' : ''}`}</span>
             </div>
             ${items}
         </div>`;

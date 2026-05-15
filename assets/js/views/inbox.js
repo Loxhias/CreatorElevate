@@ -1,6 +1,7 @@
 import { store } from '../store.js';
 import { push } from '../api.js';
 import { appState } from '../main.js';
+import { t, getLang } from '../i18n.js';
 
 const LAST_SEEN_KEY = (id) => `inbox_last_seen_${id || 'anon'}`;
 
@@ -28,7 +29,7 @@ export async function renderInboxView(container) {
         renderContent(container, notifications, lastSeen);
     } catch (err) {
         container.innerHTML = `<div class="glass-panel" style="padding:2rem;color:var(--danger);">
-            Error al cargar mensajes: ${err.message}
+            ${t('inbox.error')}: ${err.message}
         </div>`;
     }
 }
@@ -39,10 +40,10 @@ function renderContent(container, notifications, lastSeen) {
     container.innerHTML = `
         <div class="animate-fadeIn">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.8rem;">
-                <h1 style="margin:0;font-size:1.5rem;">🔔 Mensajes</h1>
+                <h1 style="margin:0;font-size:1.5rem;">${t('inbox.title')}</h1>
                 ${unread > 0
-                    ? `<span style="background:var(--primary);color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:0.2rem 0.7rem;">${unread} nuevo${unread !== 1 ? 's' : ''}</span>`
-                    : `<span style="font-size:0.75rem;color:var(--text-muted);">${notifications.length} mensaje${notifications.length !== 1 ? 's' : ''}</span>`}
+                    ? `<span style="background:var(--primary);color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:0.2rem 0.7rem;">${getLang() === 'en' ? `${unread} new` : `${unread} nuevo${unread !== 1 ? 's' : ''}`}</span>`
+                    : `<span style="font-size:0.75rem;color:var(--text-muted);">${getLang() === 'en' ? `${notifications.length} message${notifications.length !== 1 ? 's' : ''}` : `${notifications.length} mensaje${notifications.length !== 1 ? 's' : ''}`}</span>`}
             </div>
             ${renderList(notifications, lastSeen)}
         </div>`;
@@ -67,24 +68,24 @@ function renderList(notifications, lastSeen) {
         return `
             <div class="glass-panel" style="padding:3rem 2rem;text-align:center;">
                 <div style="font-size:2.5rem;margin-bottom:1rem;">🔔</div>
-                <h3 style="margin-bottom:0.5rem;">Sin mensajes</h3>
-                <p style="font-size:0.8rem;color:var(--text-muted);">Aquí verás los mensajes que te envíe el equipo de Interactik.</p>
+                <h3 style="margin-bottom:0.5rem;">${t('inbox.empty_title')}</h3>
+                <p style="font-size:0.8rem;color:var(--text-muted);">${t('inbox.empty_sub')}</p>
             </div>`;
     }
 
     const timeAgo = (iso) => {
         const s = Math.floor((Date.now() - new Date(iso)) / 1000);
-        if (s < 60)    return 'hace un momento';
-        if (s < 3600)  return `hace ${Math.floor(s / 60)} min`;
-        if (s < 86400) return `hace ${Math.floor(s / 3600)}h`;
-        return new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
+        if (s < 60)    return t('inbox.just_now');
+        if (s < 3600)  return t('inbox.min_ago', { n: Math.floor(s / 60) });
+        if (s < 86400) return t('inbox.h_ago', { n: Math.floor(s / 3600) });
+        return new Date(iso).toLocaleDateString(getLang() === 'en' ? 'en' : 'es', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     const actionHtml = (url) => {
         if (!url) return '';
         if (url.startsWith('goto:')) {
             const route = url.slice(5);
-            const label = GOTO_LABELS[route] || 'Ir a la sección';
+            const label = GOTO_LABELS[route] || t('inbox.go_section');
             return `<button data-goto="${route}"
                 style="font-size:0.72rem;color:var(--primary);background:none;border:none;
                        padding:0;cursor:pointer;font-weight:600;text-align:left;">
@@ -93,7 +94,7 @@ function renderList(notifications, lastSeen) {
         }
         return `<a href="${url}" target="_blank" rel="noopener noreferrer"
             style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">
-            Ver más →
+            ${t('inbox.view_more')}
         </a>`;
     };
 
