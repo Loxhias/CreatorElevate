@@ -30,7 +30,7 @@ const T = {
         'metrics.title':       'Mis métricas del mes',
         'metrics.desc':        'Cargá tus métricas de TikTok del mes actual. Podés actualizar estos valores cuando quieras hasta el cierre del período.',
         'metrics.valid_days':  'DÍAS VÁLIDOS (0–31)',
-        'metrics.live_hours':  'HORAS DE LIVE (HH:MM o HH:MM:SS)',
+        'metrics.live_hours':  'HORAS DE LIVE',
         'metrics.diamonds':    'DIAMANTES TOTALES DEL MES',
         'metrics.save':        'Guardar métricas',
         'metrics.saving':      'Guardando...',
@@ -38,7 +38,7 @@ const T = {
         'metrics.ph_hours':    'ej: 42:30',
         'metrics.ph_diamonds': 'ej: 125000',
         'metrics.err_days':    'Días válidos debe estar entre 0 y 31.',
-        'metrics.err_hours':   'Formato de horas inválido. Usá HH:MM o HH:MM:SS (ej: 42:30).',
+        'metrics.err_hours':   'Los minutos deben estar entre 0 y 59.',
         'metrics.err_diamonds':'Los diamantes no pueden ser negativos.',
         'metrics.err_generic': 'Error al guardar. Intenta de nuevo.',
 
@@ -49,7 +49,7 @@ const T = {
         'daily.streamed':   'Transmití hoy',
         'daily.valid_note': '(cuenta como día válido)',
         'daily.diamonds':   'Diamantes de hoy',
-        'daily.time':       'Tiempo live (HH:MM)',
+        'daily.time':       'Tiempo live',
         'daily.goal':       'Meta',
         'daily.save_day':   '+ Guardar día',
         'daily.update_day': '✏️ Actualizar hoy',
@@ -59,7 +59,7 @@ const T = {
         'daily.valid_days': 'días válidos',
         'daily.live':       'en live',
         'daily.past':       'Días anteriores',
-        'daily.time_err':   'Formato inválido. Usá HH:MM (ej: 1:30).',
+        'daily.time_err':   'Los minutos deben estar entre 0 y 59.',
 
         // Inbox
         'inbox.title':       '🔔 Mensajes',
@@ -101,7 +101,7 @@ const T = {
         'metrics.title':       'My Monthly Metrics',
         'metrics.desc':        'Enter your TikTok metrics for the current month. You can update these values any time before the period closes.',
         'metrics.valid_days':  'VALID DAYS (0–31)',
-        'metrics.live_hours':  'LIVE HOURS (HH:MM or HH:MM:SS)',
+        'metrics.live_hours':  'LIVE HOURS',
         'metrics.diamonds':    'TOTAL MONTHLY DIAMONDS',
         'metrics.save':        'Save metrics',
         'metrics.saving':      'Saving...',
@@ -109,7 +109,7 @@ const T = {
         'metrics.ph_hours':    'e.g.: 42:30',
         'metrics.ph_diamonds': 'e.g.: 125000',
         'metrics.err_days':    'Valid days must be between 0 and 31.',
-        'metrics.err_hours':   'Invalid format. Use HH:MM or HH:MM:SS (e.g.: 42:30).',
+        'metrics.err_hours':   'Minutes must be between 0 and 59.',
         'metrics.err_diamonds':'Diamonds cannot be negative.',
         'metrics.err_generic': 'Error saving. Please try again.',
 
@@ -120,7 +120,7 @@ const T = {
         'daily.streamed':   'I streamed today',
         'daily.valid_note': '(counts as a valid day)',
         'daily.diamonds':   "Today's diamonds",
-        'daily.time':       'Live time (HH:MM)',
+        'daily.time':       'Live time',
         'daily.goal':       'Goal',
         'daily.save_day':   '+ Save day',
         'daily.update_day': '✏️ Update today',
@@ -130,7 +130,7 @@ const T = {
         'daily.valid_days': 'valid days',
         'daily.live':       'live time',
         'daily.past':       'Previous days',
-        'daily.time_err':   'Invalid format. Use HH:MM (e.g.: 1:30).',
+        'daily.time_err':   'Minutes must be between 0 and 59.',
 
         // Inbox
         'inbox.title':       '🔔 Messages',

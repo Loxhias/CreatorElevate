@@ -637,9 +637,15 @@ function renderDailyTracker(placeholder, uid, mode) {
                     </div>
                     <div>
                         <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">⏱ ${t('daily.time')}</label>
-                        <input id="dt-time" type="text" placeholder="ej: 1:30"
-                            value="${todayE?.minutes ? minsToHM(todayE.minutes) : ''}"
-                            class="input-control" style="padding:0.45rem 0.6rem;font-size:0.82rem;letter-spacing:0.05em;">
+                        <div style="display:flex;align-items:center;gap:0.3rem;">
+                            <input id="dt-time-h" type="number" min="0" max="99" placeholder="0"
+                                value="${todayE?.minutes ? Math.floor(todayE.minutes / 60) : ''}"
+                                class="input-control" inputmode="numeric" style="width:2.9rem;text-align:center;padding:0.45rem 0.3rem;font-size:0.82rem;">
+                            <span style="font-size:1rem;font-weight:800;color:var(--text-secondary);flex-shrink:0;">:</span>
+                            <input id="dt-time-m" type="number" min="0" max="59" placeholder="00"
+                                value="${todayE?.minutes ? (todayE.minutes % 60) : ''}"
+                                class="input-control" inputmode="numeric" style="width:2.9rem;text-align:center;padding:0.45rem 0.3rem;font-size:0.82rem;">
+                        </div>
                         <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitTime ? 'var(--accent)' : 'var(--text-muted)'};">
                             ${t('daily.goal')}: ${minsToHM(minsGoal)}${hitTime ? ' ✅' : ''}
                         </div>
@@ -700,18 +706,15 @@ function renderDailyTracker(placeholder, uid, mode) {
     placeholder.querySelector('#dt-save')?.addEventListener('click', () => {
         const streamed = placeholder.querySelector('#dt-streamed').checked;
         const diamonds = Number(placeholder.querySelector('#dt-diamonds').value) || 0;
-        const timeRaw  = placeholder.querySelector('#dt-time').value.trim();
+        const dtH      = Number(placeholder.querySelector('#dt-time-h').value) || 0;
+        const dtM      = Number(placeholder.querySelector('#dt-time-m').value) || 0;
 
-        let minutes = 0;
-        if (timeRaw) {
-            const parsed = parseHHMM(timeRaw);
-            if (parsed === null) {
-                errDiv.textContent = t('daily.time_err');
-                errDiv.style.display = 'block';
-                return;
-            }
-            minutes = Math.round(parsed * 60);
+        if (dtM > 59) {
+            errDiv.textContent = t('daily.time_err');
+            errDiv.style.display = 'block';
+            return;
         }
+        const minutes = dtH * 60 + dtM;
         errDiv.style.display = 'none';
         entries[today] = { streamed, diamonds, minutes };
         localStorage.setItem(key, JSON.stringify(entries));
@@ -1162,7 +1165,8 @@ function parseHHMM(val) {
 
 function renderSubmitMetricsView(container, prefill = null) {
     const liveSecs        = Number(prefill?.live_seconds || 0);
-    const prefillHours    = prefill && liveSecs > 0 ? secsToHHMM(liveSecs) : '';
+    const prefillH        = prefill && liveSecs > 0 ? Math.floor(liveSecs / 3600) : '';
+    const prefillM        = prefill && liveSecs > 0 ? Math.floor((liveSecs % 3600) / 60) : '';
     const prefillDays     = prefill ? (prefill.validDays ?? '') : '';
     const prefillDiamonds = prefill ? (prefill.diamonds ?? '') : '';
 
@@ -1179,9 +1183,14 @@ function renderSubmitMetricsView(container, prefill = null) {
                 </div>
                 <div class="input-group">
                     <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.live_hours')}</label>
-                    <input id="sm-hours" type="text" class="input-control" placeholder="${t('metrics.ph_hours')}" value="${prefillHours}"
-                        inputmode="numeric" pattern="[0-9]+:[0-5][0-9](:[0-5][0-9])?"
-                        style="font-variant-numeric:tabular-nums;letter-spacing:0.05em;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <input id="sm-hours-h" type="number" class="input-control" min="0" max="999" placeholder="0" value="${prefillH}"
+                            inputmode="numeric" style="width:5.5rem;text-align:center;padding:0.5rem 0.4rem;">
+                        <span style="font-size:1.2rem;font-weight:800;color:var(--text-secondary);flex-shrink:0;line-height:1;">:</span>
+                        <input id="sm-hours-m" type="number" class="input-control" min="0" max="59" placeholder="00" value="${prefillM}"
+                            inputmode="numeric" style="width:5rem;text-align:center;padding:0.5rem 0.4rem;">
+                        <span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">h &nbsp;:&nbsp; min</span>
+                    </div>
                 </div>
                 <div class="input-group">
                     <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.diamonds')}</label>
@@ -1198,8 +1207,9 @@ function renderSubmitMetricsView(container, prefill = null) {
 
     btn.onclick = async () => {
         const days     = Number(container.querySelector('#sm-days').value);
-        const hoursRaw = container.querySelector('#sm-hours').value;
-        const hours    = parseHHMM(hoursRaw);
+        const hoursH   = Number(container.querySelector('#sm-hours-h').value) || 0;
+        const hoursM   = Number(container.querySelector('#sm-hours-m').value) || 0;
+        const hours    = hoursH + hoursM / 60;
         const diamonds = Number(container.querySelector('#sm-diamonds').value);
 
         errDiv.style.display = 'none';
@@ -1208,7 +1218,7 @@ function renderSubmitMetricsView(container, prefill = null) {
             errDiv.style.display = 'block';
             return;
         }
-        if (hours === null) {
+        if (hoursM > 59) {
             errDiv.textContent = t('metrics.err_hours');
             errDiv.style.display = 'block';
             return;
