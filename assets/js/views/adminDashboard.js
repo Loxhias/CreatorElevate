@@ -324,7 +324,12 @@ function renderAuditView(container, managers, creators, metricsData) {
     container.querySelectorAll('.v-m-dash').forEach(btn => {
         btn.onclick = () => {
             container.innerHTML = skelRows(3);
-            import('./managerDashboard.js').then(mod => mod.renderManagerDashboard(container, btn.dataset.id));
+            import('./managerDashboard.js')
+                .then(mod => mod.renderManagerDashboard(container, btn.dataset.id))
+                .catch(err => {
+                    console.error('[import] managerDashboard.js falló:', err);
+                    container.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando dashboard: ${err.message}</p>`;
+                });
         };
     });
     container.querySelectorAll('.v-m-group').forEach(btn => {
@@ -798,7 +803,12 @@ export async function renderCreatorsList(container) {
         if (btn) {
             const username = btn.dataset.username;
             container.innerHTML = skelCreator();
-            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+            import('./creatorDashboard.js')
+                .then(m => m.renderCreatorDashboard(container, username))
+                .catch(err => {
+                    console.error('[import] creatorDashboard.js falló:', err);
+                    container.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando dashboard: ${err.message}</p>`;
+                });
         }
     });
 }

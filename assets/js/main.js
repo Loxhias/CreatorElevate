@@ -80,18 +80,41 @@ async function safeRender(fn, container) {
     try {
         await fn(container);
     } catch (err) {
-        console.error('[safeRender]', err);
+        console.error('[safeRender] error en', fn?.name || '?', err);
         container.innerHTML = `
             <div style="padding:3rem; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1.2rem;">
                 <div style="font-size:2rem;">⚠️</div>
-                <p style="color:var(--danger); font-weight:700;">No se pudo conectar</p>
+                <p style="color:var(--danger); font-weight:700;">No se pudo cargar este panel</p>
                 <p style="color:var(--text-secondary); font-size:0.85rem; max-width:300px;">
                     ${err?.message?.includes('abort') || err?.message?.includes('connect')
                         ? 'Sin conexión con el servidor. Verifica tu internet e inténtalo de nuevo.'
                         : 'Ocurrió un error inesperado al cargar este panel.'}
                 </p>
+                <code style="font-size:0.7rem;color:var(--text-muted);word-break:break-all;max-width:340px;">${err?.message || ''}</code>
                 <button class="btn btn-primary" onclick="location.reload()">🔄 Reintentar</button>
             </div>`;
+    }
+}
+
+// Carga dinámica de módulo con log claro si falla (500, red, etc.)
+async function safeImport(path, container) {
+    try {
+        console.log('[import] cargando', path);
+        const mod = await import(path);
+        console.log('[import] OK', path);
+        return mod;
+    } catch (err) {
+        console.error('[import] FALLÓ', path, err);
+        if (container) {
+            container.innerHTML = `
+                <div style="padding:3rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1.2rem;">
+                    <div style="font-size:2rem;">⚠️</div>
+                    <p style="color:var(--danger);font-weight:700;">No se pudo cargar el módulo</p>
+                    <code style="font-size:0.7rem;color:var(--text-muted);word-break:break-all;max-width:340px;">${path}<br>${err?.message || ''}</code>
+                    <button class="btn btn-primary" onclick="location.reload()">🔄 Reintentar</button>
+                </div>`;
+        }
+        return null;
     }
 }
 
@@ -188,22 +211,22 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'canales') safeRender(renderCanales, contentArea);
             else if (view === 'creadores') safeRender(renderCreatorsList, contentArea);
             else if (view === 'notificaciones') {
-                import('./views/notifications.js').then(m => safeRender(m.renderNotificationsView, contentArea));
+                safeImport('./views/notifications.js', contentArea).then(m => m && safeRender(m.renderNotificationsView, contentArea));
             }
             else if (view === 'mensajes') {
-                import('./views/inbox.js').then(m => safeRender(m.renderInboxView, contentArea));
+                safeImport('./views/inbox.js', contentArea).then(m => m && safeRender(m.renderInboxView, contentArea));
                 container.querySelectorAll('.nav-item[data-view="mensajes"] span:not(.nav-icon)').forEach(span => {
                     span.textContent = t('nav.messages');
                 });
             }
             else if (view === 'mis-metricas') {
-                import('./views/creatorDashboard.js').then(m => safeRender(m.renderCreatorDashboard, contentArea));
+                safeImport('./views/creatorDashboard.js', contentArea).then(m => m && safeRender(m.renderCreatorDashboard, contentArea));
             }
             else if (view === 'capacitaciones') {
-                import('./views/trainings.js').then(m => safeRender(m.renderTrainingsView, contentArea));
+                safeImport('./views/trainings.js', contentArea).then(m => m && safeRender(m.renderTrainingsView, contentArea));
             }
             else if (view === 'eventos') {
-                import('./views/events.js').then(m => safeRender(m.renderEventsView, contentArea));
+                safeImport('./views/events.js', contentArea).then(m => m && safeRender(m.renderEventsView, contentArea));
             }
             else if (view === 'perfil') safeRender(renderProfile, contentArea);
         };
