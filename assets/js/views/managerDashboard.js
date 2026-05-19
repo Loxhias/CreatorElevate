@@ -54,14 +54,20 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
     let labelManager = activeManagerName;
 
     if (isSupabaseConfigured && activeManagerId) {
-        try {
-            const [usernames, list] = await Promise.all([
-                profiles.getCreatorsByManager(activeManagerId),
-                profiles.listCreatorsForManager(activeManagerId),
-            ]);
-            usernames.forEach(u => myCreatorUsernames.add(u.toLowerCase()));
-            list.forEach(c => c.tiktok_username && myCreatorUsernames.add(c.tiktok_username.toLowerCase()));
-        } catch (e) { console.warn('Error fetching group:', e); }
+        const cached = store.getManagerGroup(activeManagerId);
+        if (cached) {
+            cached.forEach(u => myCreatorUsernames.add(u));
+        } else {
+            try {
+                const [usernames, list] = await Promise.all([
+                    profiles.getCreatorsByManager(activeManagerId),
+                    profiles.listCreatorsForManager(activeManagerId),
+                ]);
+                usernames.forEach(u => myCreatorUsernames.add(u.toLowerCase()));
+                list.forEach(c => c.tiktok_username && myCreatorUsernames.add(c.tiktok_username.toLowerCase()));
+                store.setManagerGroup(activeManagerId, new Set(myCreatorUsernames));
+            } catch (e) { console.warn('Error fetching group:', e); }
+        }
     } else if (!isSupabaseConfigured) {
         const numMatch = (activeManagerName || '').match(/\d+/);
         const target = numMatch ? `Manager ${numMatch[0]}` : 'Manager 1';

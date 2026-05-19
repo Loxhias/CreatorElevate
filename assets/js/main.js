@@ -317,7 +317,15 @@ async function boot() {
             if (!isRecovery) appState.navigate('login');
             return;
         }
-        await store.refreshProfile();
+
+        // Skip re-fetching + re-rendering if store.init() already booted this user.
+        // onAuthChange fires immediately on registration (INITIAL_SESSION), which would
+        // cause a second full dashboard render right after init(). Guard against that.
+        const alreadyBooted = store.getProfile()?.id === session.user.id;
+        if (!alreadyBooted) {
+            await store.refreshProfile();
+        }
+
         const profile = store.getProfile();
         const u = store.getCurrentUser();
         if (profile) identifyOneSignalUser(profile);
@@ -335,7 +343,7 @@ async function boot() {
 
         // Si estamos en flujo de recuperación de contraseña, NO navegamos al dashboard
         // para permitir que el usuario vea el formulario de "Nueva Contraseña".
-        if (u && !isRecovery) appState.navigate(u.role);
+        if (u && !isRecovery && !alreadyBooted) appState.navigate(u.role);
     });
 
     // Si ya había sesión cargada en store.init(), identificamos también al boot.

@@ -13,6 +13,7 @@ const state = {
     period: null,          // { id, period, label } o null
     managers: [],          // lista de managers (para admin)
     profiles: [],          // lista de profiles (para admin)
+    managerCreators: {},   // cache { [managerId]: { usernames: Set, expiresAt: number } }
 };
 
 export const store = {
@@ -82,7 +83,8 @@ export const store = {
 
             if (sessionResult.status === 'fulfilled' && sessionResult.value) {
                 state.sessionUser = sessionResult.value.user;
-                state.profile = await auth.getProfile();
+                // Pass userId to skip the internal getUser() round-trip
+                state.profile = await auth.getProfile(sessionResult.value.user.id);
             }
 
             if (metricsResult.status === 'fulfilled' && metricsResult.value) {
@@ -111,6 +113,18 @@ export const store = {
         ]);
         state.profile  = profile;
         state.sessionUser = session?.user || null;
+    },
+
+    // ── manager group cache ────────────────────────────────────────────────
+    getManagerGroup(managerId) {
+        const c = state.managerCreators[managerId];
+        return c && Date.now() < c.expiresAt ? c.usernames : null;
+    },
+    setManagerGroup(managerId, usernames) {
+        state.managerCreators[managerId] = { usernames, expiresAt: Date.now() + 5 * 60 * 1000 };
+    },
+    invalidateManagerGroup(managerId) {
+        delete state.managerCreators[managerId];
     },
 
     /** Carga managers + perfiles (panel admin). */

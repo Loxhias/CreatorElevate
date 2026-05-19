@@ -393,7 +393,8 @@ function renderManageView(container) {
                     if (isActive && !confirm('¿Estás seguro de quitar el rol de Manager a este usuario?')) return;
 
                     try {
-                        const p = (await profiles.searchProfiles(uid))[0];
+                        const p = await profiles.getById(uid);
+                        if (!p) throw new Error('Usuario no encontrado.');
                         await profiles.updateRoles(uid, { isAdmin: p.is_admin, isManager: !isActive, isCreator: p.is_creator });
                         appState.showToast('Rol actualizado correctamente', 'success');
                         doSearch();
@@ -582,6 +583,7 @@ async function renderGroupEditor(container, managerId) {
     // Quitar: por username
     container.querySelectorAll('.rem-c').forEach(b => b.onclick = async () => {
         await profiles.unassignManagerByUsername(b.dataset.username);
+        store.invalidateManagerGroup(managerId);
         appState.showToast('Creador desvinculado', 'info');
         renderGroupEditor(container, managerId);
     });
@@ -612,6 +614,7 @@ function renderAvailableCreators(list) {
 function bindAddBtns(el, managerId, rootContainer) {
     el.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
         await profiles.assignManagerByUsername(b.dataset.username, managerId);
+        store.invalidateManagerGroup(managerId);
         appState.showToast('Creador asignado', 'success');
         renderGroupEditor(rootContainer, managerId);
     });

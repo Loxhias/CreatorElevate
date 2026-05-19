@@ -400,6 +400,17 @@ export const profiles = {
         return data[0];
     },
 
+    async getById(userId) {
+        if (!isSupabaseConfigured) return null;
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+        if (error) throw error;
+        return data;
+    },
+
     async searchProfiles(query) {
         const { data, error } = await supabase
             .from('profiles')
