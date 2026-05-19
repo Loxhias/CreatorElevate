@@ -882,9 +882,10 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || user?.username || '').toLowerCase();
 
     // Buscamos al creador: primero por tiktok_id estable, luego por username
+    // En modo auditoría solo buscamos por username — profileTiktokId es del manager logueado, no del target
     const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
     const searchName = cleanMatch(myUsername);
-    const profileTiktokId = store.getProfile?.()?.tiktok_id || null;
+    const profileTiktokId = isAuditing ? null : (store.getProfile?.()?.tiktok_id || null);
     const me = data?.find(c =>
         (profileTiktokId && c.tiktokId && profileTiktokId === c.tiktokId) ||
         cleanMatch(c.username) === searchName
