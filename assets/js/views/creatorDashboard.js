@@ -1146,25 +1146,29 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     });
 }
 
-function secsToHHMM(secs) {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    return `${h}:${String(m).padStart(2, '0')}`;
-}
-
-function parseHHMM(val) {
-    const parts = String(val).trim().split(':');
-    if (parts.length < 2) return null;
-    const h = Number(parts[0]);
-    const m = Number(parts[1]);
-    const s = parts[2] !== undefined ? Number(parts[2]) : 0;
-    if (!Number.isFinite(h) || !Number.isFinite(m) || !Number.isFinite(s)) return null;
-    if (h < 0 || m < 0 || m >= 60 || s < 0 || s >= 60) return null;
-    return h + m / 60 + s / 3600;
-}
 
 function renderSubmitMetricsView(container, prefill = null) {
-    const liveSecs        = Number(prefill?.live_seconds || 0);
+    // Si no hay prefill (primera carga) y el creador no tiene username configurado → prompt
+    if (!prefill) {
+        const profile = store.getProfile?.();
+        if (profile && !profile.tiktok_username?.trim()) {
+            container.innerHTML = `
+                <div class="glass-panel animate-fadeIn" style="max-width:480px;margin:2rem auto;text-align:center;padding:2.5rem 1.5rem;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;">📋</div>
+                    <h3 style="margin-bottom:0.6rem;">${t('metrics.no_username_title')}</h3>
+                    <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1.75rem;line-height:1.6;">
+                        ${t('metrics.no_username_desc')}
+                    </p>
+                    <button id="go-profile-btn" class="btn btn-primary">${t('metrics.go_profile')}</button>
+                </div>`;
+            container.querySelector('#go-profile-btn')?.addEventListener('click', () => {
+                document.querySelector('.nav-item[data-view="perfil"]')?.click();
+            });
+            return;
+        }
+    }
+
+    const liveSecs        = Number(prefill?.liveSeconds ?? prefill?.live_seconds ?? 0);
     const prefillH        = prefill && liveSecs > 0 ? Math.floor(liveSecs / 3600) : '';
     const prefillM        = prefill && liveSecs > 0 ? Math.floor((liveSecs % 3600) / 60) : '';
     const prefillDays     = prefill ? (prefill.validDays ?? '') : '';
@@ -1254,6 +1258,10 @@ function emptyState(title, sub) {
     </div>`;
 }
 
+function escHtml(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function renderInbox(notifications, lastSeen) {
     if (!notifications.length) {
         return `
@@ -1293,11 +1301,11 @@ function renderInbox(notifications, lastSeen) {
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.3rem;">
                         <span style="font-size:0.88rem;font-weight:${isUnread ? '700' : '600'};color:${isUnread ? 'var(--text-primary)' : 'var(--text-secondary)'};">
-                            ${n.title}
+                            ${escHtml(n.title)}
                         </span>
                         <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;flex-shrink:0;">${timeAgo(n.sent_at)}</span>
                     </div>
-                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${n.body}</p>
+                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${escHtml(n.body)}</p>
                     ${n.url ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">${t('inbox.view_more')}</a>` : ''}
                 </div>
             </div>`;

@@ -97,44 +97,84 @@ const skelHistory = () => `
         <div class="skel-panel" style="height:200px;"></div>
     </div>`;
 
-// Columnas del archivo mensual simplificado (3 columnas)
-const EXCEL_COLUMNS = {
-    username:         'Usuario',
-    daysSinceJoining: 'Días desde la incorporación',
-    battles:          'Partidas',
+// ─── Columnas del archivo TikTok (múltiples variantes de nombre en español) ────
+const EXCEL_COLS = {
+    creatorId:        ['ID del creador', 'Creator ID', 'ID creador', 'TikTok ID'],
+    username:         ['Nombre de usuario del creador', 'Usuario', 'Nombre de usuario', 'Nickname', 'username'],
+    validDays:        ['Días de live activos', 'Días activos de live', 'Días activos', 'Días válidos', 'Valid days', 'Días de transmisión'],
+    liveDuration:     ['Duración total del live (hh:mm:ss)', 'Duración total del live', 'Duración del live', 'Horas de live', 'Live duration'],
+    liveSeconds:      ['Duración total del live (en segundos)', 'Live seconds', 'Segundos de live'],
+    diamonds:         ['Diamantes obtenidos en el live', 'Diamantes totales', 'Diamantes', 'Diamonds', 'Total diamonds'],
+    battles:          ['Partidas en PK', 'Partidas', 'Batallas', 'PKs', 'PK battles', 'Battles'],
+    daysSinceJoining: ['Días desde la incorporación', 'Días desde incorporación', 'Days since joining', 'Días en agencia'],
 };
 
 function normalizeRow(row) {
-    const nc = (s) => String(s)
-        .normalize('NFC').toLowerCase()
-        .replace(/s+/g, ' ').trim();
+    // Normaliza nombre de columna para comparación flexible (whitespace fix: \s+ no s+)
+    const nc = (s) => String(s).normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
 
-    const get = (colName) => {
-        if (Object.prototype.hasOwnProperty.call(row, colName)) return row[colName];
-        const target = nc(colName);
+    // Busca el valor de una columna por su lista de nombres candidatos
+    const get = (names) => {
+        for (const name of names) {
+            if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
+        }
+        const normed = names.map(nc);
         for (const [k, v] of Object.entries(row)) {
-            if (nc(k) === target) return v;
+            if (normed.includes(nc(k))) return v;
         }
         return null;
     };
 
-    const rawUser = get(EXCEL_COLUMNS.username)
-        || get('Nombre de usuario del creador')
-        || get('username');
+    // Username — requerido
+    const rawUser = get(EXCEL_COLS.username);
     const username = String(rawUser || '').trim().replace(/^@/, '');
     if (!username) return null;
 
-    const safeInt = (val, max = 10000) => {
-        if (val == null || val === '') return 0;
-        const parsed = parseInt(String(val).replace(/[^d]/g, ''));
-        if (isNaN(parsed) || parsed < 0) return 0;
-        return parsed < max ? parsed : 0;
+    // Creator ID — como string para preservar precisión de IDs largos
+    const rawId = get(EXCEL_COLS.creatorId);
+    const creatorId = rawId != null ? String(rawId).trim() : null;
+
+    // Entero seguro: regex corregida /[^\d]/ (no /[^d]/)
+    const safeInt = (val, fallback = null) => {
+        if (val == null || val === '') return fallback;
+        const n = parseInt(String(val).replace(/[^\d]/g, ''), 10);
+        return isNaN(n) || n < 0 ? fallback : n;
     };
 
+    // Duración live → segundos totales (acepta número directo o string HH:MM:SS)
+    const parseDur = (val) => {
+        if (val == null || val === '') return null;
+        if (typeof val === 'number') {
+            // Fracción de día de Excel (< 10) → segundos; o entero directo
+            return val < 10 ? Math.round(val * 86400) : Math.round(val);
+        }
+        const parts = String(val).trim().split(':');
+        if (parts.length >= 2) {
+            const h = parseInt(parts[0]) || 0;
+            const m = parseInt(parts[1]) || 0;
+            const s = parts[2] ? parseInt(parts[2]) || 0 : 0;
+            return h * 3600 + m * 60 + s;
+        }
+        const n = parseInt(String(val).replace(/[^\d]/g, ''), 10);
+        return isNaN(n) ? null : n;
+    };
+
+    const rawLiveSecs = get(EXCEL_COLS.liveSeconds);
+    const rawLiveDur  = get(EXCEL_COLS.liveDuration);
+    const liveSeconds = safeInt(rawLiveSecs) ?? parseDur(rawLiveDur);
+    const liveDuration = liveSeconds != null
+        ? `${Math.floor(liveSeconds / 3600)}h ${Math.floor((liveSeconds % 3600) / 60)}min`
+        : null;
+
     return {
+        creatorId,
         username,
-        daysSinceJoining: safeInt(get(EXCEL_COLUMNS.daysSinceJoining)),
-        battles:          safeInt(get(EXCEL_COLUMNS.battles)),
+        validDays:        safeInt(get(EXCEL_COLS.validDays)),
+        liveSeconds,
+        liveDuration,
+        diamonds:         safeInt(get(EXCEL_COLS.diamonds)),
+        battles:          safeInt(get(EXCEL_COLS.battles)) ?? 0,
+        daysSinceJoining: safeInt(get(EXCEL_COLS.daysSinceJoining)),
     };
 }
 
@@ -370,8 +410,9 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
                 <span style="background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);border-radius:999px;padding:0.2rem 0.8rem;font-size:0.75rem;font-weight:700;color:var(--primary-light);">${agencyLabel}</span>
             </div>
             <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
-                Sube un Excel con tres columnas: <strong>Usuario</strong>, <strong>Días desde la incorporación</strong> y <strong>Partidas</strong>.
-                Los diamantes, horas y días válidos los cargan los propios creadores.
+                Sube el archivo <strong>"Datos del creador"</strong> exportado desde TikTok Studio.
+                Se cargarán automáticamente: ID del creador, días válidos, horas de live, diamantes, partidas y días desde la incorporación.
+                El ID del creador se usa como identificador estable aunque el usuario cambie de nombre.
             </p>
             <div class="input-group" style="margin-bottom:1.5rem;">
                 <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">MES</label>
@@ -387,17 +428,16 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
     `;
 
     const fileIn = container.querySelector('#up-file');
-    const uBtn = container.querySelector('#up-btn');
+    const uBtn   = container.querySelector('#up-btn');
     const preview = container.querySelector('#up-preview');
     let rows = null;
 
     fileIn.onchange = async (e) => {
         const f = e.target.files[0];
         if (!f) return;
-        normalizeRow._diagDone = false;
         try {
             const buf = await f.arrayBuffer();
-            const wb = window.XLSX.read(buf, { type: 'array' });
+            const wb  = window.XLSX.read(buf, { type: 'array' });
             const rawData = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
 
             if (!rawData.length) {
@@ -406,19 +446,25 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             }
 
             rows = rawData.map(normalizeRow).filter(Boolean);
+            if (!rows.length) {
+                preview.innerHTML = '<span style="color:var(--danger);">No se encontró la columna de usuario. Verificá que el archivo sea el correcto.</span>';
+                return;
+            }
 
-            const withDays     = rows.filter(r => r.daysSinceJoining > 0).length;
-            const withBattles  = rows.filter(r => r.battles > 0).length;
+            const withId      = rows.filter(r => r.creatorId).length;
+            const withMetrics = rows.filter(r => (r.diamonds ?? 0) > 0 || (r.validDays ?? 0) > 0).length;
+            const withLive    = rows.filter(r => (r.liveSeconds ?? 0) > 0).length;
+            const withDays    = rows.filter(r => (r.daysSinceJoining ?? 0) > 0).length;
 
+            const ok  = 'color:var(--accent)';
+            const dim = 'color:var(--text-muted)';
             preview.innerHTML = `
-                <div style="display:flex;flex-direction:column;gap:0.35rem;">
-                    <span style="color:var(--accent);">✓ ${rows.length} usuario${rows.length !== 1 ? 's' : ''} detectados</span>
-                    <span style="color:${withDays > 0 ? 'var(--accent)' : 'var(--text-muted)'};">
-                        · ${withDays} con días desde incorporación
-                    </span>
-                    <span style="color:${withBattles > 0 ? 'var(--accent)' : 'var(--text-muted)'};">
-                        · ${withBattles} con partidas
-                    </span>
+                <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.82rem;">
+                    <span style="${ok};font-weight:700;">✓ ${rows.length} creador${rows.length !== 1 ? 'es' : ''} detectados</span>
+                    <span style="${withId > 0 ? ok : dim};">· ${withId} con ID de creador ${withId > 0 ? '✓' : '(no encontrado en este archivo)'}</span>
+                    <span style="${withMetrics > 0 ? ok : dim};">· ${withMetrics} con diamantes / días válidos</span>
+                    <span style="${withLive > 0 ? ok : dim};">· ${withLive} con horas de live</span>
+                    <span style="${withDays > 0 ? ok : dim};">· ${withDays} con días desde incorporación</span>
                 </div>`;
 
             uBtn.disabled = false;
@@ -430,12 +476,15 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
     uBtn.onclick = async () => {
         const m = container.querySelector('#up-month').value;
         const [y, mm] = m.split('-');
-        const dt = new Date(Date.UTC(y, mm - 1, 1));
+        const dt  = new Date(Date.UTC(y, mm - 1, 1));
         const lbl = dt.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(/^./, c => c.toUpperCase());
         uBtn.disabled = true;
         uBtn.textContent = 'Publicando...';
 
         try {
+            // Paso 1: sube métricas completas (diamantes, live, días válidos, tiktok_id)
+            await metrics.upsertPeriod(`${m}-01`, lbl, rows);
+            // Paso 2: fija agencia + días de incorporación + partidas
             await metrics.upsertJoiningData(`${m}-01`, lbl, rows, agency);
             appState.showToast('Datos publicados con éxito', 'success');
             await store.refreshMetrics();

@@ -62,6 +62,10 @@ function getNavItems(role) {
     } else if (role === 'manager') {
         items.push({ view: 'inicio',   icon: '📊', label: 'Panel' });
         items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
+        const managerProfile = store.getProfile?.();
+        if (managerProfile?.tiktok_username?.trim()) {
+            items.push({ view: 'mis-metricas', icon: '🎬', label: 'Mis métricas' });
+        }
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
@@ -191,6 +195,9 @@ function renderDashboardLayout(container, renderContentFn, role) {
                 container.querySelectorAll('.nav-item[data-view="mensajes"] span:not(.nav-icon)').forEach(span => {
                     span.textContent = t('nav.messages');
                 });
+            }
+            else if (view === 'mis-metricas') {
+                import('./views/creatorDashboard.js').then(m => safeRender(m.renderCreatorDashboard, contentArea));
             }
             else if (view === 'capacitaciones') {
                 import('./views/trainings.js').then(m => safeRender(m.renderTrainingsView, contentArea));

@@ -40,7 +40,10 @@ const T = {
         'metrics.err_days':    'Días válidos debe estar entre 0 y 31.',
         'metrics.err_hours':   'Los minutos deben estar entre 0 y 59.',
         'metrics.err_diamonds':'Los diamantes no pueden ser negativos.',
-        'metrics.err_generic': 'Error al guardar. Intenta de nuevo.',
+        'metrics.err_generic':        'Error al guardar. Intenta de nuevo.',
+        'metrics.no_username_title':  'Configurá tu usuario de TikTok',
+        'metrics.no_username_desc':   'Para cargar tus métricas necesitás configurar tu nombre de usuario de TikTok en tu perfil.',
+        'metrics.go_profile':         'Ir a mi Perfil →',
 
         // Daily tracker
         'daily.section':    'Seguimiento Diario',
@@ -111,7 +114,10 @@ const T = {
         'metrics.err_days':    'Valid days must be between 0 and 31.',
         'metrics.err_hours':   'Minutes must be between 0 and 59.',
         'metrics.err_diamonds':'Diamonds cannot be negative.',
-        'metrics.err_generic': 'Error saving. Please try again.',
+        'metrics.err_generic':        'Error saving. Please try again.',
+        'metrics.no_username_title':  'Set your TikTok username',
+        'metrics.no_username_desc':   'To submit your metrics you need to set your TikTok username in your profile settings.',
+        'metrics.go_profile':         'Go to my Profile →',
 
         // Daily tracker
         'daily.section':    'Daily Tracking',

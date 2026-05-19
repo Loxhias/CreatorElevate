@@ -257,15 +257,6 @@ export const metrics = {
 
         const safePayload = sanDeep(payload);
 
-        // DIAGNÓSTICO: muestra el primer registro exactamente como se envía al RPC
-        if (safePayload.length > 0) {
-            const s = safePayload[0];
-            console.group(`🚀 [DIAGNÓSTICO RPC] Enviando a admin_upsert_metrics — primera fila: @${s.username}`);
-            console.log('  validDays enviado al RPC:', s.validDays, '← si esto es >0 pero el DB guarda 0, el problema está en la función SQL');
-            console.log('  diamonds:', s.diamonds, '| battles:', s.battles, '| liveDuration:', s.liveDuration);
-            console.groupEnd();
-        }
-
         const { data, error } = await supabase.rpc('admin_upsert_metrics', {
             p_period: periodDate,
             p_label:  san(label),
