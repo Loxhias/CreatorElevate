@@ -458,6 +458,7 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
 
             const ok  = 'color:var(--accent)';
             const dim = 'color:var(--text-muted)';
+            const allCols = rawData.length > 0 ? Object.keys(rawData[0]) : [];
             preview.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.82rem;">
                     <span style="${ok};font-weight:700;">✓ ${rows.length} creador${rows.length !== 1 ? 'es' : ''} detectados</span>
@@ -465,6 +466,10 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
                     <span style="${withMetrics > 0 ? ok : dim};">· ${withMetrics} con diamantes / días válidos</span>
                     <span style="${withLive > 0 ? ok : dim};">· ${withLive} con horas de live</span>
                     <span style="${withDays > 0 ? ok : dim};">· ${withDays} con días desde incorporación</span>
+                    ${withLive === 0 ? `<div style="margin-top:0.4rem;padding:0.5rem 0.7rem;background:rgba(255,181,71,0.08);border:1px solid rgba(255,181,71,0.25);border-radius:6px;font-size:0.72rem;color:var(--warning);">
+                        ⚠ Columna de horas no reconocida. Columnas del archivo:<br>
+                        <span style="color:var(--text-muted);word-break:break-all;">${allCols.join(' · ')}</span>
+                    </div>` : ''}
                 </div>`;
 
             uBtn.disabled = false;
