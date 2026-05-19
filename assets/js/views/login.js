@@ -222,7 +222,10 @@ export function renderLogin(container) {
                 msg.innerHTML = `<div class="form-success">✓ Enlace enviado. Revisa tu correo electrónico.</div>`;
                 pane.querySelector('#forgot-form').reset();
             } catch (err) {
-                msg.innerHTML = `<div class="form-error">⚠ ${err.message || 'Error al enviar el enlace.'}</div>`;
+                const friendly = (err.message || '').toLowerCase().includes('sending')
+                    ? 'No se pudo enviar el email. Si el problema persiste, contactá al administrador.'
+                    : (err.message || 'Error al enviar el enlace.');
+                msg.innerHTML = `<div class="form-error">⚠ ${friendly}</div>`;
             } finally {
                 btn.disabled = false; btn.textContent = 'Enviar Instrucciones';
             }
