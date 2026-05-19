@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { appState } from '../main.js';
-import { metrics, profiles, push, content } from '../api.js';
+import { metrics, profiles, content } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
 
@@ -99,14 +99,15 @@ const skelHistory = () => `
 
 // ─── Columnas del archivo TikTok (múltiples variantes de nombre en español) ────
 const EXCEL_COLS = {
-    creatorId:        ['ID del creador', 'Creator ID', 'ID creador', 'TikTok ID'],
-    username:         ['Nombre de usuario del creador', 'Usuario', 'Nombre de usuario', 'Nickname', 'username'],
-    validDays:        ['Días de live activos', 'Días activos de live', 'Días activos', 'Días válidos', 'Valid days', 'Días de transmisión'],
-    liveDuration:     ['Duración total del live (hh:mm:ss)', 'Duración total del live', 'Duración del live', 'Horas de live', 'Live duration'],
-    liveSeconds:      ['Duración total del live (en segundos)', 'Live seconds', 'Segundos de live'],
-    diamonds:         ['Diamantes obtenidos en el live', 'Diamantes totales', 'Diamantes', 'Diamonds', 'Total diamonds'],
-    battles:          ['Partidas en PK', 'Partidas', 'Batallas', 'PKs', 'PK battles', 'Battles'],
-    daysSinceJoining: ['Días desde la incorporación', 'Días desde incorporación', 'Days since joining', 'Días en agencia'],
+    creatorId:          ['ID del creador', 'Creator ID', 'ID creador', 'TikTok ID'],
+    username:           ['Nombre de usuario del creador', 'Usuario', 'Nombre de usuario', 'Nickname', 'username'],
+    validDays:          ['Días válidos de emisiones LIVE', 'Días de live activos', 'Días activos de live', 'Días activos', 'Días válidos', 'Valid days', 'Días de transmisión'],
+    liveDuration:       ['Duración de LIVE', 'Duración total del live (hh:mm:ss)', 'Duración total del live', 'Duración del live', 'Horas de live', 'Live duration'],
+    liveSeconds:        ['Duración total del live (en segundos)', 'Live seconds', 'Segundos de live'],
+    diamonds:           ['Diamantes obtenidos en el live', 'Diamantes totales', 'Diamantes', 'Diamonds', 'Total diamonds'],
+    diamondsLastMonth:  ['Diamantes en el último mes', 'Diamonds last month', 'Diamantes mes anterior'],
+    battles:            ['Partidas en PK', 'Partidas', 'Batallas', 'PKs', 'PK battles', 'Battles'],
+    daysSinceJoining:   ['Días desde la incorporación', 'Días desde incorporación', 'Days since joining', 'Días en agencia'],
 };
 
 function normalizeRow(row) {
@@ -141,21 +142,26 @@ function normalizeRow(row) {
         return isNaN(n) || n < 0 ? fallback : n;
     };
 
-    // Duración live → segundos totales (acepta número directo o string HH:MM:SS)
+    // Duración live → segundos totales
     const parseDur = (val) => {
         if (val == null || val === '') return null;
         if (typeof val === 'number') {
             // Fracción de día de Excel (< 10) → segundos; o entero directo
             return val < 10 ? Math.round(val * 86400) : Math.round(val);
         }
-        const parts = String(val).trim().split(':');
+        const str = String(val).trim();
+        // "134h 6min 25s" — formato texto de TikTok
+        const hms = str.match(/(\d+)h\s*(\d+)min\s*(\d+)s/);
+        if (hms) return parseInt(hms[1]) * 3600 + parseInt(hms[2]) * 60 + parseInt(hms[3]);
+        // HH:MM:SS
+        const parts = str.split(':');
         if (parts.length >= 2) {
             const h = parseInt(parts[0]) || 0;
             const m = parseInt(parts[1]) || 0;
             const s = parts[2] ? parseInt(parts[2]) || 0 : 0;
             return h * 3600 + m * 60 + s;
         }
-        const n = parseInt(String(val).replace(/[^\d]/g, ''), 10);
+        const n = parseInt(str.replace(/[^\d]/g, ''), 10);
         return isNaN(n) ? null : n;
     };
 
@@ -169,12 +175,13 @@ function normalizeRow(row) {
     return {
         creatorId,
         username,
-        validDays:        safeInt(get(EXCEL_COLS.validDays)),
+        validDays:          safeInt(get(EXCEL_COLS.validDays)),
         liveSeconds,
         liveDuration,
-        diamonds:         safeInt(get(EXCEL_COLS.diamonds)),
-        battles:          safeInt(get(EXCEL_COLS.battles)) ?? 0,
-        daysSinceJoining: safeInt(get(EXCEL_COLS.daysSinceJoining)),
+        diamonds:           safeInt(get(EXCEL_COLS.diamonds)),
+        diamondsLastMonth:  safeInt(get(EXCEL_COLS.diamondsLastMonth)) ?? 0,
+        battles:            safeInt(get(EXCEL_COLS.battles)) ?? 0,
+        daysSinceJoining:   safeInt(get(EXCEL_COLS.daysSinceJoining)),
     };
 }
 
@@ -458,7 +465,6 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
 
             const ok  = 'color:var(--accent)';
             const dim = 'color:var(--text-muted)';
-            const allCols = rawData.length > 0 ? Object.keys(rawData[0]) : [];
             preview.innerHTML = `
                 <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.82rem;">
                     <span style="${ok};font-weight:700;">✓ ${rows.length} creador${rows.length !== 1 ? 'es' : ''} detectados</span>
@@ -466,10 +472,6 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
                     <span style="${withMetrics > 0 ? ok : dim};">· ${withMetrics} con diamantes / días válidos</span>
                     <span style="${withLive > 0 ? ok : dim};">· ${withLive} con horas de live</span>
                     <span style="${withDays > 0 ? ok : dim};">· ${withDays} con días desde incorporación</span>
-                    ${withLive === 0 ? `<div style="margin-top:0.4rem;padding:0.5rem 0.7rem;background:rgba(255,181,71,0.08);border:1px solid rgba(255,181,71,0.25);border-radius:6px;font-size:0.72rem;color:var(--warning);">
-                        ⚠ Columna de horas no reconocida. Columnas del archivo:<br>
-                        <span style="color:var(--text-muted);word-break:break-all;">${allCols.join(' · ')}</span>
-                    </div>` : ''}
                 </div>`;
 
             uBtn.disabled = false;
