@@ -268,7 +268,15 @@ export async function renderAdminDashboard(container) {
 
     wireAgencyToggle(container, () => renderAdminDashboard(container));
 
-    container.querySelector('#nav-audit').onclick   = () => renderAuditView(viewContent, managers, creators, data);
+    container.querySelector('#nav-audit').onclick   = async () => {
+        // Re-fetch si el caché fue invalidado (ej. tras cambio de roles)
+        if (!store.getProfiles().length) await store.refreshAdminLists().catch(console.warn);
+        const p = store.getProfiles() || [];
+        const d = (store.getMetricsData() || []).filter(x => (x.agency || 'latam') === selectedAgency);
+        const m = p.filter(x => x.is_manager  && (x.agency || 'latam') === selectedAgency);
+        const c = p.filter(x => x.is_creator  && (x.agency || 'latam') === selectedAgency);
+        renderAuditView(viewContent, m, c, d);
+    };
     container.querySelector('#nav-manage').onclick  = () => renderManageView(viewContent);
     container.querySelector('#nav-upload').onclick  = () => renderUploadView(viewContent, container, selectedAgency);
     container.querySelector('#nav-history').onclick = () => renderHistoryView(viewContent);
@@ -396,6 +404,7 @@ function renderManageView(container) {
                         const p = await profiles.getById(uid);
                         if (!p) throw new Error('Usuario no encontrado.');
                         await profiles.updateRoles(uid, { isAdmin: p.is_admin, isManager: !isActive, isCreator: p.is_creator });
+                        store.clearProfiles(); // fuerza re-fetch en próxima visita a Auditoría
                         appState.showToast('Rol actualizado correctamente', 'success');
                         doSearch();
                     } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }

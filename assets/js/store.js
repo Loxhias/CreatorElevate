@@ -115,6 +115,12 @@ export const store = {
         state.sessionUser = session?.user || null;
     },
 
+    /** Fuerza re-fetch de profiles en el próximo renderAdminDashboard. */
+    clearProfiles() {
+        state.profiles = [];
+        state.managers = [];
+    },
+
     // ── manager group cache ────────────────────────────────────────────────
     getManagerGroup(managerId) {
         const c = state.managerCreators[managerId];
