@@ -53,6 +53,7 @@ function getNavItems(role) {
     if (role === 'admin') {
         items.push({ view: 'inicio',         icon: '📊', label: 'Dashboard' });
         items.push({ view: 'creadores',      icon: '👥', label: 'Creadores' });
+        items.push({ view: 'canales',        icon: '📢', label: 'Canales' });
         items.push({ view: 'notificaciones', icon: '🔔', label: 'Mensajes' });
     } else if (role === 'creator') {
         items.push({ view: 'inicio',   icon: '📊', label: t('nav.dashboard') });

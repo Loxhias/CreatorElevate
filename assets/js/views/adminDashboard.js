@@ -1,8 +1,9 @@
 import { store } from '../store.js';
 import { appState } from '../main.js';
-import { metrics, profiles, content } from '../api.js';
+import { metrics, profiles } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
+import { renderCanales } from './canales.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
 
@@ -239,9 +240,9 @@ export async function renderAdminDashboard(container) {
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Evolución por período y creador.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-content">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📝</div>
-                    <h3 style="font-size:0.95rem;">Normas &amp; Canales</h3>
-                    <p style="font-size:0.75rem; color:var(--text-secondary);">Editar contenido de páginas.</p>
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📢</div>
+                    <h3 style="font-size:0.95rem;">Canales</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Gestionar canales de comunicación.</p>
                 </div>
             </div>
 
@@ -280,7 +281,7 @@ export async function renderAdminDashboard(container) {
     container.querySelector('#nav-manage').onclick  = () => renderManageView(viewContent);
     container.querySelector('#nav-upload').onclick  = () => renderUploadView(viewContent, container, selectedAgency);
     container.querySelector('#nav-history').onclick = () => renderHistoryView(viewContent);
-    container.querySelector('#nav-content').onclick = () => renderContentEditor(viewContent);
+    container.querySelector('#nav-content').onclick = () => renderCanales(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────
@@ -1017,60 +1018,5 @@ async function renderHistoryView(container) {
     container.querySelector('#hist-search-btn').addEventListener('click', searchCreator);
     container.querySelector('#hist-username').addEventListener('keypress', e => {
         if (e.key === 'Enter') searchCreator();
-    });
-}
-
-// ── VISTA: EDITOR DE NORMAS / CANALES ─────────────────────────────────────────
-async function renderContentEditor(container) {
-    container.innerHTML = `
-        <div class="animate-fadeIn">
-            <h2 style="margin-bottom:1.5rem;">📝 Normas &amp; Canales</h2>
-            <div id="ce-normas" class="glass-panel skel-panel" style="min-height:120px; margin-bottom:1.5rem;"></div>
-            <div id="ce-canales" class="glass-panel skel-panel" style="min-height:120px;"></div>
-        </div>`;
-
-    const [normas, canales] = await Promise.allSettled([
-        content.getPage('normas'),
-        content.getPage('canales'),
-    ]);
-
-    const makeEditor = (slug, icon, page) => `
-        <div style="margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-            <span style="font-size:1.2rem;">${icon}</span>
-            <h3 style="font-size:1rem; font-weight:700;">${page?.title || slug}</h3>
-        </div>
-        <div class="input-group">
-            <label>Título</label>
-            <input id="ce-title-${slug}" class="input-control" value="${(page?.title || '').replace(/"/g,'&quot;')}" placeholder="Título de la página">
-        </div>
-        <div class="input-group">
-            <label>Contenido (una línea = un párrafo)</label>
-            <textarea id="ce-body-${slug}" class="input-control" rows="8" style="resize:vertical;">${page?.body || ''}</textarea>
-        </div>
-        <button id="ce-save-${slug}" class="btn btn-primary" style="min-width:120px;">Guardar</button>
-        <span id="ce-status-${slug}" style="margin-left:0.75rem; font-size:0.8rem; color:var(--text-secondary);"></span>`;
-
-    container.querySelector('#ce-normas').innerHTML = makeEditor('normas', '📋', normas.value);
-    container.querySelector('#ce-canales').innerHTML = makeEditor('canales', '📢', canales.value);
-
-    ['normas', 'canales'].forEach(slug => {
-        container.querySelector(`#ce-save-${slug}`).onclick = async () => {
-            const title  = container.querySelector(`#ce-title-${slug}`).value.trim();
-            const body   = container.querySelector(`#ce-body-${slug}`).value;
-            const status = container.querySelector(`#ce-status-${slug}`);
-            const btn    = container.querySelector(`#ce-save-${slug}`);
-            btn.disabled = true;
-            status.textContent = 'Guardando…';
-            try {
-                await content.upsertPage(slug, title, body);
-                status.style.color = 'var(--accent)';
-                status.textContent = '✓ Guardado';
-            } catch (err) {
-                status.style.color = 'var(--danger)';
-                status.textContent = err.message;
-            } finally {
-                btn.disabled = false;
-            }
-        };
     });
 }
