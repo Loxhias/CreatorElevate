@@ -475,8 +475,10 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
                 if (urlError) urlError.style.display = 'block';
                 return appState.showToast('La URL debe comenzar con https://', 'warning');
             }
-            dbUrl   = raw || null;
-            pushUrl = raw || undefined;
+            dbUrl = raw || null;
+            // Ruta el clic por nuestra app para evitar que Android intercepte el
+            // dominio como App Link y envíe al Play Store (ej: meet.google.com).
+            pushUrl = raw ? `${location.origin}/?openext=${encodeURIComponent(raw)}` : undefined;
         }
 
         let finalTarget;

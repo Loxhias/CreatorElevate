@@ -296,6 +296,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 async function boot() {
+    // Cuando la notificación tiene URL externa, la abrimos aquí en lugar de
+    // dejar que el service worker la abra directamente (lo cual en Android
+    // dispara App Links y manda al Play Store si la app no está instalada).
+    const openextParam = new URLSearchParams(location.search).get('openext');
+    if (openextParam) {
+        try {
+            const decoded = decodeURIComponent(openextParam);
+            if (decoded.startsWith('https://')) {
+                history.replaceState(null, '', location.pathname);
+                window.open(decoded, '_blank', 'noopener,noreferrer');
+            }
+        } catch {}
+    }
+
     const app = document.getElementById('app');
     app.innerHTML = `<div style="height:100vh;display:flex;align-items:center;justify-content:center;">
         <div style="display:flex;flex-direction:column;align-items:center;gap:1.2rem;">
