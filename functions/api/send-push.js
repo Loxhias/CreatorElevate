@@ -14,8 +14,7 @@ const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 const ALLOWED_ORIGINS = [
     "https://creatorelevate.pages.dev",
     "https://interactik.creatorelevate.pages.dev",
-    // Agregá tu dominio personalizado acá cuando lo configures:
-    // "https://app.interactik.com",
+    "https://app.interactikagency.com",
 ];
 
 function corsHeaders(requestOrigin, appOrigin) {
@@ -125,7 +124,6 @@ export async function onRequestPost(context) {
             firefox_icon:     `${APP_ORIGIN}/iconos/logo_morado.png`,
         };
         if (url) {
-            notificationBody.url     = url;
             notificationBody.web_url = url;
         }
 
