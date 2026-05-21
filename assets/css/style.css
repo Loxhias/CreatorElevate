@@ -27,18 +27,24 @@
     --font-display: 'Plus Jakarta Sans', sans-serif;
 }
 
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+/* min-width:0 en todo para que flex/grid children no desborden por defecto */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; min-width: 0; }
+
 body {
     background: var(--bg-base);
     color: var(--text-primary);
     font-family: 'Plus Jakarta Sans', sans-serif;
     line-height: 1.6;
     overflow-x: hidden;
+    /* NO word-break aquí — causaría cortes a mitad de palabra en toda la UI */
 }
+
+/* overflow-wrap solo en elementos de contenido de texto */
+p, li, td, .text-content, .glass-panel > p { overflow-wrap: break-word; }
 
 /* ---- Estructura ---- */
 .app-shell { display: flex; min-height: 100vh; }
-.main-content { flex: 1; padding: 2rem; width: 100%; }
+.main-content { flex: 1; padding: 2rem; width: 100%; overflow-x: hidden; }
 
 /* Sidebar (Solo Escritorio) */
 .sidebar {
@@ -51,20 +57,27 @@ body {
     position: sticky;
     top: 0;
     height: 100vh;
+    overflow-y: auto;
 }
 
 /* Bottom Nav (Solo Móvil) */
 .bottom-nav {
     position: fixed;
     bottom: 0; left: 0; right: 0;
-    background: rgba(14, 17, 23, 0.95);
+    background: rgba(14, 17, 23, 0.97);
     backdrop-filter: blur(20px);
     display: none;
-    justify-content: space-around;
-    padding: 0.8rem;
+    /* Scroll horizontal cuando hay muchos ítems */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    gap: 0.15rem;
+    padding: 0.6rem 0.5rem;
     border-top: 1px solid var(--glass-border);
     z-index: 1000;
 }
+.bottom-nav::-webkit-scrollbar { display: none; }
 
 @media (max-width: 1023px) {
     .sidebar { display: none; }
@@ -84,12 +97,23 @@ body {
     font-weight: 600;
     font-size: 0.9rem;
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .nav-item:hover { background: var(--glass-bg); color: var(--text-primary); }
 .nav-item.active { background: rgba(124, 110, 247, 0.1); color: var(--primary); }
 
-.bottom-nav .nav-item { flex-direction: column; gap: 4px; font-size: 0.7rem; padding: 0.5rem; }
+/* Bottom nav: items en columna, tamaño fijo, nunca comprimir */
+.bottom-nav .nav-item {
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: 3px;
+    font-size: 0.62rem;
+    padding: 0.45rem 0.6rem;
+    min-width: 52px;
+    text-align: center;
+    white-space: nowrap;
+}
 
 /* ---- Paneles y Cards ---- */
 .glass-panel {
@@ -98,6 +122,8 @@ body {
     border-radius: var(--radius);
     padding: 1.5rem;
 }
+
+.glass-panel.no-pad { padding: 0; }
 
 .action-card {
     cursor: pointer;
@@ -113,9 +139,16 @@ body {
     cursor: pointer;
     border: none;
     font-family: inherit;
+    white-space: nowrap;
 }
 .btn-primary { background: var(--primary); color: white; }
 .btn-ghost { background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-primary); }
+.btn-sm {
+    font-size: 0.78rem; padding: 0.35rem 0.75rem; border-radius: 6px;
+    font-weight: 600; cursor: pointer; border: 1px solid var(--glass-border);
+    background: var(--glass-bg); color: var(--text-primary);
+    font-family: inherit; white-space: nowrap;
+}
 
 .input-control {
     background: rgba(0,0,0,0.2);
@@ -128,17 +161,45 @@ body {
 }
 .input-control:focus { border-color: var(--primary); }
 
+/* Forzar colores del menú desplegable nativo en todos los SO */
+select.input-control option {
+    background: #141720;
+    color: #e2e8f0;
+}
+select.input-control optgroup {
+    background: #0d0f1a;
+    color: rgba(180,180,220,0.6);
+    font-weight: 700;
+}
+
 /* ---- Metrics Grid ---- */
 .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 1.5rem;
     margin-bottom: 2rem;
 }
 
+/* ---- Metric Cards ---- */
+/* Cards simples del admin (solo label + value, sin .metric-left) */
 .metric-card { text-align: center; }
-.metric-value { font-size: 2rem; font-weight: 800; display: block; }
+.metric-value { font-size: 1.9rem; font-weight: 800; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+
+/* Cards ricas (creator/manager) — solo cuando tienen .metric-left */
+.metric-card:has(.metric-left) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    text-align: left;
+}
+.metric-left { flex: 1; min-width: 0; }
+.metric-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.3rem; }
+/* .metric-value se sobreescribe inline — el .metric-left la mantiene a tamaño correcto */
+.metric-value.sm { font-size: 1.3rem; }
+.metric-subtitle { font-size: 0.72rem; margin-top: 0.3rem; }
+.metric-icon-box { width: 48px; height: 48px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
 
 .badge {
     padding: 0.2rem 0.6rem;
@@ -150,6 +211,7 @@ body {
 /* Animaciones simples */
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .animate-fadeIn { animation: fadeIn 0.3s ease; }
+.animate-fade-in { animation: fadeIn 0.3s ease; }
 
 /* ---- Responsive Mobile ---- */
 
@@ -159,7 +221,19 @@ body {
 
 /* Tabla con scroll horizontal en móvil */
 .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.data-table { min-width: 460px; }
+.glass-panel.table-container { padding: 0; }
+.data-table { min-width: 460px; width: 100%; border-collapse: collapse; }
+.data-table th {
+    text-align: left; font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-muted);
+    padding: 0.85rem 1rem; border-bottom: 1px solid var(--glass-border);
+}
+.data-table td {
+    padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-secondary);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
 
 @media (max-width: 768px) {
     /* Padding lateral reducido */
@@ -170,8 +244,6 @@ body {
 
     /* Metrics grid más compacto */
     .metrics-grid { gap: 0.75rem; margin-bottom: 1.25rem; }
-    .metric-value { font-size: 1.5rem; }
-    .glass-panel { padding: 1rem; }
 
     /* Prevenir zoom de iOS al enfocar inputs (requiere font-size >= 16px) */
     input.input-control,
@@ -180,19 +252,16 @@ body {
 
     /* Touch targets mínimos */
     .btn { min-height: 44px; }
-    .btn-sm { min-height: 36px; padding: 0.4rem 0.8rem; }
+    .btn-sm { min-height: 36px; }
 
-    /* Navegación inferior: texto más pequeño */
-    .bottom-nav .nav-item { font-size: 0.65rem; }
+    /* Metric value más compacto en mobile */
+    .metric-value { font-size: 1.45rem; }
 }
 
 @media (max-width: 480px) {
-    /* En pantallas muy pequeñas forzar columna única en métricas */
-    .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-
-    /* Tipografía ajustada */
-    h1 { font-size: 1.35rem !important; }
-    h2 { font-size: 1.15rem !important; }
+    /* En pantallas muy pequeñas: métricas en 2 columnas */
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.6rem; }
+    .glass-panel { padding: 1rem; }
 }
 
 /* ---- Progress Bars ---- */
@@ -241,7 +310,6 @@ body {
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
-.animate-fade-in { animation: fadeIn 0.3s ease; }
 
 /* ---- Input Group ---- */
 .input-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
@@ -249,21 +317,6 @@ body {
 
 /* ---- Progress Track ---- */
 .progress-track { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
-
-/* ---- Metric Cards (Creator Dashboard) ---- */
-.metric-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    text-align: left;
-}
-.metric-left { flex: 1; min-width: 0; }
-.metric-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.3rem; }
-.metric-value { font-size: 1.8rem; font-weight: 900; line-height: 1.1; display: block; }
-.metric-value.sm { font-size: 1.3rem; }
-.metric-subtitle { font-size: 0.72rem; margin-top: 0.3rem; }
-.metric-icon-box { width: 48px; height: 48px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
 
 /* ---- Section Cards (Creator Dashboard Goals) ---- */
 .section-card { padding: 1.1rem 1.2rem; }

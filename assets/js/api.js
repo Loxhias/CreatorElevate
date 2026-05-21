@@ -135,7 +135,12 @@ export const auth = {
     },
 
     async updateOwnProfile(patch) {
-        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        if (!isSupabaseConfigured) {
+            const localProfile = JSON.parse(localStorage.getItem('ce_demo_profile') || '{}');
+            const updatedProfile = { ...localProfile, ...patch };
+            localStorage.setItem('ce_demo_profile', JSON.stringify(updatedProfile));
+            return updatedProfile;
+        }
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('No autenticado.');
         const { data, error } = await supabase
@@ -154,12 +159,17 @@ export const auth = {
 // ────────────────────────────────────────────────────────────────────────────
 
 function rowFromDb(r) {
+    const liveSecs = Number(r.live_seconds || 0);
+    const liveDurFallback = liveSecs > 0
+        ? `${Math.floor(liveSecs / 3600)}h ${Math.floor((liveSecs % 3600) / 60)}min`
+        : '0h';
     return {
         username:           r.username,
+        tiktokId:           r.tiktok_id || null,
         diamonds:           Number(r.diamonds || 0),
         diamondsLastMonth:  Number(r.diamonds_last_month || 0),
-        liveDuration:       r.live_duration || '0s',
-        liveSeconds:        Number(r.live_seconds || 0),
+        liveDuration:       r.live_duration || liveDurFallback,
+        liveSeconds:        liveSecs,
         validDays:          Number(r.valid_days || 0),
         newFollowers:       Number(r.new_followers || 0),
         emisionesLive:      Number(r.emisiones_live || 0),
@@ -173,6 +183,7 @@ function rowFromDb(r) {
         manager:            r.manager_name_legacy || null,
         managerId:          r.manager_id || null,
         daysSinceJoining:   r.days_since_joining != null ? Number(r.days_since_joining) : null,
+        agency:             r.agency || 'latam',
     };
 }
 
@@ -182,19 +193,26 @@ export const metrics = {
         if (!isSupabaseConfigured) {
             return { period: null, rows: preloadedData };
         }
+
+        // Consulta directa a las tablas — ordenado por uploaded_at para evitar
+        // períodos futuros/vacíos que tengan fecha más reciente sin datos reales
         const { data: period, error: pErr } = await supabase
-            .from('latest_period').select('*').maybeSingle();
+            .from('report_periods')
+            .select('*')
+            .order('uploaded_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
         if (pErr) throw pErr;
         if (!period) return { period: null, rows: [] };
 
         const { data, error } = await supabase
-            .from('latest_metrics')
+            .from('creator_metrics')
             .select('*')
+            .eq('period_id', period.id)
             .order('diamonds', { ascending: false });
         if (error) throw error;
 
         const rows = data.map(rowFromDb);
-        console.log('📥 API RECEIVE: Latest metrics from DB:', rows);
         return { period, rows };
     },
 
@@ -243,7 +261,6 @@ export const metrics = {
         })).filter(r => r.username);
 
         const safePayload = sanDeep(payload);
-        console.log('🚀 API SEND: Upserting metrics to server:', { periodDate, label, payloadCount: safePayload.length, firstRow: safePayload[0] });
 
         const { data, error } = await supabase.rpc('admin_upsert_metrics', {
             p_period: periodDate,
@@ -251,8 +268,131 @@ export const metrics = {
             p_rows:   safePayload,
         });
         if (error) throw error;
-        console.log('✅ API SEND SUCCESS:', data);
+
+        // Post-upsert: guardar tiktok_id en creator_metrics y sincronizar profiles
+        const withId = rows.filter(r => r.creatorId);
+        if (withId.length > 0) {
+            try {
+                const { data: period } = await supabase
+                    .from('report_periods').select('id').eq('period', periodDate).maybeSingle();
+
+                if (period?.id) {
+                    // 1. Actualizar tiktok_id en creator_metrics (match por username + período)
+                    await Promise.all(withId.map(r =>
+                        supabase.from('creator_metrics')
+                            .update({ tiktok_id: san(String(r.creatorId)) })
+                            .eq('period_id', period.id)
+                            .ilike('username', r.username)
+                    ));
+                }
+
+                // 2. Primera vez: asignar tiktok_id al perfil que coincide por username
+                await Promise.all(withId.map(r =>
+                    supabase.from('profiles')
+                        .update({ tiktok_id: san(String(r.creatorId)) })
+                        .ilike('tiktok_username', r.username)
+                        .is('tiktok_id', null)
+                ));
+
+                // 3. Cambio de username: si el tiktok_id ya existe en profiles, actualizar username
+                await Promise.all(withId.map(r =>
+                    supabase.from('profiles')
+                        .update({ tiktok_username: san(r.username) })
+                        .eq('tiktok_id', san(String(r.creatorId)))
+                        .not('tiktok_username', 'ilike', r.username)
+                ));
+            } catch (e) {
+                console.warn('[upsertPeriod] tiktok_id sync parcialmente fallido:', e.message);
+            }
+        }
+
         return data;
+    },
+
+    /** Admin: sube solo días_desde_incorporación + partidas (NO pisa métricas del creador). */
+    async upsertJoiningData(periodDate, label, rows, agency = 'latam') {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const payload = rows
+            .map(r => ({
+                username:           san(String(r.username || '').trim().replace(/^@/, '')),
+                days_since_joining: Number(r.daysSinceJoining || 0),
+                battles:            Number(r.battles || 0),
+            }))
+            .filter(r => r.username);
+        if (!payload.length) throw new Error('No se encontraron filas válidas en el archivo.');
+        const { data, error } = await supabase.rpc('admin_update_joining_data', {
+            p_period_date:  periodDate,
+            p_period_label: san(label),
+            p_rows:         sanDeep(payload),
+            p_agency:       agency,
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    /** Creador: envía sus propias métricas para el período actual o uno específico. */
+    async submitSelf(validDays, liveHours, diamonds, periodDate = null) {
+        if (!isSupabaseConfigured) {
+            // Modo Demo: Guardar métricas auto-reportadas en localStorage
+            const targetPeriodDate = periodDate || (() => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+            })();
+            const demoMetrics = JSON.parse(localStorage.getItem('ce_demo_metrics') || '{}');
+            demoMetrics[targetPeriodDate] = {
+                valid_days: Number(validDays),
+                live_seconds: Math.round(Number(liveHours) * 3600),
+                live_duration: `${Math.floor(Number(liveHours))}h ${Math.round((Number(liveHours) % 1) * 60)}min`,
+                diamonds: Number(diamonds)
+            };
+            localStorage.setItem('ce_demo_metrics', JSON.stringify(demoMetrics));
+            return { ok: true, period: targetPeriodDate };
+        }
+        const params = {
+            p_valid_days: Number(validDays),
+            p_live_hours: Number(liveHours),
+            p_diamonds:   Number(diamonds),
+        };
+        if (periodDate) {
+            params.p_period_date = periodDate;
+        }
+        const { data, error } = await supabase.rpc('creator_submit_metrics', params);
+        if (error) throw error;
+        return data;
+    },
+
+    /** Creador: obtiene sus propias métricas del período actual o uno específico (null si no envió aún). */
+    async getMyMetrics(periodDate = null) {
+        if (!isSupabaseConfigured) {
+            // Modo Demo: Recuperar de localStorage
+            const targetPeriodDate = periodDate || (() => {
+                const now = new Date();
+                return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+            })();
+            const demoMetrics = JSON.parse(localStorage.getItem('ce_demo_metrics') || '{}');
+            return demoMetrics[targetPeriodDate] || null;
+        }
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
+        
+        const targetPeriodDate = periodDate || (() => {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        })();
+        
+        const { data: period } = await supabase
+            .from('report_periods').select('id').eq('period', targetPeriodDate).maybeSingle();
+        if (!period) return null;
+        const { data: profile } = await supabase
+            .from('profiles').select('tiktok_username').eq('id', user.id).maybeSingle();
+        if (!profile?.tiktok_username) return null;
+        const { data } = await supabase
+            .from('creator_metrics')
+            .select('valid_days, live_seconds, live_duration, diamonds')
+            .eq('period_id', period.id)
+            .ilike('username', profile.tiktok_username)
+            .maybeSingle();
+        return data || null;
     },
 };
 
@@ -284,6 +424,27 @@ export const profiles = {
             .select();
         if (error) throw error;
         return data[0];
+    },
+
+    async setAgency(userId, agency) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({ agency })
+            .eq('id', userId)
+            .select();
+        if (error) throw error;
+        return data[0];
+    },
+
+    async getById(userId) {
+        if (!isSupabaseConfigured) return null;
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .maybeSingle();
+        if (error) throw error;
+        return data;
     },
 
     async searchProfiles(query) {
@@ -407,16 +568,22 @@ export const push = {
      * target = { type: 'all' | 'role' | 'user' | 'users', value: string|string[]|null }
      */
     async send({ title, body, url, target }) {
+        // Enviamos el JWT de la sesión activa para que el servidor pueda verificar identidad
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || '';
+
         const response = await fetch('/api/send-push', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
             body: JSON.stringify({ title: san(title), body: san(body), url: san(url), target: sanDeep(target) }),
         });
 
         let payload = null;
         try { payload = await response.json(); } catch { /* respuesta no-JSON */ }
 
-        // Volcamos siempre los logs del servidor (incluso en error) para poder diagnosticar.
         if (payload && Array.isArray(payload.server_logs) && payload.server_logs.length) {
             console.group(`🚀 REGISTROS DE ENVÍO (SERVIDOR) — HTTP ${response.status}`);
             payload.server_logs.forEach(l => console.log(l));
@@ -441,10 +608,160 @@ export const push = {
 
         return payload;
     },
+
+    /** Devuelve las últimas 50 notificaciones enviadas (vista admin). */
+    async listSent() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, body, url, target_type, target_value, sent_at, delivered, failed')
+            .order('sent_at', { ascending: false })
+            .limit(50);
+        if (error) throw error;
+        return data || [];
+    },
+
+    /** Guarda la notificación enviada en la tabla notifications para el historial. */
+    async saveToDb(title, body, url, target) {
+        if (!isSupabaseConfigured) return;
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('notifications').insert({
+            sent_by:      user?.id || null,
+            title:        san(title),
+            body:         san(body),
+            url:          url || null,
+            target_type:  target.type,
+            target_value: Array.isArray(target.value)
+                ? JSON.stringify(target.value)
+                : (target.value || null),
+            sent_at:      new Date().toISOString(),
+        });
+        if (error) console.warn('[push.saveToDb] error al guardar en BD:', error.message);
+    },
+
+    /**
+     * Devuelve las notificaciones relevantes para un usuario concreto.
+     * Filtra por: all, por rol, por ID individual, y por array de IDs.
+     */
+    async getForUser(userId, userRole) {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id, title, body, url, target_type, target_value, sent_at')
+            .order('sent_at', { ascending: false })
+            .limit(100);
+        if (error) throw error;
+
+        return (data || []).filter(n => {
+            if (n.target_type === 'all') return true;
+            if (n.target_type === 'role' && n.target_value === userRole) return true;
+            if (n.target_type === 'user' && n.target_value === userId) return true;
+            if (n.target_type === 'users') {
+                try {
+                    const ids = JSON.parse(n.target_value);
+                    return Array.isArray(ids) && ids.includes(userId);
+                } catch { return false; }
+            }
+            return false;
+        });
+    },
 };
 
 // ────────────────────────────────────────────────────────────────────────────
-//  CONTENIDOS — Normas y Canales editables por el admin
+//  CAPACITACIONES
+// ────────────────────────────────────────────────────────────────────────────
+
+export const trainings = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('trainings').select('*')
+            .eq('published', true)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async create({ title, description, youtube_url }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('trainings').insert({
+            title: san(title), description: san(description),
+            youtube_url: san(youtube_url), created_by: user?.id,
+        });
+        if (error) throw error;
+    },
+
+    async update(id, { title, description, youtube_url }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('trainings')
+            .update({ title: san(title), description: san(description), youtube_url: san(youtube_url) })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async remove(id) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('trainings').delete().eq('id', id);
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  EVENTOS
+// ────────────────────────────────────────────────────────────────────────────
+
+export const agencyEvents = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('events').select('*')
+            .eq('published', true)
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async create({ title, description, image_url, event_date }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('events').insert({
+            title: san(title), description: san(description),
+            image_url: image_url || null,
+            event_date: event_date || null,
+            created_by: user?.id,
+        });
+        if (error) throw error;
+    },
+
+    async uploadImage(file) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const ext  = file.name.split('.').pop().toLowerCase();
+        const path = `events/${Date.now()}.${ext}`;
+        const { data, error } = await supabase.storage
+            .from('media').upload(path, file, { upsert: false, contentType: file.type });
+        if (error) throw error;
+        return supabase.storage.from('media').getPublicUrl(data.path).data.publicUrl;
+    },
+
+    async update(id, { title, description, image_url, event_date }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('events')
+            .update({ title: san(title), description: san(description),
+                      image_url: image_url || null, event_date: event_date || null })
+            .eq('id', id);
+        if (error) throw error;
+    },
+
+    async remove(id) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
+        const { error } = await supabase.from('events').delete().eq('id', id);
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  CONTENIDOS — páginas editables por el admin
 // ────────────────────────────────────────────────────────────────────────────
 
 const CONTENT_DEFAULTS = {
@@ -470,6 +787,37 @@ export const content = {
             .from('agency_content')
             .upsert({ slug, title: san(title), body: san(body), updated_at: new Date().toISOString() },
                     { onConflict: 'slug' });
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  CANALES OFICIALES — lista gestionada por el admin, guardada como JSON
+// ────────────────────────────────────────────────────────────────────────────
+
+export const channels = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('agency_content')
+            .select('body')
+            .eq('slug', 'channels_v2')
+            .maybeSingle();
+        if (error) throw error;
+        if (!data?.body) return [];
+        try { return JSON.parse(data.body); } catch { return []; }
+    },
+
+    async save(items) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('agency_content')
+            .upsert({
+                slug:       'channels_v2',
+                title:      'Canales Oficiales',
+                body:       JSON.stringify(items),
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'slug' });
         if (error) throw error;
     },
 };

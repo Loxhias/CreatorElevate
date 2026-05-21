@@ -27,7 +27,7 @@ export function renderLogin(container) {
                         <strong>Modo DEMO</strong><br>
                         Supabase no está configurado. Estás usando datos de ejemplo.<br>
                         Admin: <code>admin</code> · Manager: <code>manager1</code>, <code>manager2</code><br>
-                        Creador: ej. <code>heyprive</code>, <code>uplunaz</code>
+                        Creador: ej. <code>loxhias</code>, <code>uplunaz</code>
                     </div>
                 `}
             </div>
@@ -71,7 +71,7 @@ export function renderLogin(container) {
                 <div id="signin-error"></div>
                 <div class="input-group">
                     <label for="si-id">Usuario de TikTok o email</label>
-                    <input type="text" id="si-id" class="input-control" placeholder="ej: heyprive o tu@email.com" required autocomplete="username">
+                    <input type="text" id="si-id" class="input-control" placeholder="ej: loxhias o tu@email.com" required autocomplete="username">
                 </div>
                 <div class="input-group" style="margin-bottom:0.5rem;">
                     <label for="si-pass">Contraseña</label>
@@ -90,7 +90,7 @@ export function renderLogin(container) {
 
         pane.querySelector('#signin-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const id   = pane.querySelector('#si-id').value.trim();
+            const id = pane.querySelector('#si-id').value.trim();
             const pass = pane.querySelector('#si-pass').value;
             const errBox = pane.querySelector('#signin-error');
             errBox.innerHTML = '';
@@ -135,7 +135,7 @@ export function renderLogin(container) {
                 ` : ''}
                 <div class="input-group">
                     <label for="su-tt">Usuario de TikTok <span style="color:var(--danger)">*</span></label>
-                    <input type="text" id="su-tt" class="input-control" placeholder="ej: heyprive (sin @)" required autocomplete="username" ${!isSupabaseConfigured ? 'disabled' : ''}>
+                    <input type="text" id="su-tt" class="input-control" placeholder="ej: loxhias (sin @)" required autocomplete="username" ${!isSupabaseConfigured ? 'disabled' : ''}>
                     <small style="display:block;margin-top:0.3rem;font-size:0.7rem;color:var(--text-muted);">Solo puede haber una cuenta por usuario.</small>
                 </div>
                 <div class="input-group">
@@ -155,10 +155,10 @@ export function renderLogin(container) {
 
         pane.querySelector('#signup-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const tt    = pane.querySelector('#su-tt').value.trim().replace(/^@/, '').toLowerCase();
+            const tt = pane.querySelector('#su-tt').value.trim().replace(/^@/, '').toLowerCase();
             const email = pane.querySelector('#su-email').value.trim().toLowerCase();
-            const pass  = pane.querySelector('#su-pass').value;
-            const msg   = pane.querySelector('#signup-msg');
+            const pass = pane.querySelector('#su-pass').value;
+            const msg = pane.querySelector('#signup-msg');
             msg.innerHTML = '';
 
             const btn = pane.querySelector('button[type=submit]');
@@ -222,7 +222,10 @@ export function renderLogin(container) {
                 msg.innerHTML = `<div class="form-success">✓ Enlace enviado. Revisa tu correo electrónico.</div>`;
                 pane.querySelector('#forgot-form').reset();
             } catch (err) {
-                msg.innerHTML = `<div class="form-error">⚠ ${err.message || 'Error al enviar el enlace.'}</div>`;
+                const friendly = (err.message || '').toLowerCase().includes('sending')
+                    ? 'No se pudo enviar el email. Si el problema persiste, contactá al administrador.'
+                    : (err.message || 'Error al enviar el enlace.');
+                msg.innerHTML = `<div class="form-error">⚠ ${friendly}</div>`;
             } finally {
                 btn.disabled = false; btn.textContent = 'Enviar Instrucciones';
             }

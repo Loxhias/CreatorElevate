@@ -21,7 +21,7 @@ create extension if not exists "citext";
 
 create table if not exists public.profiles (
     id                uuid primary key references auth.users(id) on delete cascade,
-    tiktok_username   citext unique,            -- "heyprive" — null para admin/manager si aún no asigna
+    tiktok_username   citext unique,            -- "loxhias" — null para admin/manager si aún no asigna
     email             citext unique,            -- replicado desde auth.users para queries
     role              text not null default 'creator' check (role in ('admin','manager','creator')),
     is_admin          boolean not null default false,

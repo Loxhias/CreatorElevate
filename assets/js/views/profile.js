@@ -35,6 +35,16 @@ export async function renderProfile(container) {
                     <input type="text" id="prof-avatar" class="input-control" value="${profile.avatar_url || ''}" placeholder="https://...">
                 </div>
 
+                ${profile.role === 'creator' ? `
+                <div class="input-group">
+                    <label>Fecha de ingreso a la agencia</label>
+                    <input type="date" id="prof-joining-date" class="input-control" value="${profile.joining_date || ''}">
+                    <small style="display:block;margin-top:0.3rem;font-size:0.7rem;color:var(--text-muted);">
+                        ⚡ Indica cuándo comenzaste a trabajar con nosotros. Se usa para habilitar las Misiones y el Reto de 90 Días.
+                    </small>
+                </div>
+                ` : ''}
+
                 <div style="margin-top:1.5rem;padding-top:1.2rem;border-top:1px solid rgba(255,255,255,0.05);">
                     <button type="submit" class="btn btn-primary" style="width:100%;padding:0.9rem;">
                         Guardar Cambios
@@ -126,6 +136,11 @@ export async function renderProfile(container) {
             phone:        container.querySelector('#prof-phone').value.trim(),
             avatar_url:   container.querySelector('#prof-avatar').value.trim(),
         };
+
+        const joiningInput = container.querySelector('#prof-joining-date');
+        if (joiningInput) {
+            patch.joining_date = joiningInput.value || null;
+        }
 
         btn.disabled = true;
         btn.textContent = 'Guardando…';

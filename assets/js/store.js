@@ -13,6 +13,7 @@ const state = {
     period: null,          // { id, period, label } o null
     managers: [],          // lista de managers (para admin)
     profiles: [],          // lista de profiles (para admin)
+    managerCreators: {},   // cache { [managerId]: { usernames: Set, expiresAt: number } }
 };
 
 export const store = {
@@ -49,7 +50,23 @@ export const store = {
     },
 
     // ── nuevos getters ─────────────────────────────────────────────────────
-    getProfile:  () => state.profile,
+    getProfile:  () => {
+        if (!isSupabaseConfigured) {
+            const localProfile = JSON.parse(localStorage.getItem('ce_demo_profile') || '{}');
+            const currentUser = store.getCurrentUser();
+            if (!currentUser) return null;
+            return {
+                id: currentUser.id || 'demo-user-id',
+                tiktok_username: currentUser.username,
+                display_name: currentUser.username,
+                role: currentUser.role || 'creator',
+                email: currentUser.email || 'demo@creatorelevate.com',
+                joining_date: localProfile.joining_date || null,
+                ...localProfile
+            };
+        }
+        return state.profile;
+    },
     getPeriod:   () => state.period,
     getManagers: () => state.managers,
     getProfiles: () => state.profiles,
@@ -82,7 +99,8 @@ export const store = {
 
             if (sessionResult.status === 'fulfilled' && sessionResult.value) {
                 state.sessionUser = sessionResult.value.user;
-                state.profile = await auth.getProfile();
+                // Pass userId to skip the internal getUser() round-trip
+                state.profile = await auth.getProfile(sessionResult.value.user.id);
             }
 
             if (metricsResult.status === 'fulfilled' && metricsResult.value) {
@@ -111,6 +129,24 @@ export const store = {
         ]);
         state.profile  = profile;
         state.sessionUser = session?.user || null;
+    },
+
+    /** Fuerza re-fetch de profiles en el próximo renderAdminDashboard. */
+    clearProfiles() {
+        state.profiles = [];
+        state.managers = [];
+    },
+
+    // ── manager group cache ────────────────────────────────────────────────
+    getManagerGroup(managerId) {
+        const c = state.managerCreators[managerId];
+        return c && Date.now() < c.expiresAt ? c.usernames : null;
+    },
+    setManagerGroup(managerId, usernames) {
+        state.managerCreators[managerId] = { usernames, expiresAt: Date.now() + 5 * 60 * 1000 };
+    },
+    invalidateManagerGroup(managerId) {
+        delete state.managerCreators[managerId];
     },
 
     /** Carga managers + perfiles (panel admin). */

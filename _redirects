@@ -1,2 +1,1 @@
-# SPA fallback: cualquier ruta no encontrada vuelve al index.
-/*    /index.html   200
+# No se necesitan redirects — la app es un SPA con navegacion JS, no rutas URL.

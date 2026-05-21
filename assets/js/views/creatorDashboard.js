@@ -1,6 +1,10 @@
+// v2
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements } from '../config.js';
+import { push, metrics } from '../api.js';
+import { t, getLang } from '../i18n.js';
+import { appState } from '../main.js';
 
 
 function getIdx(d, tiers) {
@@ -224,8 +228,9 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
     } else {
         inspireMsg = `💡 Completa las horas y días de transmisión para desbloquear tu bono en efectivo.`;
     }
-    const vizMax = assignedTier ? assignedTier.range
-                 : (currCashIdx+1 < cashBonuses.length ? cashBonuses[currCashIdx+1].range : cashBonuses[0].range);
+    const nextTierIdx = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx;
+    const nextTargetTier = nextTierIdx >= 0 && nextTierIdx < cashBonuses.length ? cashBonuses[nextTierIdx] : cashBonuses[0];
+    const vizMax = nextTargetTier.range;
     const curPct = Math.min(98, (me.diamonds / vizMax) * 100);
     const dotColor = reqMaintains ? 'var(--accent)' : 'var(--warning)';
     const progressChart = `
@@ -244,7 +249,7 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                 </div>
                 <div style="text-align:right;">
                     <div style="font-size:0.75rem;font-weight:700;color:${reqMaintains?'var(--accent)':'rgba(255,255,255,0.55)'};">${fmt(vizMax)} 💎</div>
-                    <div style="font-size:0.63rem;color:var(--text-muted);">${reqMaintains ? '✓ Meta alcanzada' : 'Meta del nivel'}</div>
+                    <div style="font-size:0.63rem;color:var(--text-muted);">${reqMaintains ? 'Meta alcanzada' : 'Meta del nivel'}</div>
                 </div>
             </div>
         </div>`;
@@ -261,11 +266,12 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                     </div>
                 </div>
                 ${(() => {
-                    // Bonus amounts based on ASSIGNED level (lastMonthIdx), not current month's tier
-                    // bonusIfMaintains = what they earn if they reach/match their assigned level
+                    // Bonus amounts based on currently reached level (currCashIdx) or assigned level
                     const bonusIfMaintains = lastMonthIdx >= 0 ? cashBonuses[lastMonthIdx].mantiene : null;
-                    // bonusIfSubio = what they'd earn reaching the tier ABOVE their assigned level
-                    const nextAboveAssigned = lastMonthIdx + 1 < cashBonuses.length ? cashBonuses[lastMonthIdx + 1] : null;
+                    
+                    // bonusIfNextTier is calculated dynamically based on the NEXT tier above their currently reached tier
+                    const nextTierIdxForBonus = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx + 1;
+                    const nextAboveAssigned = nextTierIdxForBonus < cashBonuses.length ? cashBonuses[nextTierIdxForBonus] : null;
                     const bonusIfNextTier   = nextAboveAssigned ? nextAboveAssigned.subio : null;
 
 
@@ -456,10 +462,8 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
 }
 
 
-function tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashIdx) {
-    // ── Data from LAST month ────────────────────────────────────────────────
-    // We use diamondsLastMonth to determine the tier/bonus earned last month.
-    // hLast / dyLast / cashAmtLast come from the previous month's calculation.
+function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashIdx) {
+    // hLast y dyLast no existen en la BD — se ignoran y se infiere desde diamondsLastMonth
     const now = new Date();
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthName = lastMonthDate.toLocaleString('es', { month: 'long', year: 'numeric' });
@@ -556,6 +560,191 @@ function tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, tr
         </div>`;
 }
 
+// ── Daily tracker helpers ──────────────────────────────────────────────────
+function dtKey(uid, ym) { return `dt_${uid || 'anon'}_${ym}`; }
+function currentYM() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+function loadDt(uid) {
+    const key = dtKey(uid, currentYM());
+    try { return { entries: JSON.parse(localStorage.getItem(key) || '{}'), key }; }
+    catch { return { entries: {}, key }; }
+}
+
+function dtTotals(entries) {
+    const vals = Object.values(entries);
+    return {
+        validDays: vals.filter(e => e.streamed).length,
+        diamonds:  vals.reduce((s, e) => s + (Number(e.diamonds) || 0), 0),
+        minutes:   vals.reduce((s, e) => s + (Number(e.minutes)  || 0), 0),
+    };
+}
+
+function minsToHM(mins) {
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return `${h}:${String(m).padStart(2,'0')}`;
+}
+
+function renderDailyTracker(placeholder, uid, mode) {
+    if (!placeholder) return;
+
+    const diamGoal = mode === 'missions'
+        ? Math.ceil(20000 / daysInMonth())
+        : Math.ceil(80000 / daysInMonth());
+    const minsGoal = mode === 'missions' ? 60 : 180;
+
+    const today = todayISO();
+    const { entries, key } = loadDt(uid);
+    const todayE = entries[today] || null;
+    const totals = dtTotals(entries);
+
+    const dayFmt = (iso) => new Date(iso + 'T12:00:00')
+        .toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' });
+
+    const logDays = Object.entries(entries)
+        .filter(([d]) => d !== today)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .slice(0, 7);
+
+    const hitDiam  = (todayE?.diamonds || 0) >= diamGoal;
+    const hitTime  = (todayE?.minutes  || 0) >= minsGoal;
+
+    placeholder.innerHTML = `
+        <div style="margin-top:1.25rem;padding-top:1.1rem;border-top:1px solid var(--glass-border);">
+            <div style="font-size:0.75rem;font-weight:700;color:var(--text-muted);margin-bottom:0.85rem;text-transform:uppercase;letter-spacing:0.07em;">📅 ${t('daily.section')}</div>
+
+            <!-- Today card -->
+            <div class="glass-panel" style="padding:1rem 1.1rem;margin-bottom:0.75rem;${todayE?.streamed ? 'border-color:rgba(0,217,166,0.3);background:rgba(0,217,166,0.04);' : ''}">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+                    <span style="font-size:0.82rem;font-weight:700;">${t('daily.today')} — ${dayFmt(today)}</span>
+                    ${todayE ? `<span style="font-size:0.63rem;background:rgba(0,217,166,0.15);color:var(--accent);border-radius:999px;padding:0.15rem 0.55rem;font-weight:700;">✓ ${t('daily.saved')}</span>` : ''}
+                </div>
+
+                <label style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.75rem;cursor:pointer;">
+                    <input type="checkbox" id="dt-streamed" ${todayE?.streamed ? 'checked' : ''}
+                        style="width:17px;height:17px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">
+                    <span style="font-size:0.82rem;">${t('daily.streamed')} <span style="color:var(--text-muted);font-size:0.72rem;">${t('daily.valid_note')}</span></span>
+                </label>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.75rem;">
+                    <div>
+                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">💎 ${t('daily.diamonds')}</label>
+                        <input id="dt-diamonds" type="number" min="0" placeholder="ej: 1200"
+                            value="${todayE?.diamonds || ''}"
+                            class="input-control" style="padding:0.45rem 0.6rem;font-size:0.82rem;">
+                        <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitDiam ? 'var(--accent)' : 'var(--text-muted)'};">
+                            ${t('daily.goal')}: ${fmt(diamGoal)} 💎${hitDiam ? ' ✅' : ''}
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;">⏱ ${t('daily.time')}</label>
+                        <div style="display:flex;align-items:center;gap:0.3rem;">
+                            <input id="dt-time-h" type="number" min="0" max="99" placeholder="0"
+                                value="${todayE?.minutes ? Math.floor(todayE.minutes / 60) : ''}"
+                                class="input-control" inputmode="numeric" style="width:2.9rem;text-align:center;padding:0.45rem 0.3rem;font-size:0.82rem;">
+                            <span style="font-size:1rem;font-weight:800;color:var(--text-secondary);flex-shrink:0;">:</span>
+                            <input id="dt-time-m" type="number" min="0" max="59" placeholder="00"
+                                value="${todayE?.minutes ? (todayE.minutes % 60) : ''}"
+                                class="input-control" inputmode="numeric" style="width:2.9rem;text-align:center;padding:0.45rem 0.3rem;font-size:0.82rem;">
+                        </div>
+                        <div style="font-size:0.62rem;margin-top:0.25rem;color:${hitTime ? 'var(--accent)' : 'var(--text-muted)'};">
+                            ${t('daily.goal')}: ${minsToHM(minsGoal)}${hitTime ? ' ✅' : ''}
+                        </div>
+                    </div>
+                </div>
+
+                <div id="dt-error" style="margin-bottom:0.5rem;color:var(--danger);font-size:0.72rem;display:none;"></div>
+
+                <div style="display:flex;gap:0.5rem;">
+                    <button id="dt-save" class="btn btn-primary" style="flex:1;padding:0.5rem 0.6rem;font-size:0.78rem;">
+                        ${todayE ? t('daily.update_day') : t('daily.save_day')}
+                    </button>
+                    ${totals.validDays > 0 ? `
+                    <button id="dt-sync" class="btn" style="padding:0.5rem 0.75rem;font-size:0.72rem;background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);color:var(--primary-light);white-space:nowrap;">
+                        ${t('daily.sync')}
+                    </button>` : ''}
+                </div>
+            </div>
+
+            <!-- Accumulated totals (only if there are entries) -->
+            ${totals.validDays > 0 ? `
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.75rem;">
+                <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-size:1.1rem;font-weight:800;">${totals.validDays}</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">${t('daily.valid_days')}</div>
+                </div>
+                <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-size:1rem;font-weight:800;color:var(--primary-light);">${fmt(totals.diamonds)}</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">💎 total</div>
+                </div>
+                <div class="glass-panel" style="padding:0.6rem 0.5rem;text-align:center;">
+                    <div style="font-size:1.1rem;font-weight:800;color:var(--accent);">${minsToHM(totals.minutes)}</div>
+                    <div style="font-size:0.6rem;color:var(--text-muted);">${t('daily.live')}</div>
+                </div>
+            </div>` : ''}
+
+            <!-- Log of past days -->
+            ${logDays.length > 0 ? `
+            <div style="font-size:0.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem;">${t('daily.past')}</div>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;">
+                ${logDays.map(([d, e]) => `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0.75rem;background:rgba(255,255,255,0.02);border:1px solid var(--glass-border);border-radius:var(--radius-sm);">
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span>${e.streamed ? '✅' : '⬜'}</span>
+                            <span style="font-size:0.72rem;color:var(--text-secondary);">${dayFmt(d)}</span>
+                        </div>
+                        <div style="display:flex;gap:0.75rem;font-size:0.68rem;color:var(--text-muted);">
+                            ${e.diamonds ? `<span>${fmt(e.diamonds)} 💎</span>` : ''}
+                            ${e.minutes  ? `<span>${minsToHM(e.minutes)}</span>` : ''}
+                        </div>
+                    </div>`).join('')}
+            </div>` : ''}
+        </div>
+    `;
+
+    const errDiv = placeholder.querySelector('#dt-error');
+
+    placeholder.querySelector('#dt-save')?.addEventListener('click', () => {
+        const streamed = placeholder.querySelector('#dt-streamed').checked;
+        const diamonds = Number(placeholder.querySelector('#dt-diamonds').value) || 0;
+        const dtH      = Number(placeholder.querySelector('#dt-time-h').value) || 0;
+        const dtM      = Number(placeholder.querySelector('#dt-time-m').value) || 0;
+
+        if (dtM > 59) {
+            errDiv.textContent = t('daily.time_err');
+            errDiv.style.display = 'block';
+            return;
+        }
+        const minutes = dtH * 60 + dtM;
+        errDiv.style.display = 'none';
+        entries[today] = { streamed, diamonds, minutes };
+        localStorage.setItem(key, JSON.stringify(entries));
+        renderDailyTracker(placeholder, uid, mode);
+    });
+
+    placeholder.querySelector('#dt-sync')?.addEventListener('click', async () => {
+        const totals  = dtTotals(entries);
+        const syncBtn = placeholder.querySelector('#dt-sync');
+        syncBtn.disabled = true;
+        syncBtn.textContent = t('daily.syncing');
+        try {
+            await metrics.submitSelf(totals.validDays, totals.minutes / 60, totals.diamonds);
+            await store.refreshMetrics();
+            syncBtn.textContent = t('daily.synced');
+            syncBtn.style.color = 'var(--accent)';
+            setTimeout(() => { syncBtn.disabled = false; syncBtn.textContent = t('daily.sync'); syncBtn.style.color = ''; }, 2500);
+        } catch (err) {
+            syncBtn.disabled = false;
+            syncBtn.textContent = '📤 Cargar al perfil';
+            errDiv.textContent = err.message || 'Error al guardar.';
+            errDiv.style.display = 'block';
+        }
+    });
+}
+
 // ── Missions tab (new creators ≤ 30 days, with grace period) ──────────────
 function tabMissions(me) {
     const m1 = me.validDays >= 5;
@@ -599,7 +788,9 @@ function tabMissions(me) {
         ${!allDone ? `
         <div style="padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(124,110,247,0.4);margin-top:0.25rem;">
             <p style="font-size:0.73rem;color:var(--text-muted);">Las misiones se renuevan con cada reporte mensual. ¡Completa las 3 para desbloquear la Insignia Galaxy 🌌!</p>
-        </div>` : ''}`;
+        </div>` : ''}
+
+        <div id="dt-missions"></div>`;
 }
 
 // ── Reto 90 días (growing creators 30-90 days) ─────────────────────────────
@@ -657,7 +848,9 @@ function tabChallenge90(me, h, dy) {
         ${!allDone ? `
         <div style="padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(255,181,71,0.4);margin-top:0.25rem;">
             <p style="font-size:0.73rem;color:var(--text-muted);">Supera los 4 objetivos en un mismo mes para obtener el estatus de <strong style="color:var(--warning);">Creador Maduro</strong> 🏆</p>
-        </div>` : ''}`;
+        </div>` : ''}
+
+        <div id="dt-challenge"></div>`;
 }
 
 // ── Main render ────────────────────────────────────────────────────────────
@@ -681,30 +874,34 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             </div>
         </div>`;
 
-    if (isSupabaseConfigured && !targetUsername && !store.getMetricsData()?.length) {
+    if (isSupabaseConfigured) {
         await store.refreshMetrics().catch(() => {});
     }
 
     const data = store.getMetricsData();
     const user = store.getCurrentUser();
-    
+
     // Si hay targetUsername, estamos en "Modo Auditoría"
     const isAuditing = !!targetUsername;
     const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || user?.username || '').toLowerCase();
 
-    if (!data?.length) { container.innerHTML = emptyState('Sin datos', 'Aún no se cargó el reporte del mes.'); return; }
-
-    // Buscamos a la creadora (limpiando @ y espacios, e insensible a mayúsculas)
+    // Buscamos al creador: primero por tiktok_id estable, luego por username
+    // En modo auditoría solo buscamos por username — profileTiktokId es del manager logueado, no del target
     const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
     const searchName = cleanMatch(myUsername);
-    const me = data.find(c => cleanMatch(c.username) === searchName);
+    const profileTiktokId = isAuditing ? null : (store.getProfile?.()?.tiktok_id || null);
+    const me = data?.find(c =>
+        (profileTiktokId && c.tiktokId && profileTiktokId === c.tiktokId) ||
+        cleanMatch(c.username) === searchName
+    );
 
-    if (!me) { 
+    if (!me) {
+        if (!isAuditing) { renderSubmitMetricsView(container); return; }
         container.innerHTML = emptyState(
-            `No se encontraron métricas para @${myUsername}`, 
-            'Asegúrate de que el usuario de TikTok en el perfil coincida exactamente con el del reporte Excel.'
-        ); 
-        return; 
+            `No se encontraron métricas para @${myUsername}`,
+            'El creador aún no ha cargado sus métricas este mes.'
+        );
+        return;
     }
 
     // Calculations
@@ -770,17 +967,27 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const dLeft = daysLeft();
     const rank  = getRanking(me, data);
 
-    // Misiones: solo para nuevos (≤30 días). Si no hay datos, asumimos que es antiguo (999)
-    const daysJoined    = me.daysSinceJoining ?? 999;
+    const profile = store.getProfile?.();
+    let dsj = null;
+    if (profile?.joining_date) {
+        const jDate = new Date(profile.joining_date);
+        const today = new Date();
+        const diffTime = today - jDate;
+        dsj = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    } else {
+        dsj = me.daysSinceJoining != null ? Number(me.daysSinceJoining) : null;
+    }
+
     const isAdmin       = store.getCurrentUser()?.role === 'admin';
-    const showMissions  = isAuditing || isAdmin || (me.daysSinceJoining !== null && daysJoined <= (30 + dLeft));
-    const showChallenge = !showMissions && (isAuditing || isAdmin || daysJoined <= 90);
+    // Misiones y Reto 90d habilitados para creadores nuevos (<90 días o sin fecha de ingreso cargada)
+    const showMissions  = dsj == null || dsj < 90;
+    const showChallenge = dsj == null || dsj < 90;
 
     // Estimated earnings: $1 per 200 diamonds
     const DIAMONDS_PER_USD = 200;
     const estimatedEarnings = (me.diamonds / DIAMONDS_PER_USD).toFixed(2);
     const now = new Date();
-    const monthName = now.toLocaleString('es', { month: 'long' });
+    const monthName = now.toLocaleString(getLang() === 'en' ? 'en' : 'es', { month: 'long' });
     const year = now.getFullYear();
 
     // Inject shell with tab nav
@@ -811,11 +1018,29 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             </div>
         </div>
 
+        ${(!isAuditing && user?.role === 'creator' && !profile?.joining_date) ? `
+        <div id="joining-date-banner" class="glass-panel animate-fadeIn" style="padding:1.2rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,181,71,0.08),rgba(124,110,247,0.05));border-color:rgba(255,181,71,0.3);position:relative;">
+            <div style="display:flex;align-items:start;gap:0.85rem;flex-wrap:wrap;">
+                <div style="font-size:1.8rem;line-height:1;">📅</div>
+                <div style="flex:1;min-width:240px;">
+                    <div style="font-weight:700;font-size:0.88rem;color:var(--warning);margin-bottom:0.25rem;">Completa tu Fecha de Ingreso</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);line-height:1.4;margin-bottom:0.85rem;">
+                        Para poder habilitar tus **Misiones de Inicio** y el **Reto de 90 Días**, necesitamos saber cuándo te uniste a la agencia.
+                    </div>
+                    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+                        <input type="date" id="banner-date-input" class="input-control" style="padding:0.4rem 0.6rem;font-size:0.75rem;width:auto;min-width:140px;background:rgba(0,0,0,0.3);border:1px solid var(--glass-border);color:#fff;border-radius:var(--radius-sm);">
+                        <button id="banner-save-btn" class="btn btn-sm btn-primary" style="padding:0.45rem 1rem;font-size:0.72rem;font-weight:700;">Activar Retos</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+
 
         <!-- Estimated Earnings Hero -->
         <div class="glass-panel" style="padding:1.4rem 1.5rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(0,217,166,0.07),rgba(124,110,247,0.05));border-color:rgba(0,217,166,0.2);text-align:center;">
             <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.35rem;">Ganancias Estimadas — ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
-            <div style="font-size:3rem;font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.3rem;">
+            <div style="font-size:clamp(2rem,8vw,3rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.3rem;">
                 $${Number(estimatedEarnings).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2})}
             </div>
             <div style="font-size:0.62rem;color:var(--text-muted);">
@@ -824,12 +1049,14 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         </div>
 
         <!-- Tab Nav -->
-        <div id="creator-tabs" style="display:flex;gap:0.4rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-            <button class="tab-btn active" data-tab="metrics"  style="flex:1;white-space:nowrap;">📊 Métricas</button>
-            <button class="tab-btn"        data-tab="goals"    style="flex:1;white-space:nowrap;">🎯 Objetivos</button>
-            <button class="tab-btn"        data-tab="benefits" style="flex:1;white-space:nowrap;">🎁 Beneficios</button>
-            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex:1;white-space:nowrap;">🚀 Misiones</button>` : ''}
-            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex:1;white-space:nowrap;">🏆 Reto 90d</button>` : ''}
+        <div id="creator-tabs" style="display:flex;gap:0.35rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
+            <button class="tab-btn active" data-tab="metrics"  style="flex-shrink:0;white-space:nowrap;">${t('tab.metrics')}</button>
+            <button class="tab-btn"        data-tab="goals"    style="flex-shrink:0;white-space:nowrap;">${t('tab.goals')}</button>
+            <button class="tab-btn"        data-tab="benefits" style="flex-shrink:0;white-space:nowrap;">${t('tab.benefits')}</button>
+            ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex-shrink:0;white-space:nowrap;">${t('tab.missions')}</button>` : ''}
+            ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex-shrink:0;white-space:nowrap;">${t('tab.challenge')}</button>` : ''}
+            <button class="tab-btn" data-tab="inbox" style="flex-shrink:0;white-space:nowrap;">${t('tab.inbox')}</button>
+            ${!isAuditing ? `<button class="tab-btn" data-tab="update" style="flex-shrink:0;white-space:nowrap;">${t('tab.update')}</button>` : ''}
         </div>
 
         <!-- Tab Content -->
@@ -857,59 +1084,65 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     }
 
     const tabContent = container.querySelector('#tab-content');
-    const tabs = { metrics: null, goals: null, benefits: null, missions: null, challenge: null };
+    const tabs = { metrics: null, goals: null, benefits: null, missions: null, challenge: null, inbox: null };
+    const inboxLastSeenKey = `inbox_last_seen_${user?.id || 'anon'}`;
 
     // ── Last month benefit calculation ────────────────────────────────────
-    // We only have dLast from the data; hours/days from last month aren't in the file.
-    // We calculate what tier they were in last month and what bonus they earned.
-    // Note: hoursLastMonth and daysLastMonth are not available, so we use
-    // me.hoursLastMonth / me.daysLastMonth if present, otherwise assume met.
-    const hLast     = me.hoursLastMonth  != null ? parseHours(me.hoursLastMonth)  : null;
-    const dyLast    = me.daysLastMonth   != null ? me.daysLastMonth                : null;
+    // Solo tenemos diamonds_last_month de la BD; horas y días del mes anterior
+    // no están almacenados. Se asume que se cumplieron si los diamantes lo indican.
     const lastCashTierIdx = Math.max(-1, getIdx(dLast, cashBonuses));
-    // Trend for last month: compare dLast vs the month before (not available → assume 'mantiene')
-    const trendLast = trend; // re-use current trend as best approximation
+    const trendLast = trend;
     let cashAmtLast = 0;
-    // Only calculate if we have enough data
     if (lastCashTierIdx >= 0) {
-        const meetsHLast = hLast != null ? hLast >= cashH : true; // assume met if no data
-        const meetsDyLast = dyLast != null ? dyLast >= cashDy : true;
-        if (meetsHLast && meetsDyLast) {
-            const tier = cashBonuses[lastCashTierIdx];
-            cashAmtLast = trendLast === 'subio' ? tier.subio : trendLast === 'mantiene' ? tier.mantiene : 0;
-        }
+        const tier = cashBonuses[lastCashTierIdx];
+        cashAmtLast = trendLast === 'subio' ? tier.subio : trendLast === 'mantiene' ? tier.mantiene : 0;
     }
     let diamAmtLast = 0;
     const lastDiamIdx = getIdx(dLast, diamondRewards);
     if (lastDiamIdx >= 0) {
-        const meetsHLast = hLast != null ? hLast >= diamH : true;
-        const meetsDyLast = dyLast != null ? dyLast >= diamDy : true;
-        if (meetsHLast && meetsDyLast) {
-            const base = diamondRewards[lastDiamIdx].reward;
-            const battlesLast = Math.min(me.battles ?? 0, maxBattles);
-            const extra = Math.round(base * (Math.floor(battlesLast / 100) * 0.1));
-            diamAmtLast = base + extra;
-        }
+        const base = diamondRewards[lastDiamIdx].reward;
+        const battlesLast = Math.min(me.battles ?? 0, maxBattles);
+        const extra = Math.round(base * (Math.floor(battlesLast / 100) * 0.1));
+        diamAmtLast = base + extra;
     }
-    // If dyLast is unavailable, infer activity from diamond count:
-    // 80K+ diamonds implies the creator was active enough (15+ days).
-    const dyLastMetSub = dyLast != null
-        ? dyLast >= subscriptionRequirements.minDays
-        : dLast >= subscriptionRequirements.minDiamonds; // high diamonds → assume active days met
-    const hasSubLast = dyLastMetSub && dLast >= subscriptionRequirements.minDiamonds;
-
+    const hasSubLast = dLast >= subscriptionRequirements.minDiamonds;
     const meetsCashLast = cashAmtLast > 0;
     const meetsDiamLast = diamAmtLast > 0;
 
     function renderTab(name) {
+        if (name === 'inbox') {
+            tabContent.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text-muted);font-size:0.85rem;">Cargando mensajes...</div>';
+            const userId   = user?.id;
+            const userRole = user?.role || 'creator';
+            push.getForUser(userId, userRole).then(notifications => {
+                const lastSeen = localStorage.getItem(inboxLastSeenKey) || '1970-01-01';
+                localStorage.setItem(inboxLastSeenKey, new Date().toISOString());
+                // Quitar badge del botón
+                const inboxBtn = container.querySelector('[data-tab="inbox"]');
+                if (inboxBtn) inboxBtn.innerHTML = t('tab.inbox');
+                tabContent.innerHTML = `<div class="animate-fade-in">${renderInbox(notifications, lastSeen)}</div>`;
+            }).catch(() => {
+                tabContent.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--danger);font-size:0.85rem;">Error al cargar los mensajes.</div>';
+            });
+            return;
+        }
+
+        if (name === 'update') {
+            renderSubmitMetricsView(tabContent, me);
+            return;
+        }
+
         if (!tabs[name]) {
             if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
             if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
-            if (name === 'benefits')  tabs[name] = tabBenefits(me, hLast, dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
+            if (name === 'benefits')  tabs[name] = tabBenefits(me, null, null, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
             if (name === 'missions')  tabs[name] = tabMissions(me);
             if (name === 'challenge') tabs[name] = tabChallenge90(me, h, dy);
         }
         tabContent.innerHTML = `<div class="animate-fade-in">${tabs[name]}</div>`;
+
+        if (name === 'missions')  renderDailyTracker(tabContent.querySelector('#dt-missions'),  user?.id, 'missions');
+        if (name === 'challenge') renderDailyTracker(tabContent.querySelector('#dt-challenge'), user?.id, 'challenge');
     }
 
     container.querySelectorAll('.tab-btn').forEach(btn => {
@@ -922,6 +1155,46 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     renderTab('metrics');
 
+    // Evento para guardar la fecha de ingreso desde el banner
+    const bannerSaveBtn = container.querySelector('#banner-save-btn');
+    if (bannerSaveBtn) {
+        bannerSaveBtn.onclick = async () => {
+            const dateInput = container.querySelector('#banner-date-input');
+            const dateValue = dateInput ? dateInput.value : '';
+            if (!dateValue) {
+                appState.showToast('Por favor, selecciona una fecha válida.', 'danger');
+                return;
+            }
+            bannerSaveBtn.disabled = true;
+            bannerSaveBtn.textContent = 'Activando...';
+            try {
+                const { auth } = await import('../api.js');
+                await auth.updateOwnProfile({ joining_date: dateValue });
+                await store.refreshProfile();
+                appState.showToast('¡Desafíos activados correctamente!', 'success');
+                // Re-renderizar el dashboard reactivamente
+                renderCreatorDashboard(container, targetUsername);
+            } catch (err) {
+                console.error(err);
+                appState.showToast('Error: ' + err.message, 'danger');
+                bannerSaveBtn.disabled = false;
+                bannerSaveBtn.textContent = 'Activar Retos';
+            }
+        };
+    }
+
+    // Cargar badge de no leídos en background
+    if (user?.id) {
+        push.getForUser(user.id, user.role || 'creator').then(notifications => {
+            const lastSeen = localStorage.getItem(inboxLastSeenKey) || '1970-01-01';
+            const unread = notifications.filter(n => n.sent_at > lastSeen).length;
+            if (unread > 0) {
+                const inboxBtn = container.querySelector('[data-tab="inbox"]');
+                if (inboxBtn) inboxBtn.innerHTML = `${t('tab.inbox')} <span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;margin-left:0.2rem;vertical-align:middle;">${unread}</span>`;
+            }
+        }).catch(() => {});
+    }
+
     // Manejar botón de volver
     container.querySelector('#back-to-list')?.addEventListener('click', () => {
         const role = store.getCurrentUser().role;
@@ -933,10 +1206,244 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     });
 }
 
+
+function renderSubmitMetricsView(container, prefill = null) {
+    // Si no hay prefill (primera carga) y el creador no tiene username configurado → prompt
+    if (!prefill) {
+        const profile = store.getProfile?.();
+        if (profile && !profile.tiktok_username?.trim()) {
+            container.innerHTML = `
+                <div class="glass-panel animate-fadeIn" style="max-width:480px;margin:2rem auto;text-align:center;padding:2.5rem 1.5rem;">
+                    <div style="font-size:2.5rem;margin-bottom:1rem;">📋</div>
+                    <h3 style="margin-bottom:0.6rem;">${t('metrics.no_username_title')}</h3>
+                    <p style="font-size:0.82rem;color:var(--text-secondary);margin-bottom:1.75rem;line-height:1.6;">
+                        ${t('metrics.no_username_desc')}
+                    </p>
+                    <button id="go-profile-btn" class="btn btn-primary">${t('metrics.go_profile')}</button>
+                </div>`;
+            container.querySelector('#go-profile-btn')?.addEventListener('click', () => {
+                document.querySelector('.nav-item[data-view="perfil"]')?.click();
+            });
+            return;
+        }
+    }
+
+    const liveSecs        = Number(prefill?.liveSeconds ?? prefill?.live_seconds ?? 0);
+    const prefillH        = prefill && liveSecs > 0 ? Math.floor(liveSecs / 3600) : '';
+    const prefillM        = prefill && liveSecs > 0 ? Math.floor((liveSecs % 3600) / 60) : '';
+    const prefillDays     = prefill ? (prefill.validDays ?? '') : '';
+    const prefillDiamonds = prefill ? (prefill.diamonds ?? '') : '';
+
+    // Calcular períodos de forma dinámica (mes actual y anterior)
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
+    const curPeriodStr = `${curYear}-${String(curMonth + 1).padStart(2, '0')}-01`;
+
+    const prevDate = new Date(curYear, curMonth - 1, 1);
+    const prevYear = prevDate.getFullYear();
+    const prevMonth = prevDate.getMonth();
+    const prevPeriodStr = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+
+    const curLabel = now.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const prevLabel = prevDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
+    const curLabelCap = curLabel.charAt(0).toUpperCase() + curLabel.slice(1);
+    const prevLabelCap = prevLabel.charAt(0).toUpperCase() + prevLabel.slice(1);
+
+    container.innerHTML = `
+        <div class="glass-panel animate-fadeIn" style="max-width:480px;margin:0 auto;">
+            <h2 style="margin-bottom:0.4rem;">📊 ${t('metrics.title')}</h2>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
+                ${t('metrics.desc')}
+            </p>
+            <div style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1.5rem;">
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">Seleccionar Período</label>
+                    <select id="sm-period" class="input-control" style="background-color:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:#fff; border-radius:var(--radius-sm); padding:0.6rem; font-size:0.85rem; width:100%;">
+                        <option value="${curPeriodStr}" selected>Mes actual (${curLabelCap})</option>
+                        <option value="${prevPeriodStr}">Mes anterior (${prevLabelCap})</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.valid_days')}</label>
+                    <input id="sm-days" type="number" class="input-control" min="0" max="31" placeholder="${t('metrics.ph_days')}" value="${prefillDays}">
+                </div>
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.live_hours')}</label>
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                        <input id="sm-hours-h" type="number" class="input-control" min="0" max="999" placeholder="0" value="${prefillH}"
+                            inputmode="numeric" style="width:5.5rem;text-align:center;padding:0.5rem 0.4rem;">
+                        <span style="font-size:1.2rem;font-weight:800;color:var(--text-secondary);flex-shrink:0;line-height:1;">:</span>
+                        <input id="sm-hours-m" type="number" class="input-control" min="0" max="59" placeholder="00" value="${prefillM}"
+                            inputmode="numeric" style="width:5rem;text-align:center;padding:0.5rem 0.4rem;">
+                        <span style="font-size:0.72rem;color:var(--text-muted);flex-shrink:0;">h &nbsp;:&nbsp; min</span>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label style="display:block;font-size:0.78rem;margin-bottom:0.4rem;color:var(--text-secondary);">${t('metrics.diamonds')}</label>
+                    <input id="sm-diamonds" type="number" class="input-control" min="0" placeholder="${t('metrics.ph_diamonds')}" value="${prefillDiamonds}">
+                </div>
+            </div>
+            <div id="sm-error" style="margin-bottom:0.75rem;color:var(--danger);font-size:0.8rem;display:none;"></div>
+            <button id="sm-submit" class="btn btn-primary" style="width:100%;">${t('metrics.save')}</button>
+        </div>
+    `;
+
+    const btn           = container.querySelector('#sm-submit');
+    const errDiv        = container.querySelector('#sm-error');
+    const periodSelect  = container.querySelector('#sm-period');
+    const inputDays     = container.querySelector('#sm-days');
+    const inputHoursH   = container.querySelector('#sm-hours-h');
+    const inputHoursM   = container.querySelector('#sm-hours-m');
+    const inputDiamonds = container.querySelector('#sm-diamonds');
+
+    if (periodSelect) {
+        periodSelect.onchange = async () => {
+            const selectedPeriod = periodSelect.value;
+            inputDays.disabled = true;
+            inputHoursH.disabled = true;
+            inputHoursM.disabled = true;
+            inputDiamonds.disabled = true;
+            btn.disabled = true;
+            btn.textContent = 'Cargando métricas...';
+            try {
+                const metricData = await metrics.getMyMetrics(selectedPeriod);
+                if (metricData) {
+                    const secs = Number(metricData.live_seconds || metricData.liveSeconds || 0);
+                    inputDays.value = metricData.valid_days ?? metricData.validDays ?? '';
+                    inputHoursH.value = secs > 0 ? Math.floor(secs / 3600) : '';
+                    inputHoursM.value = secs > 0 ? Math.floor((secs % 3600) / 60) : '';
+                    inputDiamonds.value = metricData.diamonds ?? '';
+                } else {
+                    inputDays.value = '';
+                    inputHoursH.value = '';
+                    inputHoursM.value = '';
+                    inputDiamonds.value = '';
+                }
+            } catch (err) {
+                console.error(err);
+                appState.showToast('No se pudieron cargar las métricas anteriores.', 'danger');
+            } finally {
+                inputDays.disabled = false;
+                inputHoursH.disabled = false;
+                inputHoursM.disabled = false;
+                inputDiamonds.disabled = false;
+                btn.disabled = false;
+                btn.textContent = t('metrics.save');
+            }
+        };
+    }
+
+    btn.onclick = async () => {
+        const periodDate = periodSelect ? periodSelect.value : null;
+        const days     = Number(container.querySelector('#sm-days').value);
+        const hoursH   = Number(container.querySelector('#sm-hours-h').value) || 0;
+        const hoursM   = Number(container.querySelector('#sm-hours-m').value) || 0;
+        const hours    = hoursH + hoursM / 60;
+        const diamonds = Number(container.querySelector('#sm-diamonds').value);
+
+        errDiv.style.display = 'none';
+        if (isNaN(days) || days < 0 || days > 31) {
+            errDiv.textContent = t('metrics.err_days');
+            errDiv.style.display = 'block';
+            return;
+        }
+        if (hoursM > 59) {
+            errDiv.textContent = t('metrics.err_hours');
+            errDiv.style.display = 'block';
+            return;
+        }
+        if (isNaN(diamonds) || diamonds < 0) {
+            errDiv.textContent = t('metrics.err_diamonds');
+            errDiv.style.display = 'block';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = t('metrics.saving');
+
+        try {
+            await metrics.submitSelf(days, hours, diamonds, periodDate);
+            await store.refreshMetrics();
+            const mainContainer = container.closest('#dashboard-content') || container;
+            renderCreatorDashboard(mainContainer);
+        } catch (err) {
+            errDiv.textContent = err.message || t('metrics.err_generic');
+            errDiv.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = t('metrics.save');
+        }
+    };
+}
+
 function emptyState(title, sub) {
     return `<div class="glass-panel" style="padding:3rem 2rem;text-align:center;margin-top:2rem;">
         <div style="font-size:2.5rem;margin-bottom:1rem;">🌑</div>
         <h3 style="margin-bottom:0.5rem;">${title}</h3>
         <p class="text-sm text-muted">${sub}</p>
     </div>`;
+}
+
+function escHtml(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderInbox(notifications, lastSeen) {
+    if (!notifications.length) {
+        return `
+            <div class="glass-panel" style="padding:3rem 2rem;text-align:center;">
+                <div style="font-size:2.5rem;margin-bottom:1rem;">🔔</div>
+                <h3 style="margin-bottom:0.5rem;">${t('inbox.empty_title')}</h3>
+                <p style="font-size:0.8rem;color:var(--text-muted);">${t('inbox.empty_sub')}</p>
+            </div>`;
+    }
+
+    const timeAgo = (isoStr) => {
+        const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+        if (diff < 60)    return t('inbox.just_now');
+        if (diff < 3600)  return t('inbox.min_ago', { n: Math.floor(diff/60) });
+        if (diff < 86400) return t('inbox.h_ago', { n: Math.floor(diff/3600) });
+        const d = new Date(isoStr);
+        return d.toLocaleDateString(getLang() === 'en' ? 'en' : 'es', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const items = notifications.map(n => {
+        const isUnread = n.sent_at > lastSeen;
+        return `
+            <div style="
+                display:flex;gap:0.9rem;padding:1rem 1.1rem;
+                background:${isUnread ? 'rgba(124,110,247,0.07)' : 'rgba(255,255,255,0.02)'};
+                border:1px solid ${isUnread ? 'rgba(124,110,247,0.25)' : 'var(--glass-border)'};
+                border-radius:var(--radius-md);
+                margin-bottom:0.6rem;
+            ">
+                <div style="flex-shrink:0;margin-top:0.2rem;">
+                    <div style="
+                        width:8px;height:8px;border-radius:50%;margin-top:0.35rem;
+                        background:${isUnread ? 'var(--primary)' : 'transparent'};
+                        border:${isUnread ? 'none' : '1.5px solid rgba(255,255,255,0.15)'};
+                    "></div>
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;margin-bottom:0.3rem;">
+                        <span style="font-size:0.88rem;font-weight:${isUnread ? '700' : '600'};color:${isUnread ? 'var(--text-primary)' : 'var(--text-secondary)'};">
+                            ${escHtml(n.title)}
+                        </span>
+                        <span style="font-size:0.65rem;color:var(--text-muted);white-space:nowrap;flex-shrink:0;">${timeAgo(n.sent_at)}</span>
+                    </div>
+                    <p style="font-size:0.78rem;color:var(--text-muted);margin:0 0 ${n.url ? '0.6rem' : '0'};line-height:1.5;">${escHtml(n.body)}</p>
+                    ${n.url ? `<a href="${n.url}" target="_blank" rel="noopener noreferrer" style="font-size:0.72rem;color:var(--primary);text-decoration:none;font-weight:600;">${t('inbox.view_more')}</a>` : ''}
+                </div>
+            </div>`;
+    }).join('');
+
+    return `
+        <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+                <h3 style="margin:0;font-size:0.95rem;">${t('inbox.section')}</h3>
+                <span style="font-size:0.72rem;color:var(--text-muted);">${notifications.length} ${getLang() === 'en' ? `message${notifications.length !== 1 ? 's' : ''}` : `mensaje${notifications.length !== 1 ? 's' : ''}`}</span>
+            </div>
+            ${items}
+        </div>`;
 }

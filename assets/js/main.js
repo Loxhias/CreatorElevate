@@ -1,11 +1,14 @@
 import { env, isSupabaseConfigured } from './env.js';
 import { store } from './store.js';
-import { auth, push, content } from './api.js';
+import { auth, push, profiles } from './api.js';
+import { setupLocale, detectAgency, t } from './i18n.js';
 import { renderLogin } from './views/login.js';
 import { renderAdminDashboard, renderCreatorsList } from './views/adminDashboard.js';
 import { renderManagerDashboard } from './views/managerDashboard.js';
 import { renderCreatorDashboard } from './views/creatorDashboard.js';
 import { renderProfile } from './views/profile.js';
+import { renderNormas } from './views/normas.js';
+import { renderCanales } from './views/canales.js';
 
 export const appState = {
     navigate: (route) => {
@@ -19,6 +22,12 @@ export const appState = {
             case 'notifications': renderDashboardLayout(app, renderNotificationsView, 'admin'); break;
             default:        renderLogin(app);
         }
+    },
+
+    // Navega a una sub-vista dentro del dashboard ya montado (para deep links desde inbox/push).
+    navigateTo: (view) => {
+        const navLink = document.querySelector(`.nav-item[data-view="${view}"]`);
+        if (navLink) navLink.click();
     },
 
     showToast: (message, type = 'success') => {
@@ -42,17 +51,29 @@ export const appState = {
 function getNavItems(role) {
     const items = [];
     if (role === 'admin') {
-        items.push({ view: 'inicio', icon: '📊', label: 'Admin Dashboard' });
-        items.push({ view: 'creadores', icon: '👥', label: 'Creadores' });
-        items.push({ view: 'notificaciones', icon: '🔔', label: 'Notificaciones' });
+        items.push({ view: 'inicio',         icon: '📊', label: 'Dashboard' });
+        items.push({ view: 'creadores',      icon: '👥', label: 'Creadores' });
+        items.push({ view: 'canales',        icon: '📢', label: 'Canales' });
+        items.push({ view: 'notificaciones', icon: '🔔', label: 'Mensajes' });
     } else if (role === 'creator') {
-        items.push({ view: 'inicio', icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'normas', icon: '📋', label: 'Normas' });
-        items.push({ view: 'canales', icon: '📢', label: 'Canales' });
+        items.push({ view: 'inicio',   icon: '📊', label: t('nav.dashboard') });
+        items.push({ view: 'mensajes', icon: '🔔', label: t('nav.messages') });
+        items.push({ view: 'normas',   icon: '📋', label: t('nav.rules') });
+        items.push({ view: 'canales',  icon: '📢', label: t('nav.channels') });
+    } else if (role === 'manager') {
+        items.push({ view: 'inicio',   icon: '📊', label: 'Panel' });
+        items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
+        const managerProfile = store.getProfile?.();
+        if (managerProfile?.tiktok_username?.trim()) {
+            items.push({ view: 'mis-metricas', icon: '🎬', label: 'Mis métricas' });
+        }
     } else {
         items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
     }
-    items.push({ view: 'perfil', icon: '👤', label: 'Mi Perfil' });
+    const isCreator = role === 'creator';
+    items.push({ view: 'capacitaciones', icon: '🎓', label: isCreator ? t('nav.trainings') : 'Capacitaciones' });
+    items.push({ view: 'eventos',        icon: '📅', label: isCreator ? t('nav.events')    : 'Eventos' });
+    items.push({ view: 'perfil',         icon: '👤', label: isCreator ? t('nav.profile')   : 'Perfil' });
     return items;
 }
 
@@ -60,18 +81,41 @@ async function safeRender(fn, container) {
     try {
         await fn(container);
     } catch (err) {
-        console.error('[safeRender]', err);
+        console.error('[safeRender] error en', fn?.name || '?', err);
         container.innerHTML = `
             <div style="padding:3rem; text-align:center; display:flex; flex-direction:column; align-items:center; gap:1.2rem;">
                 <div style="font-size:2rem;">⚠️</div>
-                <p style="color:var(--danger); font-weight:700;">No se pudo conectar</p>
+                <p style="color:var(--danger); font-weight:700;">No se pudo cargar este panel</p>
                 <p style="color:var(--text-secondary); font-size:0.85rem; max-width:300px;">
                     ${err?.message?.includes('abort') || err?.message?.includes('connect')
                         ? 'Sin conexión con el servidor. Verifica tu internet e inténtalo de nuevo.'
                         : 'Ocurrió un error inesperado al cargar este panel.'}
                 </p>
+                <code style="font-size:0.7rem;color:var(--text-muted);word-break:break-all;max-width:340px;">${err?.message || ''}</code>
                 <button class="btn btn-primary" onclick="location.reload()">🔄 Reintentar</button>
             </div>`;
+    }
+}
+
+// Carga dinámica de módulo con log claro si falla (500, red, etc.)
+async function safeImport(path, container) {
+    try {
+        console.log('[import] cargando', path);
+        const mod = await import(path);
+        console.log('[import] OK', path);
+        return mod;
+    } catch (err) {
+        console.error('[import] FALLÓ', path, err);
+        if (container) {
+            container.innerHTML = `
+                <div style="padding:3rem;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1.2rem;">
+                    <div style="font-size:2rem;">⚠️</div>
+                    <p style="color:var(--danger);font-weight:700;">No se pudo cargar el módulo</p>
+                    <code style="font-size:0.7rem;color:var(--text-muted);word-break:break-all;max-width:340px;">${path}<br>${err?.message || ''}</code>
+                    <button class="btn btn-primary" onclick="location.reload()">🔄 Reintentar</button>
+                </div>`;
+        }
+        return null;
     }
 }
 
@@ -102,14 +146,14 @@ function renderDashboardLayout(container, renderContentFn, role) {
                     <!-- Botón de Instalación (Sidebar) -->
                     <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} margin-top:1rem; border:1px dashed var(--primary); border-radius:var(--radius-md); background:rgba(124,110,247,0.05);">
                         <span class="nav-icon">📲</span>
-                        <span style="color:var(--primary-light);">Instalar App</span>
+                        <span style="color:var(--primary-light);">${t('nav.install')}</span>
                     </a>
                 </nav>
 
                 <div style="margin-top:auto; padding-top:1.5rem; border-top:1px solid var(--glass-border);">
                     <div style="font-size:0.85rem; font-weight:700;">@${user.username}</div>
                     <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">${role}</div>
-                    <button class="btn-logout" style="margin-top:1rem; background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Cerrar Sesión</button>
+                    <button class="btn-logout" style="margin-top:1rem; background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">${t('nav.logout')}</button>
                 </div>
             </aside>
 
@@ -120,10 +164,10 @@ function renderDashboardLayout(container, renderContentFn, role) {
             <nav class="bottom-nav">
                 ${navHtml}
                 <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} color:var(--primary-light); font-weight:700;">
-                    <span>📲</span><span>Instalar</span>
+                    <span>📲</span><span>${t('nav.install_mob')}</span>
                 </a>
                 <a href="#" class="nav-item btn-logout" style="color:var(--danger);">
-                    <span>🚪</span><span>Salir</span>
+                    <span>🚪</span><span>${t('nav.logout_mob')}</span>
                 </a>
             </nav>
         </div>
@@ -131,6 +175,21 @@ function renderDashboardLayout(container, renderContentFn, role) {
 
     const contentArea = container.querySelector('#dashboard-content');
     safeRender(renderContentFn, contentArea);
+
+    // Badge de mensajes no leídos (managers y creadores)
+    if (role === 'manager' || role === 'creator') {
+        const userId = store.getCurrentUser()?.id;
+        const lastSeen = localStorage.getItem(`inbox_last_seen_${userId || 'anon'}`) || '1970-01-01';
+        push.getForUser(userId, role).then(notifications => {
+            const unread = notifications.filter(n => n.sent_at > lastSeen).length;
+            if (!unread) return;
+            const badgeHtml = `<span style="background:var(--danger);color:#fff;border-radius:999px;font-size:0.58rem;font-weight:800;padding:0.05rem 0.35rem;margin-left:0.3rem;vertical-align:middle;display:inline-block;">${unread > 9 ? '9+' : unread}</span>`;
+            container.querySelectorAll('.nav-item[data-view="mensajes"]').forEach(el => {
+                const label = el.querySelector('span:not(.nav-icon)');
+                if (label) label.innerHTML = `Mensajes ${badgeHtml}`;
+            });
+        }).catch(() => {});
+    }
 
     // Eventos de Instalación
     container.querySelectorAll('.btn-pwa-install').forEach(btn => {
@@ -153,7 +212,22 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'canales') safeRender(renderCanales, contentArea);
             else if (view === 'creadores') safeRender(renderCreatorsList, contentArea);
             else if (view === 'notificaciones') {
-                import('./views/notifications.js').then(m => safeRender(m.renderNotificationsView, contentArea));
+                safeImport('./views/notifications.js', contentArea).then(m => m && safeRender(m.renderNotificationsView, contentArea));
+            }
+            else if (view === 'mensajes') {
+                safeImport('./views/inbox.js', contentArea).then(m => m && safeRender(m.renderInboxView, contentArea));
+                container.querySelectorAll('.nav-item[data-view="mensajes"] span:not(.nav-icon)').forEach(span => {
+                    span.textContent = t('nav.messages');
+                });
+            }
+            else if (view === 'mis-metricas') {
+                safeImport('./views/creatorDashboard.js', contentArea).then(m => m && safeRender(m.renderCreatorDashboard, contentArea));
+            }
+            else if (view === 'capacitaciones') {
+                safeImport('./views/trainings.js', contentArea).then(m => m && safeRender(m.renderTrainingsView, contentArea));
+            }
+            else if (view === 'eventos') {
+                safeImport('./views/events.js', contentArea).then(m => m && safeRender(m.renderEventsView, contentArea));
             }
             else if (view === 'perfil') safeRender(renderProfile, contentArea);
         };
@@ -166,52 +240,16 @@ function renderDashboardLayout(container, renderContentFn, role) {
             appState.navigate('login');
         };
     });
-}
 
-// ── Normas / Canales ──────────────────────────────────────────────────────────
-function renderAgencyBody(text) {
-    if (!text) return '<p style="color:var(--text-muted);">Sin contenido todavía.</p>';
-    return text
-        .split('\n')
-        .map(line => line.trim())
-        .filter(Boolean)
-        .map(line => `<p style="margin-bottom:0.6rem;">${line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>`)
-        .join('');
-}
-
-async function renderNormas(container) {
-    container.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2>
-        <div class="glass-panel skel-panel" style="min-height:120px;"></div>`;
-    try {
-        const page = await content.getPage('normas');
-        container.innerHTML = `
-            <h2 style="margin-bottom:1.5rem;">📋 ${page?.title || 'Normas de la Agencia'}</h2>
-            <div class="glass-panel animate-fadeIn" style="line-height:1.8;">
-                ${renderAgencyBody(page?.body)}
-            </div>`;
-    } catch (err) {
-        container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📋 Normas de la Agencia</h2>
-            <div class="glass-panel" style="color:var(--danger);">Error al cargar: ${err.message}</div>`;
+    // Deep link desde push notification: ?goto=X en la URL
+    const gotoView = new URLSearchParams(location.search).get('goto');
+    if (gotoView) {
+        history.replaceState(null, '', location.pathname);
+        const navLink = container.querySelector(`.nav-item[data-view="${gotoView}"]`);
+        if (navLink) setTimeout(() => navLink.click(), 0);
     }
 }
 
-async function renderCanales(container) {
-    container.innerHTML = `
-        <h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2>
-        <div class="glass-panel skel-panel" style="min-height:120px;"></div>`;
-    try {
-        const page = await content.getPage('canales');
-        container.innerHTML = `
-            <h2 style="margin-bottom:1.5rem;">📢 ${page?.title || 'Canales Oficiales'}</h2>
-            <div class="glass-panel animate-fadeIn" style="line-height:1.8;">
-                ${renderAgencyBody(page?.body)}
-            </div>`;
-    } catch (err) {
-        container.innerHTML = `<h2 style="margin-bottom:1.5rem;">📢 Canales Oficiales</h2>
-            <div class="glass-panel" style="color:var(--danger);">Error al cargar: ${err.message}</div>`;
-    }
-}
 
 /**
  * Identifica al usuario en OneSignal para que los envíos por external_id
@@ -258,6 +296,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 async function boot() {
+    // Cuando la notificación tiene URL externa, la abrimos aquí en lugar de
+    // dejar que el service worker la abra directamente (lo cual en Android
+    // dispara App Links y manda al Play Store si la app no está instalada).
+    const openextParam = new URLSearchParams(location.search).get('openext');
+    if (openextParam) {
+        try {
+            const decoded = decodeURIComponent(openextParam);
+            if (decoded.startsWith('https://')) {
+                history.replaceState(null, '', location.pathname);
+                window.open(decoded, '_blank', 'noopener,noreferrer');
+            }
+        } catch {}
+    }
+
     const app = document.getElementById('app');
     app.innerHTML = `<div style="height:100vh;display:flex;align-items:center;justify-content:center;">
         <div style="display:flex;flex-direction:column;align-items:center;gap:1.2rem;">
@@ -290,6 +342,8 @@ async function boot() {
         } catch (e) { console.warn('Limpieza de SW falló:', e); }
     }
 
+    document.title = 'Creator Elevate';
+
     await store.init().catch(console.warn);
 
     auth.onAuthChange(async (session) => {
@@ -301,11 +355,29 @@ async function boot() {
             if (!isRecovery) appState.navigate('login');
             return;
         }
+
+        // Skip re-fetching + re-rendering if store.init() already booted this user.
+        // onAuthChange fires immediately on registration (INITIAL_SESSION), which would
+        // cause a second full dashboard render right after init(). Guard against that.
+        const alreadyBooted = store.getProfile()?.id === session.user.id;
+        if (alreadyBooted) return; // Token refresh silencioso — no re-renderizar ni re-identificar
+
         await store.refreshProfile();
         const profile = store.getProfile();
         const u = store.getCurrentUser();
         if (profile) identifyOneSignalUser(profile);
-        
+
+        // Auto-assign agency from browser locale on first login per device
+        if (profile?.id && profile.role === 'creator') {
+            const agencyFlag = `ce_agency_set_${profile.id}`;
+            if (!localStorage.getItem(agencyFlag)) {
+                try {
+                    await profiles.setAgency(profile.id, detectAgency());
+                    localStorage.setItem(agencyFlag, '1');
+                } catch {}
+            }
+        }
+
         // Si estamos en flujo de recuperación de contraseña, NO navegamos al dashboard
         // para permitir que el usuario vea el formulario de "Nueva Contraseña".
         if (u && !isRecovery) appState.navigate(u.role);
@@ -326,7 +398,7 @@ window.installPWA = async () => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
     if (isIOS && !isStandalone) {
-        appState.showToast('En iOS: pulsa el botón "Compartir" (abajo) y luego "Añadir a pantalla de inicio" 📲', 'info');
+        appState.showToast(t('nav.install_ios'), 'info');
         return;
     }
 
@@ -349,4 +421,5 @@ window.addEventListener('load', () => {
     }
 });
 
+setupLocale();
 boot();

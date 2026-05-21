@@ -1,10 +1,42 @@
 import { store } from '../store.js';
 import { appState } from '../main.js';
-import { metrics, profiles, push, content } from '../api.js';
+import { metrics, profiles } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
+import { renderCanales } from './canales.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
+
+// ── Estado de agencia seleccionada (persiste entre navegaciones) ──────────────
+let selectedAgency = localStorage.getItem('ce_agency') || 'latam';
+const AGENCY_OPTS = [
+    { id: 'latam', label: '🌎 LATAM' },
+    { id: 'usa',   label: '🇺🇸 USA'  },
+];
+
+function agencyToggleHtml() {
+    return `<div style="display:flex;gap:0.3rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.2rem;">
+        ${AGENCY_OPTS.map(a => `
+            <button class="ag-btn ${selectedAgency === a.id ? 'ag-active' : ''}" data-ag="${a.id}"
+                style="background:${selectedAgency === a.id ? 'var(--bg-elevated,#141720)' : 'transparent'};
+                       border:none;color:${selectedAgency === a.id ? 'var(--text-primary)' : 'var(--text-muted)'};
+                       font-size:0.82rem;font-weight:700;padding:0.38rem 0.9rem;border-radius:var(--radius-sm);
+                       cursor:pointer;transition:all 0.2s;white-space:nowrap;
+                       ${selectedAgency === a.id ? 'box-shadow:0 2px 6px rgba(0,0,0,0.3);' : ''}">
+                ${a.label}
+            </button>`).join('')}
+    </div>`;
+}
+
+function wireAgencyToggle(container, onSwitch) {
+    container.querySelectorAll('.ag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectedAgency = btn.dataset.ag;
+            localStorage.setItem('ce_agency', selectedAgency);
+            onSwitch();
+        });
+    });
+}
 
 // ── Skeleton helpers ──────────────────────────────────────────────────────────
 const skelAdmin = () => `
@@ -66,74 +98,91 @@ const skelHistory = () => `
         <div class="skel-panel" style="height:200px;"></div>
     </div>`;
 
-function parseLiveSeconds(str) {
-    if (!str) return 0;
-    if (typeof str === 'number') return Math.round(str * 3600);
-    const s = String(str);
-    const h = +(s.match(/(\d+)h/)   || [0,0])[1];
-    const m = +(s.match(/(\d+)min/) || [0,0])[1];
-    const sec = +(s.match(/(\d+)s/) || [0,0])[1];
-    return h * 3600 + m * 60 + sec;
-}
+// ─── Columnas del archivo TikTok (múltiples variantes de nombre en español) ────
+const EXCEL_COLS = {
+    creatorId:          ['ID del creador', 'Creator ID', 'ID creador', 'TikTok ID'],
+    username:           ['Nombre de usuario del creador', 'Usuario', 'Nombre de usuario', 'Nickname', 'username'],
+    validDays:          ['Días válidos de emisiones LIVE', 'Días de live activos', 'Días activos de live', 'Días activos', 'Días válidos', 'Valid days', 'Días de transmisión'],
+    liveDuration:       ['Duración de LIVE', 'Duración total del live (hh:mm:ss)', 'Duración total del live', 'Duración del live', 'Horas de live', 'Live duration'],
+    liveSeconds:        ['Duración total del live (en segundos)', 'Live seconds', 'Segundos de live'],
+    diamonds:           ['Diamantes obtenidos en el live', 'Diamantes totales', 'Diamantes', 'Diamonds', 'Total diamonds'],
+    diamondsLastMonth:  ['Diamantes en el último mes', 'Diamonds last month', 'Diamantes mes anterior'],
+    battles:            ['Partidas en PK', 'Partidas', 'Batallas', 'PKs', 'PK battles', 'Battles'],
+    daysSinceJoining:   ['Días desde la incorporación', 'Días desde incorporación', 'Days since joining', 'Días en agencia'],
+};
 
 function normalizeRow(row) {
-    const entries = Object.entries(row);
-    if (Math.random() < 0.01 || true) { // Loguear siempre durante depuración
-        console.log('📂 Columnas detectadas en el EXCEL:', entries.map(e => e[0]));
-    }
-    const find = (kws) => {
-        const found = entries.find(([k]) => kws.some(kw => k.toLowerCase().trim().includes(kw.toLowerCase())));
-        return found ? found[1] : null;
-    };
-    const username = String(find(['Nombre de usuario del creador', 'username', 'TikTok User']) || '').trim().replace(/^@/, '');
-    if (!username) return null;
-    
-    const now = new Date();
-    const safeInt = (val, max = 2147483647) => {
-        if (val == null || val === '') return 0;
-        let n = parseInt(String(val).replace(/[^\d]/g, ''));
-        if (isNaN(n)) return 0;
+    // Normaliza nombre de columna para comparación flexible (whitespace fix: \s+ no s+)
+    const nc = (s) => String(s).normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim();
 
-        // Si el número parece una fecha formato YYYYMMDD... (ej: 20250807...)
-        if (n > 2000000000000) { 
-            try {
-                const s = String(n);
-                const year  = parseInt(s.substring(0,4));
-                const month = parseInt(s.substring(4,6)) - 1;
-                const day   = parseInt(s.substring(6,8));
-                const date  = new Date(year, month, day);
-                if (!isNaN(date.getTime())) {
-                    const diff = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-                    return (diff > 0 && diff < 10000) ? diff : 0;
-                }
-            } catch(e) {}
-            return 0; // Si falla el parseo de fecha, mejor devolver 0 que un ID gigante
+    // Busca el valor de una columna por su lista de nombres candidatos
+    const get = (names) => {
+        for (const name of names) {
+            if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
         }
-
-        return (n < max) ? n : 0;
+        const normed = names.map(nc);
+        for (const [k, v] of Object.entries(row)) {
+            if (normed.includes(nc(k))) return v;
+        }
+        return null;
     };
 
+    // Username — requerido
+    const rawUser = get(EXCEL_COLS.username);
+    const username = String(rawUser || '').trim().replace(/^@/, '');
+    if (!username) return null;
 
-    
-    const rawDaysValue = find(['Días desde la incorporación', 'Days since joining', 'days_since_joining', 'Antigüedad', 'Días de registro', 'Días en la agencia', 'Días', 'Days', 'Antiquity', 'Joining', 'Registro', 'Incorporación', 'Firma']);
-    
+    // Creator ID — como string para preservar precisión de IDs largos
+    const rawId = get(EXCEL_COLS.creatorId);
+    const creatorId = rawId != null ? String(rawId).trim() : null;
+
+    // Entero seguro: regex corregida /[^\d]/ (no /[^d]/)
+    const safeInt = (val, fallback = null) => {
+        if (val == null || val === '') return fallback;
+        const n = parseInt(String(val).replace(/[^\d]/g, ''), 10);
+        return isNaN(n) || n < 0 ? fallback : n;
+    };
+
+    // Duración live → segundos totales
+    const parseDur = (val) => {
+        if (val == null || val === '') return null;
+        if (typeof val === 'number') {
+            // Fracción de día de Excel (< 10) → segundos; o entero directo
+            return val < 10 ? Math.round(val * 86400) : Math.round(val);
+        }
+        const str = String(val).trim();
+        // "134h 6min 25s" — formato texto de TikTok
+        const hms = str.match(/(\d+)h\s*(\d+)min\s*(\d+)s/);
+        if (hms) return parseInt(hms[1]) * 3600 + parseInt(hms[2]) * 60 + parseInt(hms[3]);
+        // HH:MM:SS
+        const parts = str.split(':');
+        if (parts.length >= 2) {
+            const h = parseInt(parts[0]) || 0;
+            const m = parseInt(parts[1]) || 0;
+            const s = parts[2] ? parseInt(parts[2]) || 0 : 0;
+            return h * 3600 + m * 60 + s;
+        }
+        const n = parseInt(str.replace(/[^\d]/g, ''), 10);
+        return isNaN(n) ? null : n;
+    };
+
+    const rawLiveSecs = get(EXCEL_COLS.liveSeconds);
+    const rawLiveDur  = get(EXCEL_COLS.liveDuration);
+    const liveSeconds = safeInt(rawLiveSecs) ?? parseDur(rawLiveDur);
+    const liveDuration = liveSeconds != null
+        ? `${Math.floor(liveSeconds / 3600)}h ${Math.floor((liveSeconds % 3600) / 60)}min`
+        : null;
+
     return {
+        creatorId,
         username,
-        diamonds:           Number(find(['Diamonds', 'Diamantes este mes', 'Diamantes (actual)']) || find(['Diamantes']) || 0),
-        diamondsLastMonth:  Number(find(['Diamantes en el último mes', 'Diamonds last month', 'Diamantes (mes anterior)']) || 0),
-        liveDuration:       String(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE']) || '0s'),
-        liveSeconds:        safeInt(parseLiveSeconds(find(['LIVE Duration', 'Duración de LIVE', 'Horas LIVE'])), 1000000),
-        validDays:          safeInt(find(['Días válidos', 'Valid Days']), 32),
-        emisionesLive:      safeInt(find(['Emisiones LIVE', 'Total LIVE Emissions']), 5000),
-        battles:            safeInt(find(['Batallas', 'Battles', 'Partidas']), 10000),
-        battleDiamonds:     Number(find(['Diamantes de batalla', 'Battle diamonds']) || 0),
-        multiGuestDiamonds: Number(find(['Diamantes de invitados múltiples', 'Multi-guest diamonds', 'Multi-guest']) || 0),
-        statusGraduation:   String(find(['Estado de graduación', 'Graduation status']) || ''),
-        statusRank:         String(find(['Rango', 'Rank', 'Status Rank']) || ''),
-        statusActive:       String(find(['Activo', 'Status Active', 'Estado activo']) || ''),
-        groupName:          String(find(['Nombre del grupo', 'Group name']) || ''),
-        manager:            String(find(['Manager', 'Manager name', 'Gestor']) || ''),
-        daysSinceJoining:   safeInt(rawDaysValue, 10000),
+        validDays:          safeInt(get(EXCEL_COLS.validDays)),
+        liveSeconds,
+        liveDuration,
+        diamonds:           safeInt(get(EXCEL_COLS.diamonds)),
+        diamondsLastMonth:  safeInt(get(EXCEL_COLS.diamondsLastMonth)) ?? 0,
+        battles:            safeInt(get(EXCEL_COLS.battles)) ?? 0,
+        daysSinceJoining:   safeInt(get(EXCEL_COLS.daysSinceJoining)),
     };
 }
 
@@ -142,7 +191,7 @@ export async function renderAdminDashboard(container) {
     // Si ya hay datos en el store, no los volvemos a pedir (evita lentitud)
     const currentProfs = store.getProfiles();
     const currentMetrics = store.getMetricsData();
-    
+
     if (!currentProfs || !currentProfs.length || !currentMetrics || !currentMetrics.length) {
         container.innerHTML = skelAdmin();
         if (isSupabaseConfigured) {
@@ -150,17 +199,23 @@ export async function renderAdminDashboard(container) {
         }
     }
 
-    const data = store.getMetricsData() || [];
-    const profs = store.getProfiles() || [];
-    const managers = profs.filter(p => p.is_manager);
-    const creators = profs.filter(p => p.is_creator);
+    const allData  = store.getMetricsData() || [];
+    const allProfs = store.getProfiles()    || [];
+
+    // Filtrar por agencia seleccionada
+    const data     = allData.filter(d => (d.agency  || 'latam') === selectedAgency);
+    const managers = allProfs.filter(p => p.is_manager && (p.agency || 'latam') === selectedAgency);
+    const creators = allProfs.filter(p => p.is_creator && (p.agency || 'latam') === selectedAgency);
     const period = store.getPeriod();
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <div style="margin-bottom:2rem; display:flex; justify-content:space-between; align-items:center;">
-                <h1 style="font-size:1.8rem; font-weight:800;">Panel de Administración</h1>
-                ${period ? `<div class="badge" style="background:var(--primary); color:white;">${period.label}</div>` : ''}
+            <div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                <h1 style="font-weight:800;margin:0;">Panel de Administración</h1>
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    ${period ? `<div class="badge" style="background:var(--primary); color:white;">${period.label}</div>` : ''}
+                    ${agencyToggleHtml()}
+                </div>
             </div>
 
             <div class="metrics-grid" style="margin-bottom:2.5rem;">
@@ -176,8 +231,8 @@ export async function renderAdminDashboard(container) {
                 </div>
                 <div class="glass-panel action-card" id="nav-upload">
                     <div style="font-size:1.5rem; margin-bottom:0.5rem;">📥</div>
-                    <h3 style="font-size:0.95rem;">Cargar Reporte TikTok</h3>
-                    <p style="font-size:0.75rem; color:var(--text-secondary);">Subir Excel de métricas mensual.</p>
+                    <h3 style="font-size:0.95rem;">Cargar Datos Mensuales</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Subir incorporación y partidas.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-history">
                     <div style="font-size:1.5rem; margin-bottom:0.5rem;">📈</div>
@@ -185,9 +240,9 @@ export async function renderAdminDashboard(container) {
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Evolución por período y creador.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-content">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📝</div>
-                    <h3 style="font-size:0.95rem;">Normas &amp; Canales</h3>
-                    <p style="font-size:0.75rem; color:var(--text-secondary);">Editar contenido de páginas.</p>
+                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📢</div>
+                    <h3 style="font-size:0.95rem;">Canales</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Gestionar canales de comunicación.</p>
                 </div>
             </div>
 
@@ -212,11 +267,21 @@ export async function renderAdminDashboard(container) {
 
     const viewContent = container.querySelector('#admin-view-content');
 
-    container.querySelector('#nav-audit').onclick   = () => renderAuditView(viewContent, managers, creators, data);
-    container.querySelector('#nav-manage').onclick   = () => renderManageView(viewContent);
-    container.querySelector('#nav-upload').onclick   = () => renderUploadView(viewContent, container);
-    container.querySelector('#nav-history').onclick  = () => renderHistoryView(viewContent);
-    container.querySelector('#nav-content').onclick  = () => renderContentEditor(viewContent);
+    wireAgencyToggle(container, () => renderAdminDashboard(container));
+
+    container.querySelector('#nav-audit').onclick   = async () => {
+        // Re-fetch si el caché fue invalidado (ej. tras cambio de roles)
+        if (!store.getProfiles().length) await store.refreshAdminLists().catch(console.warn);
+        const p = store.getProfiles() || [];
+        const d = (store.getMetricsData() || []).filter(x => (x.agency || 'latam') === selectedAgency);
+        const m = p.filter(x => x.is_manager  && (x.agency || 'latam') === selectedAgency);
+        const c = p.filter(x => x.is_creator  && (x.agency || 'latam') === selectedAgency);
+        renderAuditView(viewContent, m, c, d);
+    };
+    container.querySelector('#nav-manage').onclick  = () => renderManageView(viewContent);
+    container.querySelector('#nav-upload').onclick  = () => renderUploadView(viewContent, container, selectedAgency);
+    container.querySelector('#nav-history').onclick = () => renderHistoryView(viewContent);
+    container.querySelector('#nav-content').onclick = () => renderCanales(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────
@@ -229,7 +294,7 @@ function renderAuditView(container, managers, creators, metricsData) {
                     // Creadores asignados por cuenta (profiles)
                     const assignedProfs = creators.filter(c => c.manager_id === m.id);
                     const usernamesFromProfs = assignedProfs.map(c => (c.tiktok_username || '').toLowerCase());
-                    
+
                     // Creadores asignados por métricas (Excel/Username)
                     const groupMetrics = metricsData.filter(d => {
                         const isAssignedByMetric = d.manager_id === m.id;
@@ -260,7 +325,12 @@ function renderAuditView(container, managers, creators, metricsData) {
     container.querySelectorAll('.v-m-dash').forEach(btn => {
         btn.onclick = () => {
             container.innerHTML = skelRows(3);
-            import('./managerDashboard.js').then(mod => mod.renderManagerDashboard(container, btn.dataset.id));
+            import('./managerDashboard.js')
+                .then(mod => mod.renderManagerDashboard(container, btn.dataset.id))
+                .catch(err => {
+                    console.error('[import] managerDashboard.js falló:', err);
+                    container.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando dashboard: ${err.message}</p>`;
+                });
         };
     });
     container.querySelectorAll('.v-m-group').forEach(btn => {
@@ -274,10 +344,10 @@ function renderManageView(container) {
         <div class="glass-panel animate-fadeIn">
             <h2 style="margin-bottom:1rem;">Gestión de Managers</h2>
             <p style="color:var(--text-secondary); margin-bottom:1.5rem; font-size:0.9rem;">Busca un usuario registrado por su email o nombre para asignarle el rol de Manager.</p>
-            
-            <div style="display:flex; gap:0.8rem; margin-bottom:2rem;">
-                <input type="text" id="m-search-input" class="input-control" placeholder="Email o nombre del usuario..." style="flex:1;">
-                <button id="m-search-btn" class="btn btn-primary">Buscar</button>
+
+            <div style="display:flex; gap:0.8rem; margin-bottom:2rem; flex-wrap:wrap;">
+                <input type="text" id="m-search-input" class="input-control" placeholder="Email o nombre del usuario..." style="flex:1;min-width:200px;">
+                <button id="m-search-btn" class="btn btn-primary" style="white-space:nowrap;">Buscar</button>
             </div>
 
             <div id="m-search-results" style="display:flex; flex-direction:column; gap:0.8rem;"></div>
@@ -295,29 +365,52 @@ function renderManageView(container) {
         results.innerHTML = 'Buscando...';
         try {
             const found = await profiles.searchProfiles(q);
-            results.innerHTML = found.map(p => `
-                <div class="glass-panel" style="padding:1rem; display:flex; justify-content:space-between; align-items:center;">
-                    <div>
-                        <div style="font-weight:700;">${p.display_name || p.email}</div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary);">${p.email}</div>
+            results.innerHTML = found.map(p => {
+                const ag = p.agency || 'latam';
+                return `
+                <div class="glass-panel" style="padding:0.85rem 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.display_name || p.email}</div>
+                        <div style="font-size:0.72rem; color:var(--text-secondary);display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.15rem;">
+                            <span style="overflow:hidden;text-overflow:ellipsis;">${p.email}</span>
+                            <span style="background:rgba(124,110,247,0.12);border-radius:999px;padding:0.05rem 0.55rem;font-weight:700;color:var(--primary-light);flex-shrink:0;">${ag === 'usa' ? '🇺🇸 USA' : '🌎 LATAM'}</span>
+                        </div>
                     </div>
-                    <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}" 
+                    <div style="display:flex;gap:0.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+                        <select class="input-control btn-agency-select" data-id="${p.id}"
+                            style="padding:0.3rem 0.5rem;font-size:0.72rem;border-radius:var(--radius-sm);width:auto;">
+                            <option value="latam" ${ag==='latam'?'selected':''}>🌎 LATAM</option>
+                            <option value="usa"   ${ag==='usa'  ?'selected':''}>🇺🇸 USA</option>
+                        </select>
+                        <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}"
                             style="background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
-                        ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
-                    </button>
-                </div>
-            `).join('') || '<p style="text-align:center; padding:1rem;">No se encontraron usuarios.</p>';
+                            ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
+                        </button>
+                    </div>
+                </div>`; }).join('') || '<p style="text-align:center; padding:1rem;">No se encontraron usuarios.</p>';
 
-            // Re-vincular botones de resultado
+            // Selector de agencia
+            results.querySelectorAll('.btn-agency-select').forEach(sel => {
+                sel.onchange = async () => {
+                    try {
+                        await profiles.setAgency(sel.dataset.id, sel.value);
+                        appState.showToast('Agencia actualizada', 'success');
+                    } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
+                };
+            });
+
+            // Botón de rol
             results.querySelectorAll('.btn-role-toggle').forEach(rBtn => {
                 rBtn.onclick = async () => {
                     const uid = rBtn.dataset.id;
                     const isActive = rBtn.dataset.active === 'true';
                     if (isActive && !confirm('¿Estás seguro de quitar el rol de Manager a este usuario?')) return;
-                    
+
                     try {
-                        const p = (await profiles.searchProfiles(uid))[0];
+                        const p = await profiles.getById(uid);
+                        if (!p) throw new Error('Usuario no encontrado.');
                         await profiles.updateRoles(uid, { isAdmin: p.is_admin, isManager: !isActive, isCreator: p.is_creator });
+                        store.clearProfiles(); // fuerza re-fetch en próxima visita a Auditoría
                         appState.showToast('Rol actualizado correctamente', 'success');
                         doSearch();
                     } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
@@ -330,13 +423,22 @@ function renderManageView(container) {
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') doSearch(); });
 }
 
-// ── VISTA: CARGA DE REPORTE TIKTOK ──────────────────────────────────────────
-function renderUploadView(container, mainContainer) {
+// ── VISTA: CARGA DE DATOS MENSUALES ─────────────────────────────────────────
+function renderUploadView(container, mainContainer, agency = 'latam') {
+    const agencyLabel = agency === 'usa' ? '🇺🇸 USA' : '🌎 LATAM';
     container.innerHTML = `
         <div class="glass-panel animate-fadeIn" style="max-width:600px; margin:0 auto;">
-            <h2 style="margin-bottom:1rem;">Cargar Reporte TikTok</h2>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
+                <h2 style="margin:0;">Cargar Datos Mensuales</h2>
+                <span style="background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);border-radius:999px;padding:0.2rem 0.8rem;font-size:0.75rem;font-weight:700;color:var(--primary-light);">${agencyLabel}</span>
+            </div>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:1.5rem;">
+                Sube el archivo <strong>"Datos del creador"</strong> exportado desde TikTok Studio.
+                Se cargarán automáticamente: ID del creador, días válidos, horas de live, diamantes, partidas y días desde la incorporación.
+                El ID del creador se usa como identificador estable aunque el usuario cambie de nombre.
+            </p>
             <div class="input-group" style="margin-bottom:1.5rem;">
-                <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">MES DEL REPORTE</label>
+                <label style="display:block; font-size:0.8rem; margin-bottom:0.5rem; color:var(--text-secondary);">MES</label>
                 <input type="month" id="up-month" class="input-control" value="${new Date().toISOString().slice(0,7)}">
             </div>
             <div class="input-group" style="margin-bottom:1.5rem;">
@@ -344,12 +446,12 @@ function renderUploadView(container, mainContainer) {
                 <input type="file" id="up-file" class="input-control" accept=".xlsx,.xls,.csv" style="padding:2rem; border:2px dashed var(--glass-border); text-align:center;">
             </div>
             <div id="up-preview" style="margin-bottom:1.5rem; font-size:0.9rem;"></div>
-            <button id="up-btn" class="btn btn-primary" disabled style="width:100%;">PUBLICAR MÉTRICAS</button>
+            <button id="up-btn" class="btn btn-primary" disabled style="width:100%;">PUBLICAR DATOS</button>
         </div>
     `;
 
     const fileIn = container.querySelector('#up-file');
-    const uBtn = container.querySelector('#up-btn');
+    const uBtn   = container.querySelector('#up-btn');
     const preview = container.querySelector('#up-preview');
     let rows = null;
 
@@ -358,34 +460,62 @@ function renderUploadView(container, mainContainer) {
         if (!f) return;
         try {
             const buf = await f.arrayBuffer();
-            const wb = window.XLSX.read(buf, { type: 'array' });
-            const data = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
-            rows = data.map(normalizeRow).filter(Boolean);
-            preview.innerHTML = `<span style="color:var(--accent);">✓ Detectados ${rows.length} creadores.</span>`;
+            const wb  = window.XLSX.read(buf, { type: 'array' });
+            const rawData = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+
+            if (!rawData.length) {
+                preview.innerHTML = '<span style="color:var(--danger);">El archivo está vacío.</span>';
+                return;
+            }
+
+            rows = rawData.map(normalizeRow).filter(Boolean);
+            if (!rows.length) {
+                preview.innerHTML = '<span style="color:var(--danger);">No se encontró la columna de usuario. Verificá que el archivo sea el correcto.</span>';
+                return;
+            }
+
+            const withId      = rows.filter(r => r.creatorId).length;
+            const withMetrics = rows.filter(r => (r.diamonds ?? 0) > 0 || (r.validDays ?? 0) > 0).length;
+            const withLive    = rows.filter(r => (r.liveSeconds ?? 0) > 0).length;
+            const withDays    = rows.filter(r => (r.daysSinceJoining ?? 0) > 0).length;
+
+            const ok  = 'color:var(--accent)';
+            const dim = 'color:var(--text-muted)';
+            preview.innerHTML = `
+                <div style="display:flex;flex-direction:column;gap:0.35rem;font-size:0.82rem;">
+                    <span style="${ok};font-weight:700;">✓ ${rows.length} creador${rows.length !== 1 ? 'es' : ''} detectados</span>
+                    <span style="${withId > 0 ? ok : dim};">· ${withId} con ID de creador ${withId > 0 ? '✓' : '(no encontrado en este archivo)'}</span>
+                    <span style="${withMetrics > 0 ? ok : dim};">· ${withMetrics} con diamantes / días válidos</span>
+                    <span style="${withLive > 0 ? ok : dim};">· ${withLive} con horas de live</span>
+                    <span style="${withDays > 0 ? ok : dim};">· ${withDays} con días desde incorporación</span>
+                </div>`;
+
             uBtn.disabled = false;
-        } catch (e) { preview.innerHTML = '<span style="color:var(--danger);">Error leyendo el archivo.</span>'; }
+        } catch (err) {
+            preview.innerHTML = '<span style="color:var(--danger);">Error leyendo el archivo: ' + err.message + '</span>';
+        }
     };
 
     uBtn.onclick = async () => {
         const m = container.querySelector('#up-month').value;
         const [y, mm] = m.split('-');
-        const dt = new Date(Date.UTC(y, mm - 1, 1));
+        const dt  = new Date(Date.UTC(y, mm - 1, 1));
         const lbl = dt.toLocaleString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(/^./, c => c.toUpperCase());
         uBtn.disabled = true;
         uBtn.textContent = 'Publicando...';
-        console.log('🚀 Iniciando publicación de reporte:', { month: m, label: lbl, creators: rows.length });
 
         try {
+            // Paso 1: sube métricas completas (diamantes, live, días válidos, tiktok_id)
             await metrics.upsertPeriod(`${m}-01`, lbl, rows);
+            // Paso 2: fija agencia + días de incorporación + partidas
+            await metrics.upsertJoiningData(`${m}-01`, lbl, rows, agency);
             appState.showToast('Datos publicados con éxito', 'success');
-            // Refrescamos los datos en el store antes de volver
             await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
-        } catch (err) { 
-            console.error('❌ Error publicando reporte:', err);
-            appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error'); 
+        } catch (err) {
+            appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error');
             uBtn.disabled = false;
-            uBtn.textContent = 'PUBLICAR MÉTRICAS';
+            uBtn.textContent = 'PUBLICAR DATOS';
         }
     };
 }
@@ -394,20 +524,20 @@ function renderUploadView(container, mainContainer) {
 // Asignación por USERNAME directo en creator_metrics. No requiere cuenta.
 async function renderGroupEditor(container, managerId) {
     container.innerHTML = '<div style="padding:2rem;">Sincronizando equipo...</div>';
-    
+
     const allProfs = store.getProfiles();
     const manager = allProfs.find(p => p.id === managerId) || { display_name: 'Manager' };
-    
+
     const metricsData = store.getMetricsData() || [];
 
     const [assignedUsernames, allTakenUsernames] = await Promise.all([
         profiles.getCreatorsByManager(managerId),
         profiles.getAllAssignedUsernames(),
     ]);
-    
+
     // Miembros de este manager
     const myGroup = metricsData.filter(c => assignedUsernames.includes(c.username.toLowerCase()));
-    
+
     // Disponibles: no asignados a ningún manager
     const freeCreators = metricsData.filter(c => {
         return c.username && !allTakenUsernames.includes(c.username.toLowerCase());
@@ -468,10 +598,11 @@ async function renderGroupEditor(container, managerId) {
     // Quitar: por username
     container.querySelectorAll('.rem-c').forEach(b => b.onclick = async () => {
         await profiles.unassignManagerByUsername(b.dataset.username);
+        store.invalidateManagerGroup(managerId);
         appState.showToast('Creador desvinculado', 'info');
         renderGroupEditor(container, managerId);
     });
-    
+
     // Añadir: por username
     bindAddBtns(container, managerId, container);
 }
@@ -498,6 +629,7 @@ function renderAvailableCreators(list) {
 function bindAddBtns(el, managerId, rootContainer) {
     el.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
         await profiles.assignManagerByUsername(b.dataset.username, managerId);
+        store.invalidateManagerGroup(managerId);
         appState.showToast('Creador asignado', 'success');
         renderGroupEditor(rootContainer, managerId);
     });
@@ -512,12 +644,15 @@ function getTier(diamonds) {
 }
 
 export async function renderCreatorsList(container) {
-    const currentMetrics = store.getMetricsData();
-    if (!currentMetrics || !currentMetrics.length) {
-        container.innerHTML = skelRows(5);
-        if (isSupabaseConfigured) await store.refreshMetrics().catch(console.warn);
+    container.innerHTML = skelRows(5);
+    if (isSupabaseConfigured) {
+        await Promise.all([
+            store.refreshMetrics(),
+            store.refreshAdminLists(),
+        ]).catch(console.warn);
     }
-    const data = store.getMetricsData() || [];
+    const allData = store.getMetricsData() || [];
+    const data = allData.filter(d => (d.agency || 'latam') === selectedAgency);
 
     // Construir lista de managers únicos presentes en las métricas
     const managersInData = [];
@@ -536,8 +671,11 @@ export async function renderCreatorsList(container) {
 
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-                <h2 style="margin:0;">Creadores</h2>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.5rem;">
+                <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                    <h2 style="margin:0;">Creadores</h2>
+                    ${agencyToggleHtml()}
+                </div>
                 <span id="cr-count" style="font-size:0.8rem; color:var(--text-secondary);"></span>
             </div>
 
@@ -561,10 +699,7 @@ export async function renderCreatorsList(container) {
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">NIVEL</label>
                     <select id="cr-filter-level" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="all">Todos los niveles</option>
-                        ${visualTiers.map(t => {
-                            const iconStyle = t.icon ? `display:inline-block;width:12px;height:12px;margin-right:4px;vertical-align:middle;` : '';
-                            return `<option value="${t.level}">${t.emoji} ${t.name}</option>`;
-                        }).join('')}
+                        ${visualTiers.map(t => `<option value="${t.level}">${t.emoji} ${t.name}</option>`).join('')}
                     </select>
                 </div>
                 <div>
@@ -575,15 +710,6 @@ export async function renderCreatorsList(container) {
                         <option value="15">≥ 15 días</option>
                         <option value="7">≥ 7 días</option>
                         <option value="0">Sin días válidos</option>
-                    </select>
-                </div>
-                <div>
-                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">TIPO</label>
-                    <select id="cr-filter-type" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
-                        <option value="all">Todos</option>
-                        <option value="new">Nuevos (≤ 30d) 🚀</option>
-                        <option value="old">Consolidados (> 30d)</option>
-                        <option value="none">Sin datos de antigüedad ⚠️</option>
                     </select>
                 </div>
                 <div>
@@ -603,36 +729,26 @@ export async function renderCreatorsList(container) {
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
-            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
-            const isNew = antiquity != null && antiquity <= 30;
             const tier = getTier(c.diamonds);
-            const managerId = c.manager_id ?? c.managerId;
-            const managerProf = managerId ? store.getProfiles().find(p => p.id === managerId) : null;
-            const managerName = managerProf?.display_name || managerProf?.email || c.manager_name_legacy || c.manager || null;
-            const vDays = c.valid_days ?? c.validDays ?? 0;
+            const managerProf = c.managerId ? store.getProfiles().find(p => p.id === c.managerId) : null;
+            const managerName = managerProf?.display_name || managerProf?.email || c.manager || null;
+            const vDays = c.validDays ?? 0;
             const daysColor = vDays >= 22 ? 'var(--accent)' : vDays >= 7 ? 'var(--warning)' : 'var(--danger)';
-            
-            // Intentar recuperar del caché local si existe
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
 
             return `
             <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
-            <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
-                <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
-                <img src="${cachedAvatar || `https://unavatar.io/tiktok/${encodeURIComponent(c.username)}`}" 
-                     alt="@${c.username}" 
-                     loading="lazy"
-                     style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:${cachedAvatar ? '1' : '0'}; transition:opacity 0.3s ease;" 
-                     referrerpolicy="no-referrer" 
-                     onload="this.style.opacity='1';"
-                     onerror="this.style.display='none';">
-            </div>
+                <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
+                    <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                    <img src="${cachedAvatar || `https://unavatar.io/tiktok/${encodeURIComponent(c.username)}`}"
+                         alt="@${c.username}" loading="lazy"
+                         style="width:100%; height:100%; object-fit:cover; position:absolute; top:0; left:0; opacity:${cachedAvatar ? '1' : '0'}; transition:opacity 0.3s ease;"
+                         referrerpolicy="no-referrer" onload="this.style.opacity='1';" onerror="this.style.display='none';">
+                </div>
                 <div style="flex:1; min-width:0;">
-                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        @${c.username} ${isNew ? '<span title="Creador Nuevo (≤ 30 días)" style="cursor:help;">🚀</span>' : ''}
-                    </div>
+                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
-                        <span style="color:${daysColor};">${c.valid_days ?? c.validDays ?? 0}d</span>
+                        <span style="color:${daysColor};">${vDays}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
                     </div>
                 </div>
@@ -653,56 +769,33 @@ export async function renderCreatorsList(container) {
         const manager = container.querySelector('#cr-filter-manager').value;
         const level   = container.querySelector('#cr-filter-level').value;
         const days    = container.querySelector('#cr-filter-days').value;
-        const type    = container.querySelector('#cr-filter-type').value;
         const sort    = container.querySelector('#cr-sort').value;
 
-        console.log('🔍 Filtros activos:', { q, manager, level, days, type, sort });
-        if (data && data.length > 0) {
-            const withData = data.filter(c => (c.days_since_joining ?? c.daysSinceJoining) !== null);
-            console.log(`📊 Estadísticas: ${withData.length} de ${data.length} creadores tienen dato de antigüedad.`);
-            if (withData.length > 0) {
-                console.log('📝 Ejemplo del primer creador CON antigüedad:', withData[0]);
-            } else {
-                console.log('⚠️ AVISO: Ningún creador en la base de datos tiene dato de antigüedad (todos son null).');
-            }
-        }
-
         let list = data.filter(c => {
-            const antiquity = c.days_since_joining ?? c.daysSinceJoining;
-            const vDays = c.valid_days ?? c.validDays ?? 0;
-            const mId = c.manager_id ?? c.managerId;
-
+            const vDays = c.validDays ?? 0;
             if (q && !c.username.toLowerCase().includes(q)) return false;
-            if (manager === 'none' && mId) return false;
-            if (manager !== 'all' && manager !== 'none' && mId !== manager) return false;
+            if (manager === 'none' && c.managerId) return false;
+            if (manager !== 'all' && manager !== 'none' && c.managerId !== manager) return false;
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
-            if (days === '0'  && vDays > 0)   return false;
+            if (days === '0' && vDays > 0) return false;
             if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
-            
-            if (type === 'new') {
-                return antiquity !== null && antiquity !== undefined && antiquity <= 30;
-            } else if (type === 'old') {
-                return antiquity !== null && antiquity !== undefined && antiquity > 30;
-            } else if (type === 'none') {
-                return antiquity === null || antiquity === undefined;
-            }
             return true;
         });
 
-        console.log('✅ Resultados encontrados:', list.length);
-
         if (sort === 'diamonds')  list = [...list].sort((a, b) => b.diamonds - a.diamonds);
-        if (sort === 'validDays') list = [...list].sort((a, b) => (b.valid_days ?? b.validDays ?? 0) - (a.valid_days ?? a.validDays ?? 0));
+        if (sort === 'validDays') list = [...list].sort((a, b) => (b.validDays ?? 0) - (a.validDays ?? 0));
         if (sort === 'username')  list = [...list].sort((a, b) => a.username.localeCompare(b.username));
 
         container.querySelector('#cr-count').textContent = `${list.length} de ${data.length} creadores`;
         container.querySelector('#cr-results').innerHTML = renderItems(list);
     };
 
-    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-type', '#cr-sort'].forEach(sel => {
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-sort'].forEach(sel => {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });
+
+    wireAgencyToggle(container, () => renderCreatorsList(container));
 
     applyFilters();
 
@@ -711,7 +804,12 @@ export async function renderCreatorsList(container) {
         if (btn) {
             const username = btn.dataset.username;
             container.innerHTML = skelCreator();
-            import('./creatorDashboard.js').then(m => m.renderCreatorDashboard(container, username));
+            import('./creatorDashboard.js')
+                .then(m => m.renderCreatorDashboard(container, username))
+                .catch(err => {
+                    console.error('[import] creatorDashboard.js falló:', err);
+                    container.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando dashboard: ${err.message}</p>`;
+                });
         }
     });
 }
@@ -922,59 +1020,3 @@ async function renderHistoryView(container) {
         if (e.key === 'Enter') searchCreator();
     });
 }
-
-// ── VISTA: EDITOR DE NORMAS / CANALES ─────────────────────────────────────────
-async function renderContentEditor(container) {
-    container.innerHTML = `
-        <div class="animate-fadeIn">
-            <h2 style="margin-bottom:1.5rem;">📝 Normas &amp; Canales</h2>
-            <div id="ce-normas" class="glass-panel skel-panel" style="min-height:120px; margin-bottom:1.5rem;"></div>
-            <div id="ce-canales" class="glass-panel skel-panel" style="min-height:120px;"></div>
-        </div>`;
-
-    const [normas, canales] = await Promise.allSettled([
-        content.getPage('normas'),
-        content.getPage('canales'),
-    ]);
-
-    const makeEditor = (slug, icon, page) => `
-        <div style="margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
-            <span style="font-size:1.2rem;">${icon}</span>
-            <h3 style="font-size:1rem; font-weight:700;">${page?.title || slug}</h3>
-        </div>
-        <div class="input-group">
-            <label>Título</label>
-            <input id="ce-title-${slug}" class="input-control" value="${(page?.title || '').replace(/"/g,'&quot;')}" placeholder="Título de la página">
-        </div>
-        <div class="input-group">
-            <label>Contenido (una línea = un párrafo)</label>
-            <textarea id="ce-body-${slug}" class="input-control" rows="8" style="resize:vertical;">${page?.body || ''}</textarea>
-        </div>
-        <button id="ce-save-${slug}" class="btn btn-primary" style="min-width:120px;">Guardar</button>
-        <span id="ce-status-${slug}" style="margin-left:0.75rem; font-size:0.8rem; color:var(--text-secondary);"></span>`;
-
-    container.querySelector('#ce-normas').innerHTML = makeEditor('normas', '📋', normas.value);
-    container.querySelector('#ce-canales').innerHTML = makeEditor('canales', '📢', canales.value);
-
-    ['normas', 'canales'].forEach(slug => {
-        container.querySelector(`#ce-save-${slug}`).onclick = async () => {
-            const title  = container.querySelector(`#ce-title-${slug}`).value.trim();
-            const body   = container.querySelector(`#ce-body-${slug}`).value;
-            const status = container.querySelector(`#ce-status-${slug}`);
-            const btn    = container.querySelector(`#ce-save-${slug}`);
-            btn.disabled = true;
-            status.textContent = 'Guardando…';
-            try {
-                await content.upsertPage(slug, title, body);
-                status.style.color = 'var(--accent)';
-                status.textContent = '✓ Guardado';
-            } catch (err) {
-                status.style.color = 'var(--danger)';
-                status.textContent = err.message;
-            } finally {
-                btn.disabled = false;
-            }
-        };
-    });
-}
-
