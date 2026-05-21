@@ -2,7 +2,7 @@
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements } from '../config.js';
-import { push, metrics } from '../api.js';
+import { auth, push, metrics } from '../api.js';
 import { t, getLang } from '../i18n.js';
 import { appState } from '../main.js';
 
@@ -1143,48 +1143,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
         if (name === 'missions')  renderDailyTracker(tabContent.querySelector('#dt-missions'),  user?.id, 'missions');
         if (name === 'challenge') renderDailyTracker(tabContent.querySelector('#dt-challenge'), user?.id, 'challenge');
-    }
 
-    container.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            renderTab(btn.dataset.tab);
-        });
-    });
-
-    renderTab('metrics');
-
-    // Evento para guardar la fecha de ingreso desde el banner
-    const bannerSaveBtn = container.querySelector('#banner-save-btn');
-    if (bannerSaveBtn) {
-        bannerSaveBtn.onclick = async () => {
-            const dateInput = container.querySelector('#banner-date-input');
-            const dateValue = dateInput ? dateInput.value : '';
-            if (!dateValue) {
-                appState.showToast('Por favor, selecciona una fecha válida.', 'danger');
-                return;
-            }
-            bannerSaveBtn.disabled = true;
-            bannerSaveBtn.textContent = 'Activando...';
-            try {
-                const { auth } = await import('../api.js');
-                await auth.updateOwnProfile({ joining_date: dateValue });
-                await store.refreshProfile();
-                appState.showToast('¡Desafíos activados correctamente!', 'success');
-                // Re-renderizar el dashboard reactivamente
-                renderCreatorDashboard(container, targetUsername);
-            } catch (err) {
-                console.error(err);
-                appState.showToast('Error: ' + err.message, 'danger');
-                bannerSaveBtn.disabled = false;
-                bannerSaveBtn.textContent = 'Activar Retos';
-            }
-        };
-    }
-
-    // Cargar badge de no leídos en background
-    if (user?.id) {
         push.getForUser(user.id, user.role || 'creator').then(notifications => {
             const lastSeen = localStorage.getItem(inboxLastSeenKey) || '1970-01-01';
             const unread = notifications.filter(n => n.sent_at > lastSeen).length;
@@ -1204,6 +1163,45 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             import('./adminDashboard.js').then(m => m.renderCreatorsList(container));
         }
     });
+
+    // Reinsertar los escuchadores de clics de las pestañas
+    container.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderTab(btn.dataset.tab);
+        });
+    });
+
+    // Invocar la carga por defecto de la pestaña
+    renderTab('metrics');
+
+    // Manejar botón de guardar fecha del banner
+    const bannerSaveBtn = container.querySelector('#banner-save-btn');
+    const bannerDateInput = container.querySelector('#banner-date-input');
+    if (bannerSaveBtn && bannerDateInput) {
+        bannerSaveBtn.onclick = async () => {
+            const dateVal = bannerDateInput.value;
+            if (!dateVal) {
+                appState.showToast('Por favor, selecciona una fecha válida.', 'warning');
+                return;
+            }
+            bannerSaveBtn.disabled = true;
+            bannerSaveBtn.textContent = 'Guardando...';
+            try {
+                await auth.updateOwnProfile({ joining_date: dateVal });
+                await store.refreshProfile();
+                appState.showToast('Fecha de ingreso guardada. ¡Retos activados!', 'success');
+                // Recargar el dashboard
+                renderCreatorDashboard(container, targetUsername);
+            } catch (err) {
+                console.error(err);
+                appState.showToast('Error al guardar la fecha: ' + err.message, 'danger');
+                bannerSaveBtn.disabled = false;
+                bannerSaveBtn.textContent = 'Activar Retos';
+            }
+        };
+    }
 }
 
 
@@ -1250,7 +1248,6 @@ function renderSubmitMetricsView(container, prefill = null) {
 
     const curLabelCap = curLabel.charAt(0).toUpperCase() + curLabel.slice(1);
     const prevLabelCap = prevLabel.charAt(0).toUpperCase() + prevLabel.slice(1);
-
     container.innerHTML = `
         <div class="glass-panel animate-fadeIn" style="max-width:480px;margin:0 auto;">
             <h2 style="margin-bottom:0.4rem;">📊 ${t('metrics.title')}</h2>
