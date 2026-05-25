@@ -379,6 +379,16 @@ async function boot() {
         if (alreadyBooted) return; // Token refresh silencioso — no re-renderizar ni re-identificar
 
         await store.refreshProfile();
+
+        // Cuenta desactivada — cerrar sesión inmediatamente
+        if (store.getProfile()?.active === false) {
+            await auth.signOut();
+            await store.clear();
+            appState.navigate('login');
+            setTimeout(() => appState.showToast('Tu cuenta fue desactivada. Contactá a tu manager.', 'danger', 6000), 300);
+            return;
+        }
+
         const profile = store.getProfile();
         const u = store.getCurrentUser();
         if (profile) identifyOneSignalUser(profile);
@@ -401,6 +411,13 @@ async function boot() {
 
     // Si ya había sesión cargada en store.init(), identificamos también al boot.
     const profile = store.getProfile();
+    if (profile?.active === false) {
+        await auth.signOut();
+        await store.clear();
+        appState.navigate('login');
+        setTimeout(() => appState.showToast('Tu cuenta fue desactivada. Contactá a tu manager.', 'danger', 6000), 300);
+        return;
+    }
     if (profile) identifyOneSignalUser(profile);
 
     const user = store.getCurrentUser();

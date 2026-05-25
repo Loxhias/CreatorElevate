@@ -3,6 +3,7 @@ import { appState } from '../main.js';
 import { metrics, profiles } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
+import { profiles as profilesApi } from '../api.js';
 import { renderCanales } from './canales.js';
 import { renderMissionsAdmin } from './missionsAdmin.js';
 
@@ -688,7 +689,7 @@ export async function renderCreatorsList(container) {
 
             <!-- Barra de búsqueda -->
             <div class="glass-panel" style="padding:0.8rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.8rem;">
-                <span>🔍</span>
+                <i class="ph-bold ph-magnifying-glass" style="color:var(--text-muted);flex-shrink:0;"></i>
                 <input type="text" id="cr-search" placeholder="Buscar por username..." class="input-control" style="background:none; border:none; padding:0; flex:1;">
             </div>
 
@@ -720,6 +721,14 @@ export async function renderCreatorsList(container) {
                     </select>
                 </div>
                 <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">ESTADO</label>
+                    <select id="cr-filter-active" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="active">Activos</option>
+                        <option value="inactive">Inactivos (dados de baja)</option>
+                        <option value="all">Todos</option>
+                    </select>
+                </div>
+                <div>
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">ORDENAR POR</label>
                     <select id="cr-sort" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="diamonds">Diamantes ↓</option>
@@ -733,6 +742,11 @@ export async function renderCreatorsList(container) {
         </div>
     `;
 
+    const profilesByUsername = {};
+    (store.getProfiles() || []).forEach(p => {
+        if (p.tiktok_username) profilesByUsername[p.tiktok_username.toLowerCase()] = p;
+    });
+
     const renderItems = (list) => {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
@@ -742,9 +756,12 @@ export async function renderCreatorsList(container) {
             const vDays = c.validDays ?? 0;
             const daysColor = vDays >= 22 ? 'var(--accent)' : vDays >= 7 ? 'var(--warning)' : 'var(--danger)';
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
+            const prof = profilesByUsername[c.username.toLowerCase()];
+            const isActive = prof?.active !== false;
+            const uid = prof?.id;
 
             return `
-            <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;">
+            <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;${!isActive ? ' opacity:0.55;' : ''}">
                 <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
                     <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
                     <img src="${cachedAvatar || `https://unavatar.io/tiktok/${encodeURIComponent(c.username)}`}"
@@ -753,30 +770,40 @@ export async function renderCreatorsList(container) {
                          referrerpolicy="no-referrer" onload="this.style.opacity='1';" onerror="this.style.display='none';">
                 </div>
                 <div style="flex:1; min-width:0;">
-                    <div style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</div>
+                    <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
+                        <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</span>
+                        ${!isActive ? '<span style="background:rgba(255,85,105,0.15);color:var(--danger);font-size:0.62rem;font-weight:700;padding:0.1rem 0.45rem;border-radius:999px;border:1px solid rgba(255,85,105,0.3);flex-shrink:0;">DADO DE BAJA</span>' : ''}
+                    </div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
                         <span style="color:${daysColor};">${vDays}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
                     </div>
                 </div>
-                <div style="text-align:right; flex-shrink:0;">
-                    <div style="font-size:0.68rem; margin-bottom:0.2rem; display:flex; align-items:center; justify-content:flex-end; gap:0.3rem;">
+                <div style="text-align:right; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:0.2rem;">
+                    <div style="font-size:0.68rem; display:flex; align-items:center; justify-content:flex-end; gap:0.3rem;">
                         ${tier.icon ? `<img src="${tier.icon}" style="width:14px; height:14px; object-fit:contain;">` : `<span>${tier.emoji}</span>`}
                         <span>${tier.name}</span>
                     </div>
                     <div style="font-weight:800; color:var(--accent); font-size:0.95rem;">${fmt(c.diamonds)} 💎</div>
-                    <button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="margin-top:0.35rem; font-size:0.65rem; padding:0.2rem 0.6rem;">Ver →</button>
+                    <div style="display:flex; gap:0.3rem; margin-top:0.15rem; justify-content:flex-end;">
+                        ${isActive ? `<button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="font-size:0.65rem; padding:0.2rem 0.6rem;">Ver →</button>` : ''}
+                        ${uid ? `<button class="btn btn-sm v-c-toggle" data-uid="${uid}" data-active="${isActive}"
+                            style="font-size:0.62rem;padding:0.2rem 0.55rem;background:${isActive ? 'rgba(255,85,105,0.1)' : 'rgba(0,217,166,0.1)'};color:${isActive ? 'var(--danger)' : 'var(--accent)'};border:1px solid ${isActive ? 'rgba(255,85,105,0.3)' : 'rgba(0,217,166,0.3)'};border-radius:var(--radius-sm);cursor:pointer;">
+                            ${isActive ? 'Desactivar' : 'Reactivar'}
+                        </button>` : ''}
+                    </div>
                 </div>
             </div>`;
         }).join('');
     };
 
     const applyFilters = () => {
-        const q       = container.querySelector('#cr-search').value.toLowerCase().trim();
-        const manager = container.querySelector('#cr-filter-manager').value;
-        const level   = container.querySelector('#cr-filter-level').value;
-        const days    = container.querySelector('#cr-filter-days').value;
-        const sort    = container.querySelector('#cr-sort').value;
+        const q            = container.querySelector('#cr-search').value.toLowerCase().trim();
+        const manager      = container.querySelector('#cr-filter-manager').value;
+        const level        = container.querySelector('#cr-filter-level').value;
+        const days         = container.querySelector('#cr-filter-days').value;
+        const activeFilter = container.querySelector('#cr-filter-active').value;
+        const sort         = container.querySelector('#cr-sort').value;
 
         let list = data.filter(c => {
             const vDays = c.validDays ?? 0;
@@ -786,6 +813,12 @@ export async function renderCreatorsList(container) {
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
             if (days === '0' && vDays > 0) return false;
             if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
+            if (activeFilter !== 'all') {
+                const p = profilesByUsername[c.username.toLowerCase()];
+                const isActive = p?.active !== false;
+                if (activeFilter === 'active' && !isActive) return false;
+                if (activeFilter === 'inactive' && isActive) return false;
+            }
             return true;
         });
 
@@ -797,7 +830,7 @@ export async function renderCreatorsList(container) {
         container.querySelector('#cr-results').innerHTML = renderItems(list);
     };
 
-    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-sort'].forEach(sel => {
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-active', '#cr-sort'].forEach(sel => {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });
@@ -806,10 +839,10 @@ export async function renderCreatorsList(container) {
 
     applyFilters();
 
-    container.addEventListener('click', (e) => {
-        const btn = e.target.closest('.v-c-dash');
-        if (btn) {
-            const username = btn.dataset.username;
+    container.addEventListener('click', async (e) => {
+        const dashBtn = e.target.closest('.v-c-dash');
+        if (dashBtn) {
+            const username = dashBtn.dataset.username;
             container.innerHTML = skelCreator();
             import('./creatorDashboard.js')
                 .then(m => m.renderCreatorDashboard(container, username))
@@ -817,6 +850,22 @@ export async function renderCreatorsList(container) {
                     console.error('[import] creatorDashboard.js falló:', err);
                     container.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando dashboard: ${err.message}</p>`;
                 });
+            return;
+        }
+
+        const toggleBtn = e.target.closest('.v-c-toggle');
+        if (toggleBtn) {
+            const uid = toggleBtn.dataset.uid;
+            const currentlyActive = toggleBtn.dataset.active === 'true';
+            const newActive = !currentlyActive;
+            if (!confirm(`¿Estás seguro de ${newActive ? 'reactivar' : 'desactivar'} a este creador?`)) return;
+            try {
+                await profilesApi.setActive(uid, newActive);
+                appState.showToast(newActive ? 'Creador reactivado' : 'Creador desactivado', newActive ? 'success' : 'info');
+                renderCreatorsList(container);
+            } catch (err) {
+                appState.showToast('Error: ' + err.message, 'error');
+            }
         }
     });
 }

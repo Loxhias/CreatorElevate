@@ -115,6 +115,10 @@ p, li, td, .text-content, .glass-panel > p { overflow-wrap: break-word; }
     white-space: nowrap;
 }
 
+/* Icon container: fixed size so bottom-nav's 0.62rem doesn't shrink it */
+.nav-icon { font-size: 1.2rem; line-height: 1; display: block; }
+.bottom-nav .nav-item .nav-icon { font-size: 1.15rem; }
+
 /* ---- Paneles y Cards ---- */
 .glass-panel {
     background: var(--glass-bg);

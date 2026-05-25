@@ -496,6 +496,15 @@ export const profiles = {
         if (error) throw error;
     },
 
+    async setActive(userId, active) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('profiles')
+            .update({ active })
+            .eq('id', userId);
+        if (error) throw error;
+    },
+
     async assignManagerByUsername(username, managerId) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
         const { error } = await supabase
