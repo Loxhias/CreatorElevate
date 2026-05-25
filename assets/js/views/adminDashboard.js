@@ -4,6 +4,7 @@ import { metrics, profiles } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
 import { renderCanales } from './canales.js';
+import { renderMissionsAdmin } from './missionsAdmin.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
 
@@ -220,29 +221,34 @@ export async function renderAdminDashboard(container) {
 
             <div class="metrics-grid" style="margin-bottom:2.5rem;">
                 <div class="glass-panel action-card" id="nav-audit">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📊</div>
+                    <i class="ph-bold ph-chart-bar-horizontal" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
                     <h3 style="font-size:0.95rem;">Auditoría de Managers</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Revisar dashboards y equipos.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-manage">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">👥</div>
+                    <i class="ph-bold ph-users-three" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
                     <h3 style="font-size:0.95rem;">Gestión de Managers</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Altas, bajas y roles de staff.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-upload">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📥</div>
+                    <i class="ph-bold ph-upload-simple" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
                     <h3 style="font-size:0.95rem;">Cargar Datos Mensuales</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Subir incorporación y partidas.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-history">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📈</div>
+                    <i class="ph-bold ph-trend-up" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
                     <h3 style="font-size:0.95rem;">Historial de Métricas</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Evolución por período y creador.</p>
                 </div>
                 <div class="glass-panel action-card" id="nav-content">
-                    <div style="font-size:1.5rem; margin-bottom:0.5rem;">📢</div>
+                    <i class="ph-bold ph-megaphone-simple" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
                     <h3 style="font-size:0.95rem;">Canales</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Gestionar canales de comunicación.</p>
+                </div>
+                <div class="glass-panel action-card" id="nav-missions">
+                    <i class="ph-bold ph-target" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
+                    <h3 style="font-size:0.95rem;">Misiones</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Crear y editar el camino de 7 días.</p>
                 </div>
             </div>
 
@@ -281,7 +287,8 @@ export async function renderAdminDashboard(container) {
     container.querySelector('#nav-manage').onclick  = () => renderManageView(viewContent);
     container.querySelector('#nav-upload').onclick  = () => renderUploadView(viewContent, container, selectedAgency);
     container.querySelector('#nav-history').onclick = () => renderHistoryView(viewContent);
-    container.querySelector('#nav-content').onclick = () => renderCanales(viewContent);
+    container.querySelector('#nav-content').onclick  = () => renderCanales(viewContent);
+    container.querySelector('#nav-missions').onclick = () => renderMissionsAdmin(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────

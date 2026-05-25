@@ -49,31 +49,35 @@ export const appState = {
 };
 
 function getNavItems(role) {
+    const pi = (name) => `<i class="ph-bold ph-${name}"></i>`;
     const items = [];
     if (role === 'admin') {
-        items.push({ view: 'inicio',         icon: '📊', label: 'Dashboard' });
-        items.push({ view: 'creadores',      icon: '👥', label: 'Creadores' });
-        items.push({ view: 'canales',        icon: '📢', label: 'Canales' });
-        items.push({ view: 'notificaciones', icon: '🔔', label: 'Mensajes' });
+        items.push({ view: 'inicio',         icon: pi('chart-bar'),        label: 'Dashboard' });
+        items.push({ view: 'creadores',      icon: pi('users'),            label: 'Creadores' });
+        items.push({ view: 'canales',        icon: pi('megaphone-simple'), label: 'Canales' });
+        items.push({ view: 'notificaciones', icon: pi('bell'),             label: 'Mensajes' });
+        items.push({ view: 'puntos',         icon: pi('star'),             label: 'Puntos' });
     } else if (role === 'creator') {
-        items.push({ view: 'inicio',   icon: '📊', label: t('nav.dashboard') });
-        items.push({ view: 'mensajes', icon: '🔔', label: t('nav.messages') });
-        items.push({ view: 'normas',   icon: '📋', label: t('nav.rules') });
-        items.push({ view: 'canales',  icon: '📢', label: t('nav.channels') });
+        items.push({ view: 'inicio',      icon: pi('chart-bar'),        label: t('nav.dashboard') });
+        items.push({ view: 'mensajes',    icon: pi('bell'),             label: t('nav.messages') });
+        items.push({ view: 'misiones',    icon: pi('target'),           label: 'Misiones' });
+        items.push({ view: 'mis-puntos',  icon: pi('star'),             label: 'Mis Puntos' });
+        items.push({ view: 'normas',      icon: pi('clipboard-text'),   label: t('nav.rules') });
+        items.push({ view: 'canales',     icon: pi('megaphone-simple'), label: t('nav.channels') });
     } else if (role === 'manager') {
-        items.push({ view: 'inicio',   icon: '📊', label: 'Panel' });
-        items.push({ view: 'mensajes', icon: '🔔', label: 'Mensajes' });
+        items.push({ view: 'inicio',   icon: pi('chart-bar'), label: 'Panel' });
+        items.push({ view: 'mensajes', icon: pi('bell'),      label: 'Mensajes' });
         const managerProfile = store.getProfile?.();
         if (managerProfile?.tiktok_username?.trim()) {
-            items.push({ view: 'mis-metricas', icon: '🎬', label: 'Mis métricas' });
+            items.push({ view: 'mis-metricas', icon: pi('video-camera'), label: 'Mis métricas' });
         }
     } else {
-        items.push({ view: 'inicio', icon: '📊', label: 'Panel' });
+        items.push({ view: 'inicio', icon: pi('chart-bar'), label: 'Panel' });
     }
     const isCreator = role === 'creator';
-    items.push({ view: 'capacitaciones', icon: '🎓', label: isCreator ? t('nav.trainings') : 'Capacitaciones' });
-    items.push({ view: 'eventos',        icon: '📅', label: isCreator ? t('nav.events')    : 'Eventos' });
-    items.push({ view: 'perfil',         icon: '👤', label: isCreator ? t('nav.profile')   : 'Perfil' });
+    items.push({ view: 'capacitaciones', icon: pi('graduation-cap'),  label: isCreator ? t('nav.trainings') : 'Capacitaciones' });
+    items.push({ view: 'eventos',        icon: pi('calendar-blank'),  label: isCreator ? t('nav.events')    : 'Eventos' });
+    items.push({ view: 'perfil',         icon: pi('user'),            label: isCreator ? t('nav.profile')   : 'Perfil' });
     return items;
 }
 
@@ -145,7 +149,7 @@ function renderDashboardLayout(container, renderContentFn, role) {
                     ${navHtml}
                     <!-- Botón de Instalación (Sidebar) -->
                     <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} margin-top:1rem; border:1px dashed var(--primary); border-radius:var(--radius-md); background:rgba(124,110,247,0.05);">
-                        <span class="nav-icon">📲</span>
+                        <span class="nav-icon"><i class="ph-bold ph-device-mobile"></i></span>
                         <span style="color:var(--primary-light);">${t('nav.install')}</span>
                     </a>
                 </nav>
@@ -164,7 +168,7 @@ function renderDashboardLayout(container, renderContentFn, role) {
             <nav class="bottom-nav">
                 ${navHtml}
                 <a href="#" class="nav-item btn-pwa-install" style="${installBtnStyle} color:var(--primary-light); font-weight:700;">
-                    <span>📲</span><span>${t('nav.install_mob')}</span>
+                    <span><i class="ph-bold ph-device-mobile"></i></span><span>${t('nav.install_mob')}</span>
                 </a>
                 <a href="#" class="nav-item btn-logout" style="color:var(--danger);">
                     <span>🚪</span><span>${t('nav.logout_mob')}</span>
@@ -222,6 +226,18 @@ function renderDashboardLayout(container, renderContentFn, role) {
             }
             else if (view === 'mis-metricas') {
                 safeImport('./views/creatorDashboard.js', contentArea).then(m => m && safeRender(m.renderCreatorDashboard, contentArea));
+            }
+            else if (view === 'misiones') {
+                safeImport('./views/missions.js', contentArea).then(m => m && safeRender(m.renderMissionsView, contentArea));
+            }
+            else if (view === 'misiones-admin') {
+                safeImport('./views/missionsAdmin.js', contentArea).then(m => m && safeRender(m.renderMissionsAdmin, contentArea));
+            }
+            else if (view === 'mis-puntos') {
+                safeImport('./views/points.js', contentArea).then(m => m && safeRender(m.renderPointsView, contentArea));
+            }
+            else if (view === 'puntos') {
+                safeImport('./views/pointsAdmin.js', contentArea).then(m => m && safeRender(m.renderPointsAdmin, contentArea));
             }
             else if (view === 'capacitaciones') {
                 safeImport('./views/trainings.js', contentArea).then(m => m && safeRender(m.renderTrainingsView, contentArea));

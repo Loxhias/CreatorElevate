@@ -672,30 +672,40 @@ export const push = {
 // ────────────────────────────────────────────────────────────────────────────
 
 export const trainings = {
-    async list() {
+    // agency: 'latam'|'usa' → muestra de esa región + 'all'; null → todo (admin)
+    async list(agency = null) {
         if (!isSupabaseConfigured) return [];
+        if (agency) {
+            try {
+                const { data, error } = await supabase
+                    .from('trainings').select('*').eq('published', true)
+                    .or(`agency.eq.${agency},agency.eq.all`)
+                    .order('created_at', { ascending: false });
+                if (!error) return data || [];
+            } catch { /* columna no existe aún — cae al fallback */ }
+        }
         const { data, error } = await supabase
-            .from('trainings').select('*')
-            .eq('published', true)
+            .from('trainings').select('*').eq('published', true)
             .order('created_at', { ascending: false });
         if (error) throw error;
         return data || [];
     },
 
-    async create({ title, description, youtube_url }) {
+    async create({ title, description, youtube_url, agency = 'all' }) {
         if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
         const { data: { user } } = await supabase.auth.getUser();
         const { error } = await supabase.from('trainings').insert({
             title: san(title), description: san(description),
             youtube_url: san(youtube_url), created_by: user?.id,
+            agency: agency || 'all',
         });
         if (error) throw error;
     },
 
-    async update(id, { title, description, youtube_url }) {
+    async update(id, { title, description, youtube_url, agency = 'all' }) {
         if (!isSupabaseConfigured) throw new Error('Supabase no configurado.');
         const { error } = await supabase.from('trainings')
-            .update({ title: san(title), description: san(description), youtube_url: san(youtube_url) })
+            .update({ title: san(title), description: san(description), youtube_url: san(youtube_url), agency: agency || 'all' })
             .eq('id', id);
         if (error) throw error;
     },
@@ -796,28 +806,245 @@ export const content = {
 // ────────────────────────────────────────────────────────────────────────────
 
 export const channels = {
-    async list() {
+    async list(agency = 'latam') {
         if (!isSupabaseConfigured) return [];
+        const slug = `channels_${agency}`;
         const { data, error } = await supabase
-            .from('agency_content')
-            .select('body')
-            .eq('slug', 'channels_v2')
-            .maybeSingle();
+            .from('agency_content').select('body').eq('slug', slug).maybeSingle();
         if (error) throw error;
-        if (!data?.body) return [];
-        try { return JSON.parse(data.body); } catch { return []; }
+        if (data?.body) try { return JSON.parse(data.body); } catch { return []; }
+        // Migración: si aún no existe el slug regional, usa el legacy channels_v2
+        const { data: legacy } = await supabase
+            .from('agency_content').select('body').eq('slug', 'channels_v2').maybeSingle();
+        if (legacy?.body) try { return JSON.parse(legacy.body); } catch {}
+        return [];
     },
 
-    async save(items) {
+    async save(items, agency = 'latam') {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const slug = `channels_${agency}`;
         const { error } = await supabase
             .from('agency_content')
             .upsert({
-                slug:       'channels_v2',
-                title:      'Canales Oficiales',
+                slug,
+                title:      `Canales Oficiales ${agency.toUpperCase()}`,
                 body:       JSON.stringify(items),
                 updated_at: new Date().toISOString(),
             }, { onConflict: 'slug' });
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  SISTEMA DE PUNTOS / REFERIDOS
+// ────────────────────────────────────────────────────────────────────────────
+
+export const points = {
+    /** Balance actual del usuario autenticado (o de un userId específico para admin). */
+    async getBalance(userId = null) {
+        if (!isSupabaseConfigured) return 0;
+        let id = userId;
+        if (!id) {
+            const { data: { user } } = await supabase.auth.getUser();
+            id = user?.id;
+        }
+        if (!id) return 0;
+        const { data } = await supabase.from('profiles').select('points').eq('id', id).maybeSingle();
+        return data?.points ?? 0;
+    },
+
+    /** Admin: suma (o resta) puntos a un creador. */
+    async addPoints(userId, delta) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { data: profile } = await supabase.from('profiles').select('points').eq('id', userId).maybeSingle();
+        const next = Math.max(0, (profile?.points ?? 0) + delta);
+        const { error } = await supabase.from('profiles').update({ points: next }).eq('id', userId);
+        if (error) throw error;
+        return next;
+    },
+
+    /** Admin: lista todos los creadores con sus puntos. */
+    async listCreatorPoints() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, tiktok_username, display_name, points, agency')
+            .eq('role', 'creator')
+            .gt('points', 0)
+            .order('points', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    /** Creador: canjea todos sus puntos por diamantes. */
+    async redeem() {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('No autenticado.');
+        const { data: profile } = await supabase
+            .from('profiles').select('points, tiktok_username, display_name').eq('id', user.id).maybeSingle();
+        const bal = profile?.points ?? 0;
+        if (bal <= 0) throw new Error('No tenés puntos para canjear.');
+        const diamonds = bal * 250;
+        const username = profile?.tiktok_username || profile?.display_name || user.id;
+        // Primero deducimos los puntos
+        const { error: e1 } = await supabase.from('profiles').update({ points: 0 }).eq('id', user.id);
+        if (e1) throw e1;
+        // Registramos el canje (best-effort)
+        await supabase.from('points_redemptions').insert({
+            user_id: user.id, username, points_redeemed: bal, diamonds_earned: diamonds,
+        });
+        return { pointsRedeemed: bal, diamondsEarned: diamonds };
+    },
+
+    /** Creador: historial de sus canjes. */
+    async myRedemptions() {
+        if (!isSupabaseConfigured) return [];
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return [];
+        const { data, error } = await supabase
+            .from('points_redemptions').select('*')
+            .eq('user_id', user.id).order('redeemed_at', { ascending: false });
+        if (error) throw error;
+        return data || [];
+    },
+
+    /** Admin: lista todos los canjes. */
+    async listRedemptions() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('points_redemptions').select('*')
+            .order('redeemed_at', { ascending: false }).limit(200);
+        if (error) throw error;
+        return data || [];
+    },
+
+    /** Admin: marca un canje como procesado. */
+    async markProcessed(id) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('points_redemptions')
+            .update({ status: 'processed', processed_at: new Date().toISOString(), processed_by: user?.id })
+            .eq('id', id);
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  MISIONES — camino de 7 días para nuevos creadores
+// ────────────────────────────────────────────────────────────────────────────
+
+export const missions = {
+    async list() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('missions')
+            .select('*')
+            .order('day_number', { ascending: true })
+            .order('sort_order',  { ascending: true });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getCompletions(creatorId = null) {
+        if (!isSupabaseConfigured) return [];
+        let id = creatorId;
+        if (!id) {
+            const { data: { user } } = await supabase.auth.getUser();
+            id = user?.id;
+        }
+        if (!id) return [];
+        const { data, error } = await supabase
+            .from('mission_completions')
+            .select('mission_id, completed_at')
+            .eq('creator_id', id);
+        if (error) throw error;
+        return data || [];
+    },
+
+    async complete(missionId) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('No autenticado.');
+        const { error } = await supabase.from('mission_completions')
+            .insert({ creator_id: user.id, mission_id: missionId });
+        if (error) throw error;
+    },
+
+    async uncomplete(missionId) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('No autenticado.');
+        const { error } = await supabase.from('mission_completions')
+            .delete().eq('creator_id', user.id).eq('mission_id', missionId);
+        if (error) throw error;
+    },
+
+    async create({ day_number, title, description = '', sort_order = 0 }) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { error } = await supabase.from('missions').insert({
+            day_number, title: san(title), description: san(description), sort_order,
+        });
+        if (error) throw error;
+    },
+
+    async update(id, { title, description, day_number, sort_order }) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const updates = {};
+        if (title       !== undefined) updates.title       = san(title);
+        if (description !== undefined) updates.description = san(description);
+        if (day_number  !== undefined) updates.day_number  = day_number;
+        if (sort_order  !== undefined) updates.sort_order  = sort_order;
+        const { error } = await supabase.from('missions').update(updates).eq('id', id);
+        if (error) throw error;
+    },
+
+    async remove(id) {
+        if (!isSupabaseConfigured) throw new Error('No configurado.');
+        const { error } = await supabase.from('missions').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    async getCompletionCounts() {
+        if (!isSupabaseConfigured) return {};
+        const { data, error } = await supabase
+            .from('mission_completions')
+            .select('mission_id');
+        if (error) return {};
+        const counts = {};
+        for (const r of data || []) counts[r.mission_id] = (counts[r.mission_id] || 0) + 1;
+        return counts;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  NOTIFICACIONES AUTOMÁTICAS — cooldown anti-spam
+// ────────────────────────────────────────────────────────────────────────────
+
+export const autoNotif = {
+    /** Devuelve el Set de IDs que ya recibieron notif de inactividad en el cooldown. */
+    async getCooldownIds(creatorIds, cooldownDays = 7) {
+        if (!isSupabaseConfigured || !creatorIds.length) return new Set();
+        const cutoff = new Date(Date.now() - cooldownDays * 86400 * 1000).toISOString();
+        try {
+            const { data } = await supabase
+                .from('auto_notifications_log')
+                .select('creator_id')
+                .eq('type', 'inactivity')
+                .gte('sent_at', cutoff)
+                .in('creator_id', creatorIds);
+            return new Set((data || []).map(l => l.creator_id));
+        } catch {
+            return new Set();
+        }
+    },
+
+    /** Registra que se envió notif de inactividad a estos creadores. */
+    async logInactivity(creatorIds) {
+        if (!isSupabaseConfigured || !creatorIds.length) return;
+        const { error } = await supabase.from('auto_notifications_log').insert(
+            creatorIds.map(id => ({ creator_id: id, type: 'inactivity' }))
+        );
         if (error) throw error;
     },
 };

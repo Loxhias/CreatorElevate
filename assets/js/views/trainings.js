@@ -2,6 +2,12 @@ import { store } from '../store.js';
 import { trainings as api } from '../api.js';
 import { appState } from '../main.js';
 
+const AGENCIES = [
+    { val: 'all',   label: '<i class="ph-bold ph-globe"></i> Todos',  tag: 'Todas las regiones' },
+    { val: 'latam', label: '🌎 LATAM',  tag: 'LATAM' },
+    { val: 'usa',   label: '🇺🇸 USA',   tag: 'USA' },
+];
+
 function getYoutubeId(url) {
     if (!url) return null;
     const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?/\s]+)/);
@@ -10,6 +16,7 @@ function getYoutubeId(url) {
 
 export async function renderTrainingsView(container) {
     const isAdmin = store.getCurrentUser()?.role === 'admin';
+    const creatorAgency = isAdmin ? null : (store.getProfile()?.agency || 'latam');
 
     container.innerHTML = `
         <div>
@@ -20,7 +27,7 @@ export async function renderTrainingsView(container) {
         </div>`;
 
     try {
-        const items = await api.list();
+        const items = await api.list(creatorAgency);
         renderContent(container, items, isAdmin);
     } catch (err) {
         container.innerHTML = `<div class="glass-panel" style="padding:2rem;color:var(--danger);">
@@ -29,15 +36,44 @@ export async function renderTrainingsView(container) {
     }
 }
 
-function renderContent(container, items, isAdmin) {
+function tabStyle(active) {
+    return `font-size:0.75rem;padding:0.3rem 0.85rem;border-radius:999px;cursor:pointer;font-weight:600;
+        background:${active ? 'rgba(124,110,247,0.2)' : 'rgba(255,255,255,0.04)'};
+        border:1.5px solid ${active ? 'var(--primary)' : 'var(--glass-border)'};
+        color:${active ? 'var(--primary-light)' : 'var(--text-secondary)'};`;
+}
+
+function renderContent(container, allItems, isAdmin, activeAgency = 'all') {
+    // Admin: filtro de tab. Tabs "LATAM" y "USA" muestran también los de región 'all'
+    // (espeja lo que ve cada creador). Tab "Todos" muestra todo sin filtro.
+    const items = isAdmin && activeAgency !== 'all'
+        ? allItems.filter(t => {
+            const ag = t.agency || 'all';
+            return ag === activeAgency || ag === 'all';
+        })
+        : allItems;
+
+    const agTagHtml = (t) => {
+        if (!isAdmin || !t.agency || t.agency === 'all') return '';
+        const label = t.agency === 'latam' ? '🌎 LATAM' : '🇺🇸 USA';
+        return `<span style="font-size:0.6rem;padding:0.1rem 0.4rem;border-radius:999px;
+            background:rgba(124,110,247,0.12);color:var(--primary-light);font-weight:700;">${label}</span>`;
+    };
+
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;">
-                <h1 style="margin:0;font-size:1.5rem;">🎓 Capacitaciones</h1>
-                ${isAdmin ? `<button id="add-tr-btn" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;">+ Agregar</button>` : ''}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${isAdmin ? '1rem' : '1.5rem'};gap:1rem;flex-wrap:wrap;">
+                <h1 style="margin:0;font-size:1.5rem;">Capacitaciones</h1>
+                ${isAdmin ? `<button id="add-tr-btn" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;"><i class="ph-bold ph-plus"></i> Agregar</button>` : ''}
             </div>
 
             ${isAdmin ? `
+            <div style="display:flex;gap:0.4rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+                ${AGENCIES.map(a => `
+                    <button class="ag-tab" data-ag="${a.val}" style="${tabStyle(activeAgency === a.val)}">${a.label}</button>
+                `).join('')}
+            </div>
+
             <div id="tr-form" class="glass-panel" style="padding:1.25rem;margin-bottom:1.5rem;display:none;">
                 <h3 id="tr-form-title" style="margin-top:0;font-size:0.95rem;">Nueva Capacitación</h3>
                 <div style="display:flex;flex-direction:column;gap:0.8rem;">
@@ -46,6 +82,12 @@ function renderContent(container, items, isAdmin) {
                     <input type="url" id="tr-url" class="input-control" placeholder="https://www.youtube.com/watch?v=...">
                     <div id="tr-preview" style="display:none;border-radius:8px;overflow:hidden;max-width:360px;">
                         <img id="tr-thumb" style="width:100%;display:block;" alt="Miniatura">
+                    </div>
+                    <div class="input-group" style="margin-bottom:0;">
+                        <label style="font-size:0.78rem;color:var(--text-muted);">Región visible</label>
+                        <select id="tr-agency" class="input-control">
+                            ${AGENCIES.map(a => `<option value="${a.val}" ${activeAgency === a.val ? 'selected' : ''}>${a.label} — ${a.tag}</option>`).join('')}
+                        </select>
                     </div>
                     <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
                         <button id="tr-save-btn" class="btn btn-primary" style="flex:1;min-width:120px;">Guardar</button>
@@ -56,14 +98,21 @@ function renderContent(container, items, isAdmin) {
 
             ${!items.length
                 ? `<div class="glass-panel" style="padding:3rem 2rem;text-align:center;">
-                    <div style="font-size:2.5rem;margin-bottom:1rem;">🎓</div>
-                    <p style="color:var(--text-muted);font-size:0.9rem;">No hay capacitaciones publicadas todavía.</p>
+                    <div style="font-size:2.5rem;margin-bottom:1rem;"><i class="ph-bold ph-graduation-cap"></i></div>
+                    <p style="color:var(--text-muted);font-size:0.9rem;">No hay capacitaciones${isAdmin && activeAgency !== 'all' ? ` para ${AGENCIES.find(a => a.val === activeAgency)?.label || ''}` : ''} publicadas todavía.</p>
                    </div>`
                 : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1.2rem;">
-                    ${items.map(t => renderCard(t, isAdmin)).join('')}
+                    ${items.map(t => renderCard(t, isAdmin, agTagHtml(t))).join('')}
                    </div>`}
         </div>
     `;
+
+    // Tabs de agencia (admin)
+    container.querySelectorAll('.ag-tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            renderContent(container, allItems, isAdmin, btn.dataset.ag);
+        });
+    });
 
     if (!isAdmin) return;
 
@@ -77,6 +126,7 @@ function renderContent(container, items, isAdmin) {
     const preview   = container.querySelector('#tr-preview');
     const thumb     = container.querySelector('#tr-thumb');
     const saveBtn   = container.querySelector('#tr-save-btn');
+    const agencyEl  = container.querySelector('#tr-agency');
 
     const closeForm = () => {
         form.style.display = 'none';
@@ -87,6 +137,7 @@ function renderContent(container, items, isAdmin) {
         container.querySelector('#tr-desc').value  = '';
         urlInput.value = '';
         preview.style.display = 'none';
+        agencyEl.value = activeAgency === 'all' ? 'all' : activeAgency;
     };
 
     addBtn.onclick = () => {
@@ -108,21 +159,23 @@ function renderContent(container, items, isAdmin) {
     });
 
     saveBtn.onclick = async () => {
-        const title = container.querySelector('#tr-title').value.trim();
-        const desc  = container.querySelector('#tr-desc').value.trim();
-        const url   = urlInput.value.trim();
+        const title  = container.querySelector('#tr-title').value.trim();
+        const desc   = container.querySelector('#tr-desc').value.trim();
+        const url    = urlInput.value.trim();
+        const agency = agencyEl.value;
         if (!title) return appState.showToast('El título es obligatorio', 'warning');
         if (!getYoutubeId(url)) return appState.showToast('Ingresa una URL de YouTube válida', 'warning');
         saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
         try {
             if (editingId) {
-                await api.update(editingId, { title, description: desc, youtube_url: url });
+                await api.update(editingId, { title, description: desc, youtube_url: url, agency });
                 appState.showToast('Capacitación actualizada', 'success');
             } else {
-                await api.create({ title, description: desc, youtube_url: url });
+                await api.create({ title, description: desc, youtube_url: url, agency });
                 appState.showToast('Capacitación agregada', 'success');
             }
-            renderTrainingsView(container);
+            const newItems = await api.list(null);
+            renderContent(container, newItems, isAdmin, activeAgency);
         } catch (err) {
             appState.showToast('Error: ' + err.message, 'danger');
             saveBtn.disabled = false; saveBtn.textContent = editingId ? 'Actualizar' : 'Guardar';
@@ -131,8 +184,7 @@ function renderContent(container, items, isAdmin) {
 
     container.querySelectorAll('.tr-edit-btn').forEach(btn => {
         btn.onclick = () => {
-            const id   = btn.dataset.id;
-            const item = items.find(t => String(t.id) === String(id));
+            const item = allItems.find(t => String(t.id) === String(btn.dataset.id));
             if (!item) return;
             editingId = item.id;
             formTitle.textContent = 'Editar Capacitación';
@@ -140,6 +192,7 @@ function renderContent(container, items, isAdmin) {
             container.querySelector('#tr-title').value = item.title || '';
             container.querySelector('#tr-desc').value  = item.description || '';
             urlInput.value = item.youtube_url || '';
+            agencyEl.value = item.agency || 'all';
             const ytId = getYoutubeId(item.youtube_url);
             if (ytId) { thumb.src = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`; preview.style.display = 'block'; }
             else { preview.style.display = 'none'; }
@@ -154,13 +207,14 @@ function renderContent(container, items, isAdmin) {
             try {
                 await api.remove(btn.dataset.id);
                 appState.showToast('Eliminada', 'info');
-                renderTrainingsView(container);
+                const newItems = await api.list(null);
+                renderContent(container, newItems, isAdmin, activeAgency);
             } catch (err) { appState.showToast('Error: ' + err.message, 'danger'); }
         };
     });
 }
 
-function renderCard(t, isAdmin) {
+function renderCard(t, isAdmin, agTagHtml = '') {
     const ytId  = getYoutubeId(t.youtube_url);
     const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : '';
     const date  = new Date(t.created_at).toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -174,7 +228,7 @@ function renderCard(t, isAdmin) {
                            style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;opacity:0.92;"
                            onerror="this.parentElement.style.minHeight='120px'">`
                     : `<div style="width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);">
-                           <span style="font-size:2rem;">🎬</span>
+                           <span style="font-size:2rem;"><i class="ph-bold ph-video-camera"></i></span>
                        </div>`}
                 <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
                     <div style="width:48px;height:48px;background:rgba(255,0,0,0.85);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.5);">
@@ -188,7 +242,10 @@ function renderCard(t, isAdmin) {
                     ? `<p style="font-size:0.75rem;color:var(--text-muted);margin:0;line-height:1.5;flex:1;">${t.description}</p>`
                     : ''}
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.5rem;gap:0.4rem;flex-wrap:wrap;">
-                    <span style="font-size:0.62rem;color:var(--text-muted);">${date}</span>
+                    <div style="display:flex;align-items:center;gap:0.4rem;">
+                        <span style="font-size:0.62rem;color:var(--text-muted);">${date}</span>
+                        ${agTagHtml}
+                    </div>
                     <div style="display:flex;gap:0.35rem;align-items:center;">
                         <a href="${t.youtube_url}" target="_blank" rel="noopener noreferrer"
                            style="font-size:0.68rem;padding:0.2rem 0.5rem;border-radius:6px;
@@ -199,11 +256,11 @@ function renderCard(t, isAdmin) {
                         <button class="tr-edit-btn" data-id="${t.id}"
                             style="font-size:0.68rem;padding:0.2rem 0.45rem;border-radius:6px;
                                    background:rgba(124,110,247,0.1);color:var(--primary-light);
-                                   border:none;cursor:pointer;">✏️</button>
+                                   border:none;cursor:pointer;"><i class="ph-bold ph-pencil-simple"></i></button>
                         <button class="tr-del-btn" data-id="${t.id}"
                             style="font-size:0.68rem;padding:0.2rem 0.45rem;border-radius:6px;
                                    background:rgba(255,85,105,0.1);color:var(--danger);
-                                   border:none;cursor:pointer;">🗑</button>` : ''}
+                                   border:none;cursor:pointer;"><i class="ph-bold ph-trash"></i></button>` : ''}
                     </div>
                 </div>
             </div>

@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { agencyEvents as api } from '../api.js';
+import { agencyEvents as api, push } from '../api.js';
 import { appState } from '../main.js';
 
 export async function renderEventsView(container) {
@@ -27,8 +27,8 @@ function renderContent(container, items, isAdmin) {
     container.innerHTML = `
         <div class="animate-fadeIn">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;">
-                <h1 style="margin:0;font-size:1.5rem;">📅 Eventos</h1>
-                ${isAdmin ? `<button id="add-ev-btn" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;">+ Agregar Evento</button>` : ''}
+                <h1 style="margin:0;font-size:1.5rem;">Eventos</h1>
+                ${isAdmin ? `<button id="add-ev-btn" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;"><i class="ph-bold ph-plus"></i> Agregar Evento</button>` : ''}
             </div>
 
             ${isAdmin ? `
@@ -42,8 +42,8 @@ function renderContent(container, items, isAdmin) {
                     <div>
                         <label style="display:block;font-size:0.75rem;color:var(--text-secondary);margin-bottom:0.4rem;">IMAGEN DEL EVENTO</label>
                         <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;">
-                            <button id="ev-tab-file" class="btn btn-sm active" style="font-size:0.72rem;">📁 Subir archivo</button>
-                            <button id="ev-tab-url"  class="btn btn-sm btn-ghost" style="font-size:0.72rem;">🔗 Pegar URL</button>
+                            <button id="ev-tab-file" class="btn btn-sm active" style="font-size:0.72rem;">Subir archivo</button>
+                            <button id="ev-tab-url"  class="btn btn-sm btn-ghost" style="font-size:0.72rem;">Pegar URL</button>
                         </div>
                         <div id="ev-input-file">
                             <input type="file" id="ev-file" accept="image/*" class="input-control" style="padding:0.6rem;">
@@ -66,7 +66,7 @@ function renderContent(container, items, isAdmin) {
 
             ${!items.length
                 ? `<div class="glass-panel" style="padding:3rem 2rem;text-align:center;">
-                    <div style="font-size:2.5rem;margin-bottom:1rem;">📅</div>
+                    <div style="font-size:2.5rem;margin-bottom:1rem;"><i class="ph-bold ph-calendar-blank"></i></div>
                     <p style="color:var(--text-muted);font-size:0.9rem;">No hay eventos publicados todavía.</p>
                    </div>`
                 : `<div style="display:flex;flex-direction:column;gap:1.2rem;" id="events-feed">
@@ -213,6 +213,31 @@ function renderContent(container, items, isAdmin) {
             } catch (err) { appState.showToast('Error: ' + err.message, 'danger'); }
         };
     });
+
+    container.querySelectorAll('.ev-notify-btn').forEach(btn => {
+        btn.onclick = async () => {
+            const title = btn.dataset.title || 'Nuevo evento disponible';
+            const desc  = btn.dataset.desc  || '';
+            const body  = desc
+                ? `${desc}${desc.length >= 100 ? '...' : ''} — ¡Miralo en la app!`
+                : '¡Hay un nuevo evento en la agencia! Abrí la app para verlo.';
+
+            if (!confirm(`¿Notificar a todos los creadores sobre "${title}"?`)) return;
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            try {
+                const target = { type: 'role', value: 'creator' };
+                await push.send({ title: `📅 ${title}`, body, url: undefined, target });
+                await push.saveToDb(`📅 ${title}`, body, null, target);
+                appState.showToast('¡Notificación de evento enviada a todos los creadores!', 'success');
+            } catch (err) {
+                appState.showToast('Error al notificar: ' + err.message, 'danger');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="ph-bold ph-megaphone"></i> Notificar';
+            }
+        };
+    });
 }
 
 function renderEventCard(ev, isAdmin) {
@@ -236,21 +261,27 @@ function renderEventCard(ev, isAdmin) {
                             background:rgba(124,110,247,0.12);color:var(--primary-light);
                             border-radius:999px;padding:0.2rem 0.7rem;
                             font-size:0.68rem;font-weight:700;margin-bottom:0.65rem;text-transform:capitalize;">
-                    📅 ${dateLabel}
+                    <i class="ph-bold ph-calendar-blank"></i> ${dateLabel}
                 </div>` : ''}
 
                 <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.5rem;flex-wrap:wrap;">
                     <h2 style="margin:0 0 0.5rem;font-size:1.05rem;line-height:1.3;flex:1;">${ev.title}</h2>
                     ${isAdmin ? `
-                    <div style="display:flex;gap:0.35rem;flex-shrink:0;">
+                    <div style="display:flex;gap:0.35rem;flex-shrink:0;flex-wrap:wrap;">
+                        <button class="ev-notify-btn" data-id="${ev.id}"
+                            data-title="${ev.title.replace(/"/g,'&quot;')}"
+                            data-desc="${(ev.description || '').slice(0, 100).replace(/"/g,'&quot;')}"
+                            style="font-size:0.72rem;padding:0.25rem 0.5rem;border-radius:6px;
+                                   background:rgba(0,217,166,0.1);color:var(--accent);
+                                   border:none;cursor:pointer;"><i class="ph-bold ph-megaphone"></i> Notificar</button>
                         <button class="ev-edit-btn" data-id="${ev.id}"
                             style="font-size:0.72rem;padding:0.25rem 0.5rem;border-radius:6px;
                                    background:rgba(124,110,247,0.1);color:var(--primary-light);
-                                   border:none;cursor:pointer;">✏️ Editar</button>
+                                   border:none;cursor:pointer;"><i class="ph-bold ph-pencil-simple"></i> Editar</button>
                         <button class="ev-del-btn" data-id="${ev.id}"
                             style="font-size:0.72rem;padding:0.25rem 0.5rem;border-radius:6px;
                                    background:rgba(255,85,105,0.1);color:var(--danger);
-                                   border:none;cursor:pointer;">🗑</button>
+                                   border:none;cursor:pointer;"><i class="ph-bold ph-trash"></i></button>
                     </div>` : ''}
                 </div>
 

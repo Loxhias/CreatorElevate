@@ -99,9 +99,6 @@ function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
         <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;flex-wrap:wrap;">
             <span class="level-badge ${levelClass(lastMonthTier.level)}">${renderTier(lastMonthTier, '1.2rem')} ${lastMonthTier.name}</span>
             <span class="text-xs text-muted">Rango del mes anterior</span>
-            ${rank.pct<=20
-                ? `<span style="margin-left:auto;font-size:0.73rem;background:rgba(0,217,166,0.12);color:var(--accent);border:1px solid rgba(0,217,166,0.25);padding:0.2rem 0.7rem;border-radius:999px;font-weight:700;">🏅 Top ${rank.pct}%</span>`
-                : `<span style="margin-left:auto;font-size:0.73rem;color:var(--text-muted);">#${rank.pos} de ${rank.total}</span>`}
         </div>
 
         <!-- Ritmo diario: comparativa honesta vs mes anterior -->
@@ -722,6 +719,13 @@ function renderDailyTracker(placeholder, uid, mode) {
         errDiv.style.display = 'none';
         entries[today] = { streamed, diamonds, minutes };
         localStorage.setItem(key, JSON.stringify(entries));
+        // Sincroniza totales del mes a la BD en background tras cada guardado
+        const saved = dtTotals(entries);
+        if (saved.validDays > 0 || saved.diamonds > 0) {
+            metrics.submitSelf(saved.validDays, saved.minutes / 60, saved.diamonds)
+                .then(() => store.refreshMetrics())
+                .catch(console.warn);
+        }
         renderDailyTracker(placeholder, uid, mode);
     });
 

@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { profiles, push } from '../api.js';
+import { profiles, push, autoNotif } from '../api.js';
 import { appState } from '../main.js';
 
 export async function renderNotificationsView(container) {
@@ -167,6 +167,29 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
                             <div><strong style="color:var(--primary);">Nuevos</strong> — Menos de 30 días en la agencia</div>
                         </div>
                     </div>
+
+                    <!-- Recordatorios automáticos -->
+                    <div class="glass-panel" style="padding:1.25rem;">
+                        <h4 style="margin-top:0; font-size:0.8rem; color:var(--text-secondary); letter-spacing:0.05em;">⚡ RECORDATORIOS AUTOMÁTICOS</h4>
+                        <div id="inactivity-panel">
+                            <p style="font-size:0.78rem;color:var(--text-secondary);margin:0 0 0.75rem;line-height:1.5;">
+                                Envía un recordatorio a los creadores con <strong>0 días válidos</strong> en el período actual.
+                                Cooldown de <strong>7 días</strong> por creador para evitar spam.
+                            </p>
+                            <div id="inactivity-preview" style="display:none;margin-bottom:0.75rem;
+                                padding:0.6rem 0.85rem;border-radius:var(--radius-sm);
+                                background:rgba(255,255,255,0.03);border:1px solid var(--glass-border);
+                                font-size:0.75rem;color:var(--text-secondary);line-height:1.6;"></div>
+                            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                                <button id="inactivity-check-btn" class="btn btn-ghost" style="font-size:0.78rem;flex:1;">
+                                    🔍 Ver quiénes recibirán el mensaje
+                                </button>
+                                <button id="inactivity-send-btn" class="btn btn-primary" style="font-size:0.78rem;flex:1;display:none;">
+                                    📣 Enviar recordatorios
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -260,24 +283,76 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
     };
 
     const renderSubIndividual = () => {
-        subEl.innerHTML = `
-            <div style="position:relative;margin-bottom:0.5rem;">
-                <input id="creator-search" type="text" class="input-control"
-                       placeholder="Buscar por nombre, @usuario o email..."
-                       autocomplete="off" style="margin-bottom:0.4rem;">
-                <div id="creator-results" style="
-                    position:absolute;left:0;right:0;z-index:10;
-                    max-height:200px;overflow-y:auto;
-                    border:1px solid var(--glass-border);border-radius:var(--radius-md);
-                    background:rgba(18,18,32,0.97);display:none;"></div>
-            </div>
-            <div id="selected-chips" style="display:flex;flex-wrap:wrap;gap:0.4rem;min-height:24px;"></div>`;
+        const pool = tState.agency
+            ? creators.filter(c => (c.agency || 'latam') === tState.agency)
+            : creators;
 
-        const searchInput = subEl.querySelector('#creator-search');
-        const resultsEl   = subEl.querySelector('#creator-results');
+        subEl.innerHTML = `
+            <div>
+                <input id="creator-filter" type="text" class="input-control"
+                       placeholder="Filtrar por nombre o @usuario..."
+                       autocomplete="off" style="margin-bottom:0.5rem;">
+                <div id="creator-list" style="
+                    max-height:230px;overflow-y:auto;
+                    border:1px solid var(--glass-border);border-radius:var(--radius-md);
+                    background:rgba(18,18,32,0.6);margin-bottom:0.5rem;"></div>
+                <div id="selected-chips" style="display:flex;flex-wrap:wrap;gap:0.4rem;min-height:20px;"></div>
+            </div>`;
+
+        const filterInput = subEl.querySelector('#creator-filter');
+        const listEl      = subEl.querySelector('#creator-list');
         const chipsEl     = subEl.querySelector('#selected-chips');
 
+        const renderRows = () => {
+            const q = filterInput.value.toLowerCase().trim();
+            const visible = pool.filter(c =>
+                !q ||
+                (c.display_name || '').toLowerCase().includes(q) ||
+                (c.tiktok_username || '').toLowerCase().includes(q)
+            );
+            if (!visible.length) {
+                listEl.innerHTML = `<p style="font-size:0.75rem;color:var(--text-muted);padding:0.75rem;text-align:center;">Sin resultados</p>`;
+                return;
+            }
+            listEl.innerHTML = visible.map(c => {
+                const sel = tState.selectedIds.includes(c.id);
+                return `<div data-pid="${c.id}" style="
+                    display:flex;align-items:center;gap:0.7rem;
+                    padding:0.45rem 0.8rem;cursor:pointer;
+                    border-bottom:1px solid var(--glass-border);
+                    background:${sel ? 'rgba(124,110,247,0.1)' : 'transparent'};">
+                    <div style="width:16px;height:16px;border-radius:4px;flex-shrink:0;
+                        background:${sel ? 'var(--primary)' : 'transparent'};
+                        border:2px solid ${sel ? 'var(--primary)' : 'rgba(255,255,255,0.2)'};
+                        display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;">
+                        ${sel ? '✓' : ''}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:0.78rem;font-weight:600;color:var(--text-primary);
+                            white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            ${esc(c.display_name || c.tiktok_username || 'Sin nombre')}
+                        </div>
+                        ${c.tiktok_username ? `<div style="font-size:0.65rem;color:var(--text-muted);">@${esc(c.tiktok_username)}</div>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+            listEl.querySelectorAll('[data-pid]').forEach(row => {
+                row.addEventListener('click', () => {
+                    const id = row.dataset.pid;
+                    if (tState.selectedIds.includes(id)) {
+                        tState.selectedIds = tState.selectedIds.filter(x => x !== id);
+                    } else {
+                        tState.selectedIds.push(id);
+                    }
+                    renderRows();
+                    renderChips();
+                    updateCount();
+                });
+            });
+        };
+
         const renderChips = () => {
+            if (!tState.selectedIds.length) { chipsEl.innerHTML = ''; return; }
             chipsEl.innerHTML = tState.selectedIds.map(id => {
                 const p    = creators.find(c => c.id === id);
                 const name = esc(p?.display_name || p?.tiktok_username || id.slice(0, 8));
@@ -293,53 +368,15 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
             chipsEl.querySelectorAll('[data-rid]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     tState.selectedIds = tState.selectedIds.filter(id => id !== btn.dataset.rid);
+                    renderRows();
                     renderChips();
                     updateCount();
                 });
             });
         };
 
-        searchInput.addEventListener('input', () => {
-            const q = searchInput.value.toLowerCase().trim();
-            if (!q) { resultsEl.style.display = 'none'; return; }
-            const matches = creators
-                .filter(c => !tState.selectedIds.includes(c.id))
-                .filter(c =>
-                    (c.display_name || '').toLowerCase().includes(q) ||
-                    (c.tiktok_username || '').toLowerCase().includes(q) ||
-                    (c.email || '').toLowerCase().includes(q)
-                ).slice(0, 8);
-
-            if (!matches.length) {
-                resultsEl.innerHTML = `<p style="font-size:0.75rem;color:var(--text-muted);padding:0.5rem 0.8rem;">Sin resultados</p>`;
-            } else {
-                resultsEl.innerHTML = matches.map(c => `
-                    <div data-pid="${c.id}" style="padding:0.45rem 0.8rem;cursor:pointer;font-size:0.78rem;
-                         border-bottom:1px solid var(--glass-border);">
-                        <span style="font-weight:600;color:var(--text-primary);">
-                            ${esc(c.display_name || c.tiktok_username || 'Sin nombre')}
-                        </span>
-                        ${c.tiktok_username ? `<span style="font-size:0.7rem;color:var(--text-muted);margin-left:0.4rem;">@${esc(c.tiktok_username)}</span>` : ''}
-                    </div>`).join('');
-                resultsEl.querySelectorAll('[data-pid]').forEach(row => {
-                    row.addEventListener('mousedown', (e) => {
-                        e.preventDefault();
-                        const id = row.dataset.pid;
-                        if (!tState.selectedIds.includes(id)) {
-                            tState.selectedIds.push(id);
-                            renderChips();
-                            updateCount();
-                        }
-                        searchInput.value = '';
-                        resultsEl.style.display = 'none';
-                    });
-                });
-            }
-            resultsEl.style.display = 'block';
-        });
-        searchInput.addEventListener('blur', () => {
-            setTimeout(() => { resultsEl.style.display = 'none'; }, 150);
-        });
+        filterInput.addEventListener('input', renderRows);
+        renderRows();
         renderChips();
     };
 
@@ -547,6 +584,94 @@ function renderContent(container, allProfiles, admins, managers, creators, segme
 
     // Cargar historial al abrir
     loadHistorial(container);
+
+    // ── Panel de recordatorios de inactividad ────────────────────────────────
+    wireInactivityPanel(container, allProfiles, segments);
+}
+
+async function wireInactivityPanel(container, allProfiles, segments) {
+    const checkBtn   = container.querySelector('#inactivity-check-btn');
+    const sendBtn    = container.querySelector('#inactivity-send-btn');
+    const previewEl  = container.querySelector('#inactivity-preview');
+    if (!checkBtn) return;
+
+    // Creadores con 0 días válidos en el período actual, con al menos 5 días en la agencia
+    const inactiveMetrics = (segments.inactive || []).concat(segments.newInactive || []);
+    const byUsername = new Map(
+        allProfiles.filter(p => p.tiktok_username).map(p => [p.tiktok_username.toLowerCase(), p])
+    );
+    const inactiveProfiles = [];
+    const seen = new Set();
+    for (const m of inactiveMetrics) {
+        const p = byUsername.get((m.username || '').toLowerCase());
+        if (p && !seen.has(p.id)) {
+            seen.add(p.id);
+            if ((p.days_since_joining ?? 999) >= 5) inactiveProfiles.push(p);
+        }
+    }
+
+    let toNotifyIds = [];
+
+    checkBtn.addEventListener('click', async () => {
+        checkBtn.disabled = true;
+        checkBtn.textContent = 'Verificando...';
+        try {
+            const allIds = inactiveProfiles.map(p => p.id);
+            const cooldownSet = await autoNotif.getCooldownIds(allIds, 7);
+            toNotifyIds = allIds.filter(id => !cooldownSet.has(id));
+            const skipped = cooldownSet.size;
+
+            if (!toNotifyIds.length) {
+                previewEl.innerHTML = `✅ Todos los creadores inactivos ya recibieron un recordatorio en los últimos 7 días. Ninguno pendiente.`;
+                previewEl.style.display = 'block';
+                sendBtn.style.display = 'none';
+            } else {
+                const names = toNotifyIds.slice(0, 5).map(id => {
+                    const p = allProfiles.find(x => x.id === id);
+                    return `@${p?.tiktok_username || p?.display_name || id.slice(0,8)}`;
+                }).join(', ');
+                previewEl.innerHTML =
+                    `<strong style="color:var(--danger);">🔴 ${toNotifyIds.length} creador${toNotifyIds.length !== 1 ? 'es' : ''}</strong> recibirán el recordatorio` +
+                    (skipped ? ` · <span style="color:var(--text-muted);">${skipped} omitidos (cooldown activo)</span>` : '') +
+                    `<br><span style="font-size:0.68rem;color:var(--text-muted);">${names}${toNotifyIds.length > 5 ? ` y ${toNotifyIds.length - 5} más...` : ''}</span>`;
+                previewEl.style.display = 'block';
+                sendBtn.style.display   = '';
+            }
+        } catch (err) {
+            appState.showToast('Error al verificar: ' + err.message, 'danger');
+        } finally {
+            checkBtn.disabled = false;
+            checkBtn.textContent = '🔍 Ver quiénes recibirán el mensaje';
+        }
+    });
+
+    sendBtn.addEventListener('click', async () => {
+        if (!toNotifyIds.length) return;
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Enviando...';
+        try {
+            const target = toNotifyIds.length === 1
+                ? { type: 'user',  value: toNotifyIds[0] }
+                : { type: 'users', value: toNotifyIds };
+            await push.send({
+                title: '¡Es hora de transmitir! 🔴',
+                body:  'Tu equipo te extraña en LIVE. ¡Conectate hoy y sumá días válidos!',
+                url:   undefined,
+                target,
+            });
+            await push.saveToDb('¡Es hora de transmitir! 🔴', 'Tu equipo te extraña en LIVE. ¡Conectate hoy y sumá días válidos!', null, target);
+            await autoNotif.logInactivity(toNotifyIds);
+            appState.showToast(`✅ Recordatorios enviados a ${toNotifyIds.length} creador${toNotifyIds.length !== 1 ? 'es' : ''}`, 'success');
+            toNotifyIds = [];
+            sendBtn.style.display = 'none';
+            previewEl.innerHTML = `✅ Recordatorios enviados. Próxima ventana disponible en 7 días.`;
+            loadHistorial(container);
+        } catch (err) {
+            appState.showToast('Error al enviar: ' + err.message, 'danger');
+            sendBtn.disabled = false;
+            sendBtn.textContent = '📣 Enviar recordatorios';
+        }
+    });
 }
 
 function esc(str) {
