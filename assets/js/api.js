@@ -91,7 +91,16 @@ export const auth = {
         if (!password || password.length < 6)
             throw new Error('La contraseña debe tener al menos 6 caracteres.');
 
-        // 1) verificar disponibilidad del username
+        // 1) verificar que el username está en la whitelist de la agencia
+        const { data: wl, error: wlErr } = await supabase.rpc('is_creator_whitelisted', { p_username: username });
+        if (wlErr) throw wlErr;
+        if (!wl?.allowed) {
+            throw new Error(wl?.reason === 'abandoned'
+                ? 'Tu cuenta no está activa. Contactá al administrador de la agencia.'
+                : 'Tu usuario de TikTok no está registrado en la agencia. El administrador debe cargarte en la planilla primero.');
+        }
+
+        // 2) verificar disponibilidad del username
         const { data: available, error: checkErr } = await supabase.rpc(
             'is_tiktok_username_available',
             { p_username: username },
@@ -99,7 +108,8 @@ export const auth = {
         if (checkErr) throw checkErr;
         if (!available) throw new Error('Ese usuario de TikTok ya está registrado.');
 
-        // 2) signUp con metadata; el trigger handle_new_user crea el profile
+        // 3) signUp con metadata; el trigger handle_new_user crea el profile
+        const agency = wl?.agency || 'latam';
         const { data, error } = await supabase.auth.signUp({
             email,
             password,
@@ -108,6 +118,7 @@ export const auth = {
                     tiktok_username: username,
                     role: 'creator',
                     display_name: displayName || username,
+                    agency,
                 },
             },
         });
@@ -306,6 +317,26 @@ export const metrics = {
             }
         }
 
+        return data;
+    },
+
+    /** Admin: sincroniza la whitelist desde el Excel y desactiva creadores "Abandonó". */
+    async syncWhitelist(rows, agency = 'latam') {
+        if (!isSupabaseConfigured) return 0;
+        const payload = rows
+            .map(r => ({
+                username:  san(String(r.username || '').trim().replace(/^@/, '').toLowerCase()),
+                tiktok_id: r.creatorId ? san(String(r.creatorId)) : null,
+                status:    san(r.statusActive || ''),
+                join_date: r.joinDate || null,
+            }))
+            .filter(r => r.username);
+        if (!payload.length) return 0;
+        const { data, error } = await supabase.rpc('admin_sync_whitelist', {
+            p_rows:   sanDeep(payload),
+            p_agency: agency,
+        });
+        if (error) throw error;
         return data;
     },
 

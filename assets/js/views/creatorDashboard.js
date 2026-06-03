@@ -659,10 +659,6 @@ function renderDailyTracker(placeholder, uid, mode) {
                     <button id="dt-save" class="btn btn-primary" style="flex:1;padding:0.5rem 0.6rem;font-size:0.78rem;">
                         ${todayE ? t('daily.update_day') : t('daily.save_day')}
                     </button>
-                    ${totals.validDays > 0 ? `
-                    <button id="dt-sync" class="btn" style="padding:0.5rem 0.75rem;font-size:0.72rem;background:rgba(124,110,247,0.15);border:1px solid rgba(124,110,247,0.3);color:var(--primary-light);white-space:nowrap;">
-                        ${t('daily.sync')}
-                    </button>` : ''}
                 </div>
             </div>
 
@@ -719,34 +715,9 @@ function renderDailyTracker(placeholder, uid, mode) {
         errDiv.style.display = 'none';
         entries[today] = { streamed, diamonds, minutes };
         localStorage.setItem(key, JSON.stringify(entries));
-        // Sincroniza totales del mes a la BD en background tras cada guardado
-        const saved = dtTotals(entries);
-        if (saved.validDays > 0 || saved.diamonds > 0) {
-            metrics.submitSelf(saved.validDays, saved.minutes / 60, saved.diamonds)
-                .then(() => store.refreshMetrics())
-                .catch(console.warn);
-        }
         renderDailyTracker(placeholder, uid, mode);
     });
 
-    placeholder.querySelector('#dt-sync')?.addEventListener('click', async () => {
-        const totals  = dtTotals(entries);
-        const syncBtn = placeholder.querySelector('#dt-sync');
-        syncBtn.disabled = true;
-        syncBtn.textContent = t('daily.syncing');
-        try {
-            await metrics.submitSelf(totals.validDays, totals.minutes / 60, totals.diamonds);
-            await store.refreshMetrics();
-            syncBtn.textContent = t('daily.synced');
-            syncBtn.style.color = 'var(--accent)';
-            setTimeout(() => { syncBtn.disabled = false; syncBtn.textContent = t('daily.sync'); syncBtn.style.color = ''; }, 2500);
-        } catch (err) {
-            syncBtn.disabled = false;
-            syncBtn.textContent = '📤 Cargar al perfil';
-            errDiv.textContent = err.message || 'Error al guardar.';
-            errDiv.style.display = 'block';
-        }
-    });
 }
 
 // ── Missions tab (new creators ≤ 30 days, with grace period) ──────────────
@@ -900,10 +871,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     );
 
     if (!me) {
-        if (!isAuditing) { renderSubmitMetricsView(container); return; }
         container.innerHTML = emptyState(
-            `No se encontraron métricas para @${myUsername}`,
-            'El creador aún no ha cargado sus métricas este mes.'
+            !isAuditing ? 'Tus métricas aún no están disponibles' : `No se encontraron métricas para @${myUsername}`,
+            !isAuditing
+                ? 'El administrador carga los datos mensualmente. Si ya empezaste a hacer lives, volvé a revisar cuando tu período sea procesado.'
+                : 'Este creador aún no tiene métricas cargadas para el período actual.'
         );
         return;
     }
@@ -1022,6 +994,20 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             </div>
         </div>
 
+        ${(!isAuditing && dsj != null && dsj > 90 && dLast < 50000 && (me.agency || 'latam') === 'latam') ? `
+        <div class="glass-panel animate-fadeIn" style="padding:1.1rem 1.2rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,85,105,0.08),rgba(255,181,71,0.04));border-color:rgba(255,85,105,0.35);">
+            <div style="display:flex;align-items:start;gap:0.85rem;">
+                <div style="font-size:1.5rem;line-height:1;">⚠️</div>
+                <div>
+                    <div style="font-weight:700;font-size:0.87rem;color:var(--danger);margin-bottom:0.3rem;">Rendimiento bajo</div>
+                    <div style="font-size:0.73rem;color:var(--text-muted);line-height:1.5;">
+                        Tu rendimiento del mes anterior fue de <strong style="color:var(--text-secondary);">${fmt(dLast)} 💎</strong>, por debajo del mínimo de <strong style="color:var(--text-secondary);">50.000 💎</strong> requerido. Si no mejorás tu rendimiento en el próximo período podés ser removido de la agencia.
+                    </div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+
         ${(!isAuditing && user?.role === 'creator' && !profile?.joining_date) ? `
         <div id="joining-date-banner" class="glass-panel animate-fadeIn" style="padding:1.2rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,181,71,0.08),rgba(124,110,247,0.05));border-color:rgba(255,181,71,0.3);position:relative;">
             <div style="display:flex;align-items:start;gap:0.85rem;flex-wrap:wrap;">
@@ -1060,7 +1046,6 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             ${showMissions  ? `<button class="tab-btn" data-tab="missions"  style="flex-shrink:0;white-space:nowrap;">${t('tab.missions')}</button>` : ''}
             ${showChallenge ? `<button class="tab-btn" data-tab="challenge" style="flex-shrink:0;white-space:nowrap;">${t('tab.challenge')}</button>` : ''}
             <button class="tab-btn" data-tab="inbox" style="flex-shrink:0;white-space:nowrap;">${t('tab.inbox')}</button>
-            ${!isAuditing ? `<button class="tab-btn" data-tab="update" style="flex-shrink:0;white-space:nowrap;">${t('tab.update')}</button>` : ''}
         </div>
 
         <!-- Tab Content -->
@@ -1128,11 +1113,6 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             }).catch(() => {
                 tabContent.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--danger);font-size:0.85rem;">Error al cargar los mensajes.</div>';
             });
-            return;
-        }
-
-        if (name === 'update') {
-            renderSubmitMetricsView(tabContent, me);
             return;
         }
 

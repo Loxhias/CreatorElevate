@@ -116,6 +116,12 @@ export function renderLogin(container) {
                 await store.refreshProfile();
                 const u = store.getCurrentUser();
                 if (!u) throw new Error('No se encontró el perfil del usuario.');
+                // Verificar que la cuenta esté activa (creadores con estado "Abandonó" quedan bloqueados)
+                const profile = store.getProfile?.();
+                if (profile && profile.active === false && u.role === 'creator') {
+                    await auth.signOut();
+                    throw new Error('Tu cuenta está desactivada. Contactá al administrador de la agencia.');
+                }
                 appState.navigate(u.role);
                 appState.showToast(`¡Bienvenido/a, ${u.username}!`);
             } catch (err) {

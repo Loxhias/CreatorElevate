@@ -111,6 +111,15 @@ const EXCEL_COLS = {
     diamondsLastMonth:  ['Diamantes en el último mes', 'Diamonds last month', 'Diamantes mes anterior'],
     battles:            ['Partidas en PK', 'Partidas', 'Batallas', 'PKs', 'PK battles', 'Battles'],
     daysSinceJoining:   ['Días desde la incorporación', 'Días desde incorporación', 'Days since joining', 'Días en agencia'],
+    newFollowers:       ['Nuevos seguidores', 'New followers'],
+    emisionesLive:      ['Emisiones LIVE', 'Transmisiones', 'Live count'],
+    battleDiamonds:     ['Diamantes de partidas', 'Battle diamonds'],
+    multiGuestDiamonds: ['Diamantes del modo de varios invitados', 'Multi-guest diamonds'],
+    statusGraduation:   ['Estado de graduación', 'Graduation status'],
+    statusRank:         ['Estado del rango', 'Rank status'],
+    statusActive:       ['Estado', 'Status'],
+    groupName:          ['Grupo', 'Group'],
+    joinDate:           ['Hora de incorporación', 'Fecha de incorporación', 'Join date'],
 };
 
 function normalizeRow(row) {
@@ -185,6 +194,15 @@ function normalizeRow(row) {
         diamondsLastMonth:  safeInt(get(EXCEL_COLS.diamondsLastMonth)) ?? 0,
         battles:            safeInt(get(EXCEL_COLS.battles)) ?? 0,
         daysSinceJoining:   safeInt(get(EXCEL_COLS.daysSinceJoining)),
+        newFollowers:       safeInt(get(EXCEL_COLS.newFollowers)) ?? 0,
+        emisionesLive:      safeInt(get(EXCEL_COLS.emisionesLive)) ?? 0,
+        battleDiamonds:     safeInt(get(EXCEL_COLS.battleDiamonds)) ?? 0,
+        multiGuestDiamonds: safeInt(get(EXCEL_COLS.multiGuestDiamonds)) ?? 0,
+        statusGraduation:   String(get(EXCEL_COLS.statusGraduation) || '').trim() || null,
+        statusRank:         String(get(EXCEL_COLS.statusRank) || '').trim() || null,
+        statusActive:       String(get(EXCEL_COLS.statusActive) || '').trim() || '',
+        groupName:          String(get(EXCEL_COLS.groupName) || '').trim() || null,
+        joinDate:           String(get(EXCEL_COLS.joinDate) || '').trim() || null,
     };
 }
 
@@ -486,6 +504,7 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             const withMetrics = rows.filter(r => (r.diamonds ?? 0) > 0 || (r.validDays ?? 0) > 0).length;
             const withLive    = rows.filter(r => (r.liveSeconds ?? 0) > 0).length;
             const withDays    = rows.filter(r => (r.daysSinceJoining ?? 0) > 0).length;
+            const abandoned   = rows.filter(r => r.statusActive === 'Abandonó').length;
 
             const ok  = 'color:var(--accent)';
             const dim = 'color:var(--text-muted)';
@@ -496,6 +515,7 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
                     <span style="${withMetrics > 0 ? ok : dim};">· ${withMetrics} con diamantes / días válidos</span>
                     <span style="${withLive > 0 ? ok : dim};">· ${withLive} con horas de live</span>
                     <span style="${withDays > 0 ? ok : dim};">· ${withDays} con días desde incorporación</span>
+                    ${abandoned > 0 ? `<span style="color:var(--danger);font-weight:600;">· ${abandoned} con estado "Abandonó" — sus cuentas serán desactivadas</span>` : ''}
                 </div>`;
 
             uBtn.disabled = false;
@@ -517,6 +537,8 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             await metrics.upsertPeriod(`${m}-01`, lbl, rows);
             // Paso 2: fija agencia + días de incorporación + partidas
             await metrics.upsertJoiningData(`${m}-01`, lbl, rows, agency);
+            // Paso 3: sincroniza whitelist y desactiva cuentas "Abandonó"
+            await metrics.syncWhitelist(rows, agency);
             appState.showToast('Datos publicados con éxito', 'success');
             await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
