@@ -24,6 +24,16 @@ export const appState = {
         }
     },
 
+    /**
+     * Monta la app completa con el layout de creador, mostrando los datos de
+     * `targetUsername`. El admin ve exactamente lo que ve ese creador.
+     */
+    previewAsCreator: (targetUsername) => {
+        const app = document.getElementById('app');
+        app.innerHTML = '';
+        renderCreatorPreviewLayout(app, targetUsername);
+    },
+
     // Navega a una sub-vista dentro del dashboard ya montado (para deep links desde inbox/push).
     navigateTo: (view) => {
         const navLink = document.querySelector(`.nav-item[data-view="${view}"]`);
@@ -121,6 +131,97 @@ async function safeImport(path, container) {
         }
         return null;
     }
+}
+
+function renderCreatorPreviewLayout(container, targetUsername) {
+    const user = store.getCurrentUser();
+    const navItems = getNavItems('creator');
+
+    const navHtml = navItems.map(item => `
+        <a href="#" class="nav-item ${item.view === 'inicio' ? 'active' : ''}" data-view="${item.view}">
+            <span class="nav-icon">${item.icon}</span>
+            <span>${item.label}</span>
+        </a>
+    `).join('');
+
+    const installBtnStyle = deferredPrompt ? 'display:flex;' : 'display:none;';
+
+    container.innerHTML = `
+        <div class="app-shell animate-fadeIn">
+            <!-- Banner de vista previa -->
+            <div style="position:fixed;top:0;left:0;right:0;z-index:1000;background:linear-gradient(90deg,rgba(255,181,71,0.18),rgba(124,110,247,0.12));border-bottom:1px solid rgba(255,181,71,0.35);padding:0.45rem 1.2rem;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);">
+                <span style="font-size:0.72rem;font-weight:700;color:var(--warning);letter-spacing:0.04em;">👁 VISTA PREVIA — @${targetUsername}</span>
+                <button id="exit-preview" style="background:rgba(255,181,71,0.15);border:1px solid rgba(255,181,71,0.4);color:var(--warning);font-size:0.7rem;font-weight:700;padding:0.25rem 0.75rem;border-radius:999px;cursor:pointer;">← Volver al Admin</button>
+            </div>
+
+            <!-- Sidebar (Escritorio) — con offset por el banner -->
+            <aside class="sidebar" style="padding-top:calc(2.5rem + 2rem);">
+                <div style="margin-bottom:2.5rem; display:flex; align-items:center; gap:0.8rem;">
+                    <img src="/iconos/logo_morado.png" alt="Logo" style="width:32px; height:32px; object-fit:contain;">
+                    <span style="font-weight:800; font-size:1.1rem;">Creator Elevate</span>
+                </div>
+
+                <nav style="display:flex; flex-direction:column; gap:0.4rem; flex:1;">
+                    ${navHtml}
+                </nav>
+
+                <div style="margin-top:auto; padding-top:1.5rem; border-top:1px solid var(--glass-border);">
+                    <div style="font-size:0.85rem; font-weight:700;">@${targetUsername}</div>
+                    <div style="font-size:0.7rem; color:var(--warning); text-transform:uppercase; font-weight:700;">Vista Previa</div>
+                    <div style="font-size:0.65rem; color:var(--text-muted); margin-top:0.3rem;">Sesión: @${user.username}</div>
+                </div>
+            </aside>
+
+            <!-- Contenido Principal — con offset por el banner -->
+            <main class="main-content" id="dashboard-content" style="padding-top:calc(1.5rem + 2rem);"></main>
+
+            <!-- Bottom Nav (Móvil) — con offset -->
+            <nav class="bottom-nav" style="padding-bottom:env(safe-area-inset-bottom);">
+                ${navHtml}
+                <a href="#" id="exit-preview-mobile" style="color:var(--warning);font-weight:700;display:flex;flex-direction:column;align-items:center;gap:0.2rem;padding:0.5rem;font-size:0.65rem;">
+                    <span>👁</span><span>Salir</span>
+                </a>
+            </nav>
+        </div>
+    `;
+
+    const contentArea = container.querySelector('#dashboard-content');
+
+    const exitPreview = () => appState.navigate('admin');
+    container.querySelector('#exit-preview').onclick = exitPreview;
+    container.querySelector('#exit-preview-mobile')?.addEventListener('click', (e) => { e.preventDefault(); exitPreview(); });
+
+    // Renderizar dashboard del creador seleccionado
+    safeRender((c) => renderCreatorDashboard(c, targetUsername), contentArea);
+
+    // Navegación exacta al de un creador
+    container.querySelectorAll('.nav-item[data-view]').forEach(item => {
+        item.onclick = (e) => {
+            e.preventDefault();
+            const view = item.dataset.view;
+            container.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
+
+            if (view === 'inicio') safeRender((c) => renderCreatorDashboard(c, targetUsername), contentArea);
+            else if (view === 'normas') safeRender(renderNormas, contentArea);
+            else if (view === 'canales') safeRender(renderCanales, contentArea);
+            else if (view === 'mensajes') {
+                safeImport('./views/inbox.js', contentArea).then(m => m && safeRender(m.renderInboxView, contentArea));
+            }
+            else if (view === 'misiones') {
+                safeImport('./views/missions.js', contentArea).then(m => m && safeRender(m.renderMissionsView, contentArea));
+            }
+            else if (view === 'mis-puntos') {
+                safeImport('./views/points.js', contentArea).then(m => m && safeRender(m.renderPointsView, contentArea));
+            }
+            else if (view === 'capacitaciones') {
+                safeImport('./views/trainings.js', contentArea).then(m => m && safeRender(m.renderTrainingsView, contentArea));
+            }
+            else if (view === 'eventos') {
+                safeImport('./views/events.js', contentArea).then(m => m && safeRender(m.renderEventsView, contentArea));
+            }
+            else if (view === 'perfil') safeRender(renderProfile, contentArea);
+        };
+    });
 }
 
 function renderDashboardLayout(container, renderContentFn, role) {

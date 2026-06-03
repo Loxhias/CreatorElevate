@@ -269,6 +269,11 @@ export async function renderAdminDashboard(container) {
                     <h3 style="font-size:0.95rem;">Misiones</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Crear y editar el camino de 7 días.</p>
                 </div>
+                <div class="glass-panel action-card" id="nav-preview-creator">
+                    <i class="ph-bold ph-eye" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--warning);"></i>
+                    <h3 style="font-size:0.95rem;">Vista de Creador</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Ver la app como la ve un creador.</p>
+                </div>
             </div>
 
             <div id="admin-view-content">
@@ -308,6 +313,7 @@ export async function renderAdminDashboard(container) {
     container.querySelector('#nav-history').onclick = () => renderHistoryView(viewContent);
     container.querySelector('#nav-content').onclick  = () => renderCanales(viewContent);
     container.querySelector('#nav-missions').onclick = () => renderMissionsAdmin(viewContent);
+    container.querySelector('#nav-preview-creator').onclick = () => renderCreatorPickerView(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────
@@ -912,6 +918,71 @@ const CHART_DEFAULTS = {
     responsive: true,
     maintainAspectRatio: false,
 };
+
+// ── VISTA: SELECTOR DE CREADOR PARA VISTA PREVIA ─────────────────────────────
+function renderCreatorPickerView(container) {
+    const allData = store.getMetricsData() || [];
+    const agencyData = allData.filter(d => (d.agency || 'latam') === selectedAgency);
+
+    function renderList(items) {
+        if (!items.length) return `<p style="color:var(--text-muted);font-size:0.85rem;padding:1rem 0;">No se encontraron creadores.</p>`;
+        return items.slice(0, 60).map(c => `
+            <div class="glass-panel" data-username="${c.username}"
+                style="padding:0.7rem 1rem;display:flex;align-items:center;gap:0.85rem;cursor:pointer;transition:background 0.15s ease;">
+                <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-size:0.95rem;font-weight:800;flex-shrink:0;overflow:hidden;position:relative;">
+                    <span style="position:absolute;">${c.username.charAt(0).toUpperCase()}</span>
+                    <img src="https://unavatar.io/tiktok/${encodeURIComponent(c.username)}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.2s;" referrerpolicy="no-referrer" onload="this.style.opacity='1'">
+                </div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;font-size:0.88rem;">@${c.username}</div>
+                    <div style="font-size:0.68rem;color:var(--text-muted);">${fmt(c.diamonds)} 💎 · ${c.validDays} días válidos</div>
+                </div>
+                <i class="ph-bold ph-arrow-right" style="color:var(--text-muted);flex-shrink:0;"></i>
+            </div>`).join('');
+    }
+
+    container.innerHTML = `
+        <div class="animate-fadeIn" style="max-width:520px;margin:0 auto;">
+            <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+                <div style="width:40px;height:40px;border-radius:var(--radius-md);background:rgba(255,181,71,0.12);border:1px solid rgba(255,181,71,0.3);display:flex;align-items:center;justify-content:center;">
+                    <i class="ph-bold ph-eye" style="font-size:1.3rem;color:var(--warning);"></i>
+                </div>
+                <div>
+                    <h2 style="margin:0;font-size:1.1rem;">Vista de Creador</h2>
+                    <p style="margin:0;font-size:0.75rem;color:var(--text-muted);">Seleccioná un creador para ver la app como él la ve.</p>
+                </div>
+            </div>
+
+            <div style="position:relative;margin-bottom:1.25rem;">
+                <i class="ph-bold ph-magnifying-glass" style="position:absolute;left:0.85rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;"></i>
+                <input id="picker-search" type="text" class="input-control" placeholder="Buscar por usuario de TikTok…"
+                    style="padding-left:2.4rem;">
+            </div>
+
+            <div id="picker-list" style="display:flex;flex-direction:column;gap:0.5rem;max-height:65vh;overflow-y:auto;padding-right:2px;">
+                ${renderList(agencyData)}
+            </div>
+        </div>
+    `;
+
+    const listEl = container.querySelector('#picker-list');
+
+    container.querySelector('#picker-search').addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        const filtered = q ? agencyData.filter(c => c.username.toLowerCase().includes(q)) : agencyData;
+        listEl.innerHTML = renderList(filtered);
+        bindPickerClicks();
+    });
+
+    function bindPickerClicks() {
+        listEl.querySelectorAll('[data-username]').forEach(row => {
+            row.onmouseenter = () => row.style.background = 'rgba(255,255,255,0.04)';
+            row.onmouseleave = () => row.style.background = '';
+            row.onclick = () => appState.previewAsCreator(row.dataset.username);
+        });
+    }
+    bindPickerClicks();
+}
 
 async function renderHistoryView(container) {
     container.innerHTML = skelHistory();
