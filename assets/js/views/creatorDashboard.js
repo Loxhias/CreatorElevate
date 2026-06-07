@@ -1,7 +1,7 @@
 // v2
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
-import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements } from '../config.js';
+import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements, getCashBonuses } from '../config.js';
 import { auth, push, metrics } from '../api.js';
 import { t, getLang } from '../i18n.js';
 import { appState } from '../main.js';
@@ -178,6 +178,7 @@ function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
 }
 
 function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, proj, projStatus, cashAmt) {
+    const agencyCashBonuses = getCashBonuses(me.agency);
     const advanceTarget = nextTier ? nextTier.range : me.diamonds;
     const dMissing = Math.max(0, advanceTarget - me.diamonds);
 
@@ -198,7 +199,7 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
         </div>`;
 
     // ── 2. Bono en Efectivo USD ────────────────────────────────────────────
-    const assignedTier  = lastMonthIdx >= 0 ? cashBonuses[lastMonthIdx] : null;
+    const assignedTier  = lastMonthIdx >= 0 ? agencyCashBonuses[lastMonthIdx] : null;
     const reqMaintains  = assignedTier ? me.diamonds >= assignedTier.range : true;
     const reqH15 = h>=requirements.cashBonus.minHours, reqDy7 = dy>=requirements.cashBonus.minDays, reqTier = currCashIdx>=0;
     const cashOk = reqH15 && reqDy7 && reqTier && reqMaintains;
@@ -226,7 +227,7 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
         inspireMsg = `💡 Completa las horas y días de transmisión para desbloquear tu bono en efectivo.`;
     }
     const nextTierIdx = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx;
-    const nextTargetTier = nextTierIdx >= 0 && nextTierIdx < cashBonuses.length ? cashBonuses[nextTierIdx] : cashBonuses[0];
+    const nextTargetTier = nextTierIdx >= 0 && nextTierIdx < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdx] : agencyCashBonuses[0];
     const vizMax = nextTargetTier.range;
     const curPct = Math.min(98, (me.diamonds / vizMax) * 100);
     const dotColor = reqMaintains ? 'var(--accent)' : 'var(--warning)';
@@ -264,11 +265,11 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                 </div>
                 ${(() => {
                     // Bonus amounts based on currently reached level (currCashIdx) or assigned level
-                    const bonusIfMaintains = lastMonthIdx >= 0 ? cashBonuses[lastMonthIdx].mantiene : null;
-                    
+                    const bonusIfMaintains = lastMonthIdx >= 0 ? agencyCashBonuses[lastMonthIdx].mantiene : null;
+
                     // bonusIfNextTier is calculated dynamically based on the NEXT tier above their currently reached tier
                     const nextTierIdxForBonus = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx + 1;
-                    const nextAboveAssigned = nextTierIdxForBonus < cashBonuses.length ? cashBonuses[nextTierIdxForBonus] : null;
+                    const nextAboveAssigned = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus] : null;
                     const bonusIfNextTier   = nextAboveAssigned ? nextAboveAssigned.subio : null;
 
 
@@ -291,8 +292,8 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                         // Below first tier — show first reachable bonus
                         return `<div style="text-align:right;flex-shrink:0;">
                             <div style="font-size:0.65rem;color:var(--text-muted);margin-bottom:0.15rem;">Primer bono</div>
-                            <div style="font-size:1.1rem;font-weight:800;color:rgba(255,255,255,0.4);">$${cashBonuses[0].mantiene}</div>
-                            <div style="font-size:0.62rem;color:var(--text-muted);">al llegar a ${fmt(cashBonuses[0].range)} 💎</div>
+                            <div style="font-size:1.1rem;font-weight:800;color:rgba(255,255,255,0.4);">$${agencyCashBonuses[0].mantiene}</div>
+                            <div style="font-size:0.62rem;color:var(--text-muted);">al llegar a ${fmt(agencyCashBonuses[0].range)} 💎</div>
                         </div>`;
                     }
                 })()}
@@ -892,9 +893,12 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     // Next tier = what they must reach THIS month to go up a rank
     const nextTier    = curTierIdx + 1 < visualTiers.length ? visualTiers[curTierIdx + 1] : null;
 
+    // Tabla de bonos según agencia del creador
+    const agencyCashBonuses = getCashBonuses(me.agency);
+
     // Cash bonus tier indexes (for subio / mantiene / baja logic)
-    const lastMonthIdx  = Math.max(-1, getIdx(dLast, cashBonuses));
-    const currCashIdx   = getIdx(me.diamonds, cashBonuses);
+    const lastMonthIdx  = Math.max(-1, getIdx(dLast, agencyCashBonuses));
+    const currCashIdx   = getIdx(me.diamonds, agencyCashBonuses);
     const trend = currCashIdx > lastMonthIdx ? 'subio'
                 : currCashIdx < lastMonthIdx ? 'baja'
                 : 'mantiene';
@@ -917,7 +921,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     // Cash bonus: requires h >= cashH, dy >= cashDy, currCashIdx >= 0
     let cashAmt = 0;
     if (h >= cashH && dy >= cashDy && currCashIdx >= 0) {
-        const tierC = cashBonuses[currCashIdx];
+        const tierC = agencyCashBonuses[currCashIdx];
         cashAmt = trend === 'subio' ? tierC.subio
                 : trend === 'mantiene' ? tierC.mantiene
                 : 0; // baja → no bonus
@@ -1079,11 +1083,11 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     // ── Last month benefit calculation ────────────────────────────────────
     // Solo tenemos diamonds_last_month de la BD; horas y días del mes anterior
     // no están almacenados. Se asume que se cumplieron si los diamantes lo indican.
-    const lastCashTierIdx = Math.max(-1, getIdx(dLast, cashBonuses));
+    const lastCashTierIdx = Math.max(-1, getIdx(dLast, agencyCashBonuses));
     const trendLast = trend;
     let cashAmtLast = 0;
     if (lastCashTierIdx >= 0) {
-        const tier = cashBonuses[lastCashTierIdx];
+        const tier = agencyCashBonuses[lastCashTierIdx];
         cashAmtLast = trendLast === 'subio' ? tier.subio : trendLast === 'mantiene' ? tier.mantiene : 0;
     }
     let diamAmtLast = 0;

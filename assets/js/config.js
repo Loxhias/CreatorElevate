@@ -33,14 +33,29 @@ export const visualTiers = [
 //    baja    = bono si BAJÓ de nivel (siempre 0 — no cobra)
 // ─────────────────────────────────────────────────────────────────────
 export const cashBonuses = [
-    { level: 'Nivel 1', range: 80000, subio: 30, mantiene: 15, baja: 0 },
-    { level: 'Nivel 2', range: 150000, subio: 60, mantiene: 30, baja: 0 },
-    { level: 'Nivel 3', range: 300000, subio: 110, mantiene: 55, baja: 0 },
-    { level: 'Nivel 4', range: 500000, subio: 190, mantiene: 95, baja: 0 },
-    { level: 'Nivel 5', range: 800000, subio: 300, mantiene: 150, baja: 0 },
+    { level: 'Nivel 1', range: 80000,   subio: 30,  mantiene: 15,  baja: 0 },
+    { level: 'Nivel 2', range: 150000,  subio: 60,  mantiene: 30,  baja: 0 },
+    { level: 'Nivel 3', range: 300000,  subio: 110, mantiene: 55,  baja: 0 },
+    { level: 'Nivel 4', range: 500000,  subio: 190, mantiene: 95,  baja: 0 },
+    { level: 'Nivel 5', range: 800000,  subio: 300, mantiene: 150, baja: 0 },
     { level: 'Nivel 6', range: 1200000, subio: 450, mantiene: 225, baja: 0 },
     { level: 'Nivel 7', range: 1600000, subio: 600, mantiene: 300, baja: 0 },
 ];
+
+// Tabla de bonos para creadores de USA (mismos montos, umbrales distintos)
+export const cashBonusesUSA = [
+    { level: 'Nivel 1', range: 100000,  subio: 30,  mantiene: 15,  baja: 0 },
+    { level: 'Nivel 2', range: 200000,  subio: 60,  mantiene: 30,  baja: 0 },
+    { level: 'Nivel 3', range: 300000,  subio: 110, mantiene: 55,  baja: 0 },
+    { level: 'Nivel 4', range: 500000,  subio: 190, mantiene: 95,  baja: 0 },
+    { level: 'Nivel 5', range: 1000000, subio: 300, mantiene: 150, baja: 0 },
+    { level: 'Nivel 6', range: 1600000, subio: 450, mantiene: 225, baja: 0 },
+];
+
+/** Devuelve la tabla de bonos correcta según la agencia del creador. */
+export function getCashBonuses(agency) {
+    return agency === 'usa' ? cashBonusesUSA : cashBonuses;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // 3. PREMIO EN DIAMANTES
