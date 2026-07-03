@@ -498,26 +498,6 @@ export const profiles = {
         return data;
     },
 
-    async listCreatorsForManager(managerId) {
-        if (!isSupabaseConfigured) return [];
-        const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('role', 'creator')
-            .eq('manager_id', managerId);
-        if (error) throw error;
-        return data;
-    },
-
-    async assignManager(creatorId, managerId) {
-        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
-        const { error } = await supabase.rpc('admin_assign_manager', {
-            p_creator_id: creatorId,
-            p_manager_id: managerId,
-        });
-        if (error) throw error;
-    },
-
     async setRole(userId, role) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
         const { error } = await supabase
@@ -536,42 +516,70 @@ export const profiles = {
         if (error) throw error;
     },
 
-    async assignManagerByUsername(username, managerId) {
+    // ── Asignación de creadores (fuente única: creator_assignments) ─────────
+
+    async adminAssignCreator(username, managerId) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
-        const { error } = await supabase
-            .from('creator_metrics')
-            .update({ manager_id: managerId })
-            .ilike('username', username);
+        const { data, error } = await supabase.rpc('admin_assign_creator', {
+            p_username: username,
+            p_manager_id: managerId,
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    async adminUnassignCreator(username) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase.rpc('admin_unassign_creator', { p_username: username });
         if (error) throw error;
     },
 
-    async unassignManagerByUsername(username) {
-        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
-        const { error } = await supabase
-            .from('creator_metrics')
-            .update({ manager_id: null })
-            .ilike('username', username);
+    async lookupCreator(username) {
+        if (!isSupabaseConfigured) return null;
+        const { data, error } = await supabase.rpc('manager_lookup_creator', { p_username: username });
         if (error) throw error;
+        return data;
     },
 
-    async getCreatorsByManager(managerId) {
+    async selfAssignCreator(username) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { data, error } = await supabase.rpc('manager_self_assign_creator', { p_username: username });
+        if (error) throw error;
+        return data;
+    },
+
+    async demoteManagerCleanup(managerId) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { data, error } = await supabase.rpc('admin_demote_manager_cleanup', { p_manager_id: managerId });
+        if (error) throw error;
+        return data;
+    },
+
+    async listAssignmentHistory({ username = null, managerId = null, limit = 100 } = {}) {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase.rpc('admin_list_assignment_history', {
+            p_username: username,
+            p_manager_id: managerId,
+            p_limit: limit,
+        });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async listMyCreators(managerId = null) {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase.rpc('manager_list_my_creators', { p_manager_id: managerId });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async listAllAssignments() {
         if (!isSupabaseConfigured) return [];
         const { data, error } = await supabase
-            .from('creator_metrics')
-            .select('username')
-            .eq('manager_id', managerId);
+            .from('creator_assignments')
+            .select('username, manager_id');
         if (error) throw error;
-        return [...new Set((data || []).map(r => r.username.toLowerCase()))];
-    },
-
-    async getAllAssignedUsernames() {
-        if (!isSupabaseConfigured) return [];
-        const { data, error } = await supabase
-            .from('creator_metrics')
-            .select('username')
-            .not('manager_id', 'is', null);
-        if (error) throw error;
-        return (data || []).map(r => r.username.toLowerCase());
+        return data || [];
     },
 };
 

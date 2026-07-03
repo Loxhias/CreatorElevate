@@ -59,12 +59,8 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
             cached.forEach(u => myCreatorUsernames.add(u));
         } else {
             try {
-                const [usernames, list] = await Promise.all([
-                    profiles.getCreatorsByManager(activeManagerId),
-                    profiles.listCreatorsForManager(activeManagerId),
-                ]);
-                usernames.forEach(u => myCreatorUsernames.add(u.toLowerCase()));
-                list.forEach(c => c.tiktok_username && myCreatorUsernames.add(c.tiktok_username.toLowerCase()));
+                const list = await profiles.listMyCreators(activeManagerId);
+                list.forEach(c => c.username && myCreatorUsernames.add(c.username.toLowerCase()));
                 store.setManagerGroup(activeManagerId, new Set(myCreatorUsernames));
             } catch (e) { console.warn('Error fetching group:', e); }
         }
@@ -139,10 +135,32 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
                     </p>
                 </div>
                 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    ${!isAuditing ? `<button id="assign-toggle-btn" class="btn btn-ghost" style="font-size:0.8rem;white-space:nowrap;border:1px solid var(--glass-border);">➕ Solicitar creador</button>` : ''}
                     ${!isAuditing && myCreators.length ? `<button id="msg-toggle-btn" class="btn btn-primary" style="font-size:0.8rem;white-space:nowrap;">✉️ Redactar mensaje</button>` : ''}
                     ${isAuditing ? `<button id="back-to-admin" class="btn btn-sm" style="background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);">← Volver</button>` : ''}
                 </div>
             </div>
+
+            <!-- Formulario solicitar creador (auto-asignación) -->
+            ${!isAuditing ? `
+            <div id="assign-form" class="glass-panel" style="padding:1.25rem;margin-bottom:1.5rem;display:none;">
+                <h3 style="margin-top:0;font-size:0.95rem;">Solicitar creador</h3>
+                <p style="font-size:0.78rem;color:var(--text-secondary);margin-top:-0.5rem;margin-bottom:0.8rem;">
+                    Escribí el usuario de TikTok del creador que querés seguir. Si está libre, queda asignado a vos al instante.
+                </p>
+                <div style="display:flex;flex-direction:column;gap:0.8rem;">
+                    <div class="input-group" style="margin-bottom:0;">
+                        <label>Usuario de TikTok</label>
+                        <input type="text" id="assign-username-input" class="input-control" placeholder="Ej: loxhias" autocomplete="off">
+                    </div>
+                    <div id="assign-preview" style="font-size:0.82rem;"></div>
+                    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+                        <button id="assign-submit-btn" class="btn btn-primary" style="flex:1;min-width:140px;" disabled>Confirmar</button>
+                        <button id="assign-cancel-btn" class="btn btn-ghost">Cancelar</button>
+                    </div>
+                </div>
+                <div id="assign-recent" style="margin-top:1.25rem;"></div>
+            </div>` : ''}
 
             <!-- Formulario redactar mensaje -->
             ${!isAuditing && myCreators.length ? `
@@ -243,6 +261,125 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
         }
     });
 
+    if (isAuditing) return;
+
+    const { appState } = await import('../main.js');
+
+    // ── Solicitar creador (auto-asignación) wiring ───────────────────────────
+    const assignToggleBtn = container.querySelector('#assign-toggle-btn');
+    const assignForm       = container.querySelector('#assign-form');
+    if (assignToggleBtn && assignForm) {
+        const assignInput    = container.querySelector('#assign-username-input');
+        const assignPreview  = container.querySelector('#assign-preview');
+        const assignSubmit   = container.querySelector('#assign-submit-btn');
+        const assignCancel   = container.querySelector('#assign-cancel-btn');
+        const assignRecentEl = container.querySelector('#assign-recent');
+
+        let lookupTimer  = null;
+        let lastLookedUp = null; // último username validado como asignable
+
+        const renderRecentActivity = async () => {
+            assignRecentEl.innerHTML = '<p style="font-size:0.72rem;color:var(--text-muted);">Cargando actividad reciente...</p>';
+            try {
+                const events = await profiles.listAssignmentHistory({ managerId: activeManagerId, limit: 10 });
+                if (!events.length) {
+                    assignRecentEl.innerHTML = '';
+                    return;
+                }
+                const EVENT_TEXT = {
+                    assigned:   (e) => `Te asignaste a @${e.username}`,
+                    reassigned: (e) => `@${e.username} fue reasignado a ${e.new_manager_name || 'otro manager'}`,
+                    unassigned: (e) => `@${e.username} fue desvinculado de tu equipo`,
+                };
+                assignRecentEl.innerHTML = `
+                    <h4 style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:0.5rem;">ACTIVIDAD RECIENTE</h4>
+                    <div style="display:flex;flex-direction:column;gap:0.35rem;">
+                        ${events.map(e => `
+                            <div style="font-size:0.76rem;color:var(--text-secondary);">
+                                ${(EVENT_TEXT[e.event_type] || (() => e.event_type))(e)}
+                                <span style="color:var(--text-muted);"> · ${new Date(e.created_at).toLocaleDateString('es')}</span>
+                            </div>`).join('')}
+                    </div>`;
+            } catch (e) {
+                assignRecentEl.innerHTML = '';
+                console.warn('Error cargando actividad reciente:', e);
+            }
+        };
+
+        const resetAssignForm = () => {
+            assignInput.value = '';
+            assignPreview.innerHTML = '';
+            assignSubmit.disabled = true;
+            lastLookedUp = null;
+        };
+
+        assignToggleBtn.onclick = () => {
+            const visible = assignForm.style.display !== 'none';
+            assignForm.style.display = visible ? 'none' : 'block';
+            if (!visible) {
+                assignForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                assignInput.focus();
+                renderRecentActivity();
+            }
+        };
+
+        assignCancel.onclick = () => {
+            assignForm.style.display = 'none';
+            resetAssignForm();
+        };
+
+        assignInput.addEventListener('input', () => {
+            clearTimeout(lookupTimer);
+            assignSubmit.disabled = true;
+            lastLookedUp = null;
+            const username = assignInput.value.trim();
+            if (!username) { assignPreview.innerHTML = ''; return; }
+
+            assignPreview.innerHTML = '<span style="color:var(--text-muted);">Buscando...</span>';
+            lookupTimer = setTimeout(async () => {
+                try {
+                    const info = await profiles.lookupCreator(username);
+                    if (!info.exists_in_system) {
+                        assignPreview.innerHTML = '<span style="color:var(--danger);">No encontramos ese creador en el sistema.</span>';
+                        return;
+                    }
+                    if (info.already_assigned) {
+                        assignPreview.innerHTML = `<span style="color:var(--danger);">Ya asignado a ${info.current_manager_name || 'otro manager'}. Contactá al admin si creés que es un error.</span>`;
+                        return;
+                    }
+                    const diamonds  = info.latest_diamonds != null ? fmt(info.latest_diamonds) : '—';
+                    const validDays = info.latest_valid_days != null ? info.latest_valid_days : '—';
+                    assignPreview.innerHTML = `<span style="color:var(--accent);">@${info.username} · ${diamonds} 💎 · ${validDays} días válidos</span>`;
+                    lastLookedUp = info.username;
+                    assignSubmit.disabled = false;
+                } catch (err) {
+                    assignPreview.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`;
+                }
+            }, 400);
+        });
+
+        assignSubmit.onclick = async () => {
+            const username = assignInput.value.trim();
+            if (!username) return;
+            assignSubmit.disabled = true;
+            assignSubmit.textContent = 'Asignando...';
+            try {
+                await profiles.selfAssignCreator(username);
+                store.invalidateManagerGroup(activeManagerId);
+                appState.showToast(`@${username} asignado a tu equipo`, 'success');
+                assignForm.style.display = 'none';
+                resetAssignForm();
+                renderManagerDashboard(container);
+            } catch (err) {
+                assignPreview.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`;
+                appState.showToast(err.message, 'error');
+            } finally {
+                assignSubmit.disabled    = !lastLookedUp;
+                assignSubmit.textContent = 'Confirmar';
+            }
+        };
+    }
+
     // ── Compose form wiring ──────────────────────────────────────────────────
     const toggleBtn = container.querySelector('#msg-toggle-btn');
     const msgForm   = container.querySelector('#msg-form');
@@ -253,8 +390,6 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
     const titleEl   = container.querySelector('#msg-title');
     const bodyEl    = container.querySelector('#msg-body');
     const urlEl     = container.querySelector('#msg-url');
-
-    const { appState } = await import('../main.js');
 
     toggleBtn.onclick = () => {
         const visible = msgForm.style.display !== 'none';
@@ -284,8 +419,8 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
         sendBtn.textContent = 'Enviando...';
 
         try {
-            const list       = await profiles.listCreatorsForManager(activeManagerId);
-            const creatorIds = list.map(c => c.id).filter(Boolean);
+            const list       = await profiles.listMyCreators(activeManagerId);
+            const creatorIds = list.filter(c => c.profile_id).map(c => c.profile_id);
 
             if (!creatorIds.length) {
                 appState.showToast('No hay creadores asignados a tu cuenta en la base de datos', 'warning');

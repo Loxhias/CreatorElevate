@@ -25,7 +25,11 @@ export async function renderInboxView(container) {
     try {
         const [notifications, myCreators] = await Promise.all([
             push.getForUser(userId, role),
-            role === 'manager' ? profiles.listAll().then(all => all.filter(p => p.role === 'creator' && p.manager_id === userId)) : Promise.resolve([]),
+            role === 'manager'
+                ? profiles.listMyCreators(userId).then(list => list
+                    .filter(c => c.profile_id)
+                    .map(c => ({ id: c.profile_id, display_name: c.display_name, tiktok_username: c.username })))
+                : Promise.resolve([]),
         ]);
         const lastSeen = localStorage.getItem(LAST_SEEN_KEY(userId)) || '1970-01-01';
         localStorage.setItem(LAST_SEEN_KEY(userId), new Date().toISOString());

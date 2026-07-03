@@ -274,6 +274,11 @@ export async function renderAdminDashboard(container) {
                     <h3 style="font-size:0.95rem;">Vista de Creador</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Ver la app como la ve un creador.</p>
                 </div>
+                <div class="glass-panel action-card" id="nav-assignments">
+                    <i class="ph-bold ph-clock-counter-clockwise" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--primary-light);"></i>
+                    <h3 style="font-size:0.95rem;">Historial de Asignaciones</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Auditoría de quién asignó qué creador.</p>
+                </div>
             </div>
 
             <div id="admin-view-content">
@@ -305,8 +310,7 @@ export async function renderAdminDashboard(container) {
         const p = store.getProfiles() || [];
         const d = (store.getMetricsData() || []).filter(x => (x.agency || 'latam') === selectedAgency);
         const m = p.filter(x => x.is_manager  && (x.agency || 'latam') === selectedAgency);
-        const c = p.filter(x => x.is_creator  && (x.agency || 'latam') === selectedAgency);
-        renderAuditView(viewContent, m, c, d);
+        renderAuditView(viewContent, m, d);
     };
     container.querySelector('#nav-manage').onclick  = () => renderManageView(viewContent);
     container.querySelector('#nav-upload').onclick  = () => renderUploadView(viewContent, container, selectedAgency);
@@ -314,25 +318,25 @@ export async function renderAdminDashboard(container) {
     container.querySelector('#nav-content').onclick  = () => renderCanales(viewContent);
     container.querySelector('#nav-missions').onclick = () => renderMissionsAdmin(viewContent);
     container.querySelector('#nav-preview-creator').onclick = () => renderCreatorPickerView(viewContent);
+    container.querySelector('#nav-assignments').onclick = () => renderAssignmentHistoryView(viewContent);
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────
-function renderAuditView(container, managers, creators, metricsData) {
+async function renderAuditView(container, managers, metricsData) {
+    container.innerHTML = skelRows(3);
+
+    let assignments = [];
+    try { assignments = await profiles.listAllAssignments(); } catch (e) { console.warn('Error cargando asignaciones:', e); }
+    const managerByUsername = {};
+    assignments.forEach(a => { managerByUsername[(a.username || '').toLowerCase()] = a.manager_id; });
+
     container.innerHTML = `
         <div class="animate-fadeIn">
             <h2 style="margin-bottom:1.5rem;">Auditoría de Managers</h2>
             <div class="metrics-grid">
                 ${managers.map(m => {
-                    // Creadores asignados por cuenta (profiles)
-                    const assignedProfs = creators.filter(c => c.manager_id === m.id);
-                    const usernamesFromProfs = assignedProfs.map(c => (c.tiktok_username || '').toLowerCase());
-
-                    // Creadores asignados por métricas (Excel/Username)
-                    const groupMetrics = metricsData.filter(d => {
-                        const isAssignedByMetric = d.manager_id === m.id;
-                        const isAssignedByProf = usernamesFromProfs.includes((d.username || '').toLowerCase());
-                        return isAssignedByMetric || isAssignedByProf;
-                    });
+                    // Grupo resuelto desde la fuente única de asignaciones (creator_assignments)
+                    const groupMetrics = metricsData.filter(d => managerByUsername[(d.username || '').toLowerCase()] === m.id);
 
                     const groupDiamonds = groupMetrics.reduce((s, d) => s + Number(d.diamonds || 0), 0);
 
@@ -441,9 +445,22 @@ function renderManageView(container) {
                     try {
                         const p = await profiles.getById(uid);
                         if (!p) throw new Error('Usuario no encontrado.');
+
+                        let freedCount = 0;
+                        if (isActive) {
+                            // Se le está quitando el rol de manager: liberar sus creadores asignados
+                            freedCount = await profiles.demoteManagerCleanup(uid);
+                            store.invalidateManagerGroup(uid);
+                        }
+
                         await profiles.updateRoles(uid, { isAdmin: p.is_admin, isManager: !isActive, isCreator: p.is_creator });
                         store.clearProfiles(); // fuerza re-fetch en próxima visita a Auditoría
-                        appState.showToast('Rol actualizado correctamente', 'success');
+                        appState.showToast(
+                            isActive && freedCount > 0
+                                ? `Rol actualizado. ${freedCount} creador${freedCount !== 1 ? 'es' : ''} desvinculado${freedCount !== 1 ? 's' : ''}.`
+                                : 'Rol actualizado correctamente',
+                            'success'
+                        );
                         doSearch();
                     } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
                 };
@@ -566,17 +583,20 @@ async function renderGroupEditor(container, managerId) {
 
     const metricsData = store.getMetricsData() || [];
 
-    const [assignedUsernames, allTakenUsernames] = await Promise.all([
-        profiles.getCreatorsByManager(managerId),
-        profiles.getAllAssignedUsernames(),
+    const [myCreatorsRaw, allAssignments] = await Promise.all([
+        profiles.listMyCreators(managerId),
+        profiles.listAllAssignments(),
     ]);
 
+    const myUsernames = new Set(myCreatorsRaw.map(c => (c.username || '').toLowerCase()));
+    const takenUsernames = new Set(allAssignments.map(a => (a.username || '').toLowerCase()));
+
     // Miembros de este manager
-    const myGroup = metricsData.filter(c => assignedUsernames.includes(c.username.toLowerCase()));
+    const myGroup = metricsData.filter(c => myUsernames.has(c.username.toLowerCase()));
 
     // Disponibles: no asignados a ningún manager
     const freeCreators = metricsData.filter(c => {
-        return c.username && !allTakenUsernames.includes(c.username.toLowerCase());
+        return c.username && !takenUsernames.has(c.username.toLowerCase());
     });
 
     container.innerHTML = `
@@ -633,7 +653,7 @@ async function renderGroupEditor(container, managerId) {
 
     // Quitar: por username
     container.querySelectorAll('.rem-c').forEach(b => b.onclick = async () => {
-        await profiles.unassignManagerByUsername(b.dataset.username);
+        await profiles.adminUnassignCreator(b.dataset.username);
         store.invalidateManagerGroup(managerId);
         appState.showToast('Creador desvinculado', 'info');
         renderGroupEditor(container, managerId);
@@ -664,7 +684,7 @@ function renderAvailableCreators(list) {
 
 function bindAddBtns(el, managerId, rootContainer) {
     el.querySelectorAll('.add-c').forEach(b => b.onclick = async () => {
-        await profiles.assignManagerByUsername(b.dataset.username, managerId);
+        await profiles.adminAssignCreator(b.dataset.username, managerId);
         store.invalidateManagerGroup(managerId);
         appState.showToast('Creador asignado', 'success');
         renderGroupEditor(rootContainer, managerId);
@@ -690,14 +710,21 @@ export async function renderCreatorsList(container) {
     const allData = store.getMetricsData() || [];
     const data = allData.filter(d => (d.agency || 'latam') === selectedAgency);
 
+    // Fuente única de asignaciones (creator_assignments), no creator_metrics.managerId
+    let assignments = [];
+    try { assignments = await profiles.listAllAssignments(); } catch (e) { console.warn('Error cargando asignaciones:', e); }
+    const managerByUsername = {};
+    assignments.forEach(a => { managerByUsername[(a.username || '').toLowerCase()] = a.manager_id; });
+
     // Construir lista de managers únicos presentes en las métricas
     const managersInData = [];
     const seenManagerIds = new Set();
     data.forEach(c => {
-        if (c.managerId && !seenManagerIds.has(c.managerId)) {
-            seenManagerIds.add(c.managerId);
-            const prof = store.getProfiles().find(p => p.id === c.managerId);
-            managersInData.push({ id: c.managerId, name: prof?.display_name || prof?.email || c.manager || c.managerId });
+        const mId = managerByUsername[(c.username || '').toLowerCase()];
+        if (mId && !seenManagerIds.has(mId)) {
+            seenManagerIds.add(mId);
+            const prof = store.getProfiles().find(p => p.id === mId);
+            managersInData.push({ id: mId, name: prof?.display_name || prof?.email || mId });
         }
     });
 
@@ -779,8 +806,9 @@ export async function renderCreatorsList(container) {
         if (!list.length) return '<p style="padding:2rem; text-align:center; color:var(--text-secondary);">Ningún creador coincide con los filtros.</p>';
         return list.map(c => {
             const tier = getTier(c.diamonds);
-            const managerProf = c.managerId ? store.getProfiles().find(p => p.id === c.managerId) : null;
-            const managerName = managerProf?.display_name || managerProf?.email || c.manager || null;
+            const cManagerId = managerByUsername[(c.username || '').toLowerCase()];
+            const managerProf = cManagerId ? store.getProfiles().find(p => p.id === cManagerId) : null;
+            const managerName = managerProf?.display_name || managerProf?.email || null;
             const vDays = c.validDays ?? 0;
             const daysColor = vDays >= 22 ? 'var(--accent)' : vDays >= 7 ? 'var(--warning)' : 'var(--danger)';
             const cachedAvatar = localStorage.getItem(`avatar_${c.username}`);
@@ -835,9 +863,10 @@ export async function renderCreatorsList(container) {
 
         let list = data.filter(c => {
             const vDays = c.validDays ?? 0;
+            const cManagerId = managerByUsername[(c.username || '').toLowerCase()];
             if (q && !c.username.toLowerCase().includes(q)) return false;
-            if (manager === 'none' && c.managerId) return false;
-            if (manager !== 'all' && manager !== 'none' && c.managerId !== manager) return false;
+            if (manager === 'none' && cManagerId) return false;
+            if (manager !== 'all' && manager !== 'none' && cManagerId !== manager) return false;
             if (level !== 'all' && getTier(c.diamonds).level !== Number(level)) return false;
             if (days === '0' && vDays > 0) return false;
             if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
@@ -896,6 +925,114 @@ export async function renderCreatorsList(container) {
             }
         }
     });
+}
+
+// ── VISTA: HISTORIAL DE ASIGNACIONES ────────────────────────────────────────
+const ASSIGNMENT_EVENT_LABELS = {
+    assigned:          { label: 'Asignado',    color: 'var(--accent)' },
+    reassigned:        { label: 'Reasignado',  color: 'var(--warning)' },
+    unassigned:        { label: 'Desvinculado', color: 'var(--danger)' },
+    backfill_conflict: { label: 'Conflicto (migración)', color: 'var(--danger)' },
+};
+
+async function renderAssignmentHistoryView(container) {
+    container.innerHTML = skelRows(5);
+
+    if (!store.getProfiles().length) await store.refreshAdminLists().catch(console.warn);
+    const managers = (store.getProfiles() || []).filter(p => p.is_manager);
+    const managerOptions = managers.map(m =>
+        `<option value="${m.id}">${m.display_name || m.email}</option>`
+    ).join('');
+
+    container.innerHTML = `
+        <div class="animate-fadeIn">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.5rem;">
+                <h2 style="margin:0;">Historial de Asignaciones</h2>
+                <span id="ah-count" style="font-size:0.8rem; color:var(--text-secondary);"></span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:0.8rem; margin-bottom:1.5rem;">
+                <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">CREADOR (username)</label>
+                    <input type="text" id="ah-filter-username" class="input-control" placeholder="Ej: loxhias" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">MANAGER</label>
+                    <select id="ah-filter-manager" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos</option>
+                        ${managerOptions}
+                    </select>
+                </div>
+            </div>
+
+            <div id="ah-results" class="glass-panel table-container no-pad">
+                <table class="data-table" style="min-width:640px;">
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Creador</th>
+                            <th>Evento</th>
+                            <th>Manager anterior</th>
+                            <th>Manager nuevo</th>
+                            <th>Actor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ah-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    `;
+
+    const tbody   = container.querySelector('#ah-tbody');
+    const countEl = container.querySelector('#ah-count');
+
+    const load = async () => {
+        const username  = container.querySelector('#ah-filter-username').value.trim() || null;
+        const managerId = container.querySelector('#ah-filter-manager').value;
+
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Cargando...</td></tr>`;
+
+        let rows = [];
+        try {
+            rows = await profiles.listAssignmentHistory({
+                username,
+                managerId: managerId === 'all' ? null : managerId,
+            });
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--danger);">Error: ${err.message}</td></tr>`;
+            return;
+        }
+
+        countEl.textContent = `${rows.length} evento${rows.length !== 1 ? 's' : ''}`;
+
+        tbody.innerHTML = rows.length
+            ? rows.map(r => {
+                const ev = ASSIGNMENT_EVENT_LABELS[r.event_type] || { label: r.event_type, color: 'var(--text-secondary)' };
+                const date = r.created_at ? new Date(r.created_at).toLocaleString('es') : '—';
+                return `
+                <tr>
+                    <td style="font-size:0.78rem;white-space:nowrap;">${date}</td>
+                    <td style="font-weight:600;">@${r.username}</td>
+                    <td>
+                        <span style="font-size:0.68rem;font-weight:700;padding:0.15rem 0.5rem;border-radius:999px;color:${ev.color};background:rgba(255,255,255,0.06);">
+                            ${ev.label}
+                        </span>
+                    </td>
+                    <td style="font-size:0.8rem;color:var(--text-secondary);">${r.old_manager_name || '—'}</td>
+                    <td style="font-size:0.8rem;">${r.new_manager_name || '—'}</td>
+                    <td style="font-size:0.8rem;color:var(--text-secondary);">${r.actor_name || (r.actor_role === 'system_backfill' ? 'Sistema (migración)' : '—')}</td>
+                </tr>`;
+            }).join('')
+            : `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin eventos para estos filtros.</td></tr>`;
+    };
+
+    container.querySelector('#ah-filter-username').addEventListener('input', () => {
+        clearTimeout(container._ahDebounce);
+        container._ahDebounce = setTimeout(load, 350);
+    });
+    container.querySelector('#ah-filter-manager').addEventListener('change', load);
+
+    load();
 }
 
 // ── VISTA: HISTORIAL DE MÉTRICAS ─────────────────────────────────────────────
