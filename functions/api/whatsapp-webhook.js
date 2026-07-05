@@ -106,6 +106,56 @@ function supabaseAdmin(url, serviceKey) {
     };
 }
 
+// ── Matching tolerante de FAQ (tildes, mayúsculas, errores de tipeo) ────────
+function normalizeText(s) {
+    return String(s || '')
+        .toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '') // saca tildes/diacríticos
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ') // puntuación -> espacio
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Distancia de edición (Levenshtein) — para tolerar errores de tipeo simples.
+function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...new Array(n).fill(0)]);
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+        }
+    }
+    return dp[m][n];
+}
+
+// Una palabra de la keyword "matchea" una palabra del mensaje si son iguales,
+// una contiene a la otra (para plurales/variantes), o difieren por 1-2
+// letras (errores de tipeo — la tolerancia crece con el largo de la palabra).
+function wordMatches(kwWord, msgWord) {
+    if (kwWord === msgWord) return true;
+    if (kwWord.length >= 4 && (msgWord.includes(kwWord) || kwWord.includes(msgWord))) return true;
+    const maxDist = kwWord.length <= 4 ? 1 : 2;
+    return levenshtein(kwWord, msgWord) <= maxDist;
+}
+
+// Una keyword (puede ser frase de varias palabras, ej. "dias validos")
+// matchea si CADA palabra de la frase aparece (tolerando tipeo) en el mensaje.
+function keywordMatches(keywordPhrase, messageWords) {
+    const kwWords = normalizeText(keywordPhrase).split(' ').filter(Boolean);
+    if (!kwWords.length) return false;
+    return kwWords.every(kw => messageWords.some(w => wordMatches(kw, w)));
+}
+
+function findFaqMatch(faqs, body) {
+    const messageWords = normalizeText(body).split(' ').filter(Boolean);
+    return (faqs || []).find(f => (f.keywords || []).some(k => keywordMatches(k, messageWords)));
+}
+
 // ── Cálculo de "próximo objetivo" ────────────────────────────────────────
 // Copia mínima y deliberada de la misma lógica que assets/js/config.js y
 // scripts/tier-config.mjs (tres copias porque cada una corre en un runtime
@@ -278,8 +328,7 @@ export async function onRequestPost(context) {
         });
 
         const faqs = await sb.select('whatsapp_faq', { select: 'keywords,answer', active: 'eq.true' });
-        const lowerBody = body.toLowerCase();
-        const matchedFaq = (faqs || []).find(f => (f.keywords || []).some(k => lowerBody.includes(String(k).toLowerCase())));
+        const matchedFaq = findFaqMatch(faqs, body);
 
         let answer, messageType;
         if (matchedFaq) {
