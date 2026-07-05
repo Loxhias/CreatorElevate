@@ -19,7 +19,11 @@
  *   4. Loguear cada mensaje (entrante y saliente) en whatsapp_messages_log.
  */
 
-const LINK_CODE_RE = /\b([A-Z0-9]{8})\b/i;
+// Los códigos salen de md5() (whatsapp_generate_link_code en WHATSAPP_SQL.sql),
+// así que son hexadecimales (0-9, A-F) — no [A-Z0-9] genérico. Importante:
+// con [A-Z0-9] una palabra común de 8 letras (ej. "conectar", del texto del
+// mensaje) puede matchear antes que el código real y romper la vinculación.
+const LINK_CODE_RE = /\b([0-9A-F]{8})\b/i;
 
 // ── Firma de Twilio (HMAC-SHA1 sobre URL + params ordenados) ────────────────
 async function validateTwilioSignature(url, params, signature, authToken) {
