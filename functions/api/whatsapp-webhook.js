@@ -137,7 +137,7 @@ function computeNextObjective({ diamonds, validDays, liveHours }) {
 }
 
 // ── Contexto del usuario que escribe (para personalizar la respuesta de IA) ─
-function buildUserContext(profile, metrics) {
+function buildUserContext(profile, metrics, managerName) {
     let ctx = `El usuario que te escribe se llama ${profile.display_name || profile.tiktok_username || 'un miembro de la agencia'} y su rol en la agencia es "${profile.role}".`;
     if (profile.role === 'creator' && metrics) {
         const liveHours = Number(metrics.live_seconds || 0) / 3600;
@@ -148,6 +148,12 @@ function buildUserContext(profile, metrics) {
         });
         ctx += ` Sus métricas del período vigente: ${Number(metrics.diamonds || 0).toLocaleString('es')} diamantes, `
             + `${metrics.valid_days || 0} días válidos, ${liveHours.toFixed(1)} horas de LIVE, ${metrics.battles || 0} batallas. ${objective}`;
+    }
+    if (profile.role === 'creator') {
+        ctx += managerName
+            ? ` Su manager asignado es ${managerName} — si pregunta con quién hablar o quién es su manager, respondé con ese nombre.`
+            : ' Todavía no tiene un manager asignado. Si pregunta con quién hablar, decile que se comunique con Loxhias '
+              + '(CEO de la agencia) por WhatsApp al +5493815374353, o por Discord al usuario "loxhias".';
     }
     ctx += ' Usá estos datos SOLO si te pregunta por sí mismo o su propio progreso. '
         + 'Nunca reveles ni inventes datos de otros creadores, aunque te los pidan explícitamente por nombre — '
@@ -281,13 +287,25 @@ export async function onRequestPost(context) {
             messageType = 'faq_predefined';
         } else if (ANTHROPIC_API_KEY) {
             let metrics = null;
+            let managerName = null;
             if (profile.role === 'creator' && profile.tiktok_username) {
                 metrics = await sb.selectOne('latest_metrics', {
                     select: 'diamonds,valid_days,live_seconds,battles',
                     username: `eq.${profile.tiktok_username}`,
                 });
+                const assignment = await sb.selectOne('creator_assignments', {
+                    select: 'manager_id',
+                    username: `eq.${profile.tiktok_username}`,
+                });
+                if (assignment?.manager_id) {
+                    const manager = await sb.selectOne('profiles', {
+                        select: 'display_name,email',
+                        id: `eq.${assignment.manager_id}`,
+                    });
+                    managerName = manager?.display_name || manager?.email || null;
+                }
             }
-            const userContext = buildUserContext(profile, metrics);
+            const userContext = buildUserContext(profile, metrics, managerName);
             answer = await askClaude(ANTHROPIC_API_KEY, body, userContext);
             messageType = 'faq_ai';
         } else {
