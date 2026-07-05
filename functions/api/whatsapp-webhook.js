@@ -217,10 +217,23 @@ function computeNextObjective({ diamonds, validDays, liveHours, agency }) {
         return `Le faltan ${(nextTier.range - diamonds).toLocaleString('es')} diamantes para ${nextTier.name}.${agencyPerksText} `
             + `Además, con ${nextTier.range.toLocaleString('es')} 💎 acumulados sus propias ganancias de TikTok rondarían los $${ownEarnings} USD.`;
     }
+    // Ya está en el nivel máximo — mismo detalle que cualquier otro nivel.
+    const cashTier = findBonusTier(diamonds, agency === 'usa' ? CASH_BONUSES_USA : CASH_BONUSES);
+    const diamondTier = findBonusTier(diamonds, DIAMOND_REWARDS);
+    const ownEarnings = Math.round(diamonds / DIAMONDS_PER_USD);
+
     if (liveHours >= CASH_BONUS_MIN_HOURS && validDays >= CASH_BONUS_MIN_DAYS) {
-        return 'Ya cumple los requisitos del bono en efectivo de este nivel.';
+        const perks = [];
+        if (cashTier) perks.push(`hasta $${cashTier.subio} de bono en efectivo`);
+        if (diamondTier) perks.push(`${diamondTier.reward.toLocaleString('es')} 💎 de premio`);
+        const perksText = perks.length
+            ? ` Ya cumple los requisitos y podría ganar ${perks.join(' + ')} de la agencia este período.`
+            : ' Ya cumple los requisitos del bono en efectivo de este nivel.';
+        return `Está en el nivel máximo (${VISUAL_TIERS[VISUAL_TIERS.length - 1].name}).${perksText} `
+            + `Sus propias ganancias de TikTok este período rondarían los $${ownEarnings} USD.`;
     }
-    return 'Todavía no cumple los requisitos mínimos de horas/días válidos de este nivel.';
+    return `Todavía no cumple los requisitos mínimos de horas/días válidos de este nivel. `
+        + `Sus propias ganancias de TikTok este período rondarían los $${ownEarnings} USD.`;
 }
 
 // ── Contexto del usuario que escribe (para personalizar la respuesta de IA) ─

@@ -102,18 +102,33 @@ export function computeNextObjective({ diamonds, validDays, liveHours, agency })
             + `Además, con ${nextTier.range.toLocaleString('es')} 💎 acumulados tus propias ganancias de TikTok rondarían los $${ownEarnings} USD.`;
     }
 
-    const bonuses = getCashBonuses(agency);
+    // Ya está en el nivel máximo (Nivel 10) — no hay "próximo", pero merece el
+    // mismo detalle que cualquier otro nivel: bono real de ESE nivel + estimado
+    // de ganancias propias, no solo si cumple o no los requisitos mínimos.
+    const cashTier = findBonusTier(diamonds, getCashBonuses(agency));
+    const diamondTier = findBonusTier(diamonds, diamondRewards);
+    const ownEarnings = Math.round(diamonds / DIAMONDS_PER_USD);
     const meetsHours = liveHours >= requirements.cashBonus.minHours;
     const meetsDays  = validDays >= requirements.cashBonus.minDays;
+
     if (meetsHours && meetsDays) {
-        return '¡Ya cumplís los requisitos del bono en efectivo de este nivel! 🎉';
+        const perks = [];
+        if (cashTier) perks.push(`hasta $${cashTier.subio} de bono en efectivo`);
+        if (diamondTier) perks.push(`${diamondTier.reward.toLocaleString('es')} 💎 de premio`);
+        const perksText = perks.length
+            ? ` ¡Ya cumplís los requisitos y podrías ganar ${perks.join(' + ')} de la agencia este período! 🎉`
+            : ' ¡Ya cumplís los requisitos del bono en efectivo de este nivel! 🎉';
+        return `Estás en el nivel máximo (${tiers[tiers.length - 1].name}).${perksText} `
+            + `Tus propias ganancias de TikTok este período rondarían los $${ownEarnings} USD.`;
     }
+
     const missingHours = Math.max(0, requirements.cashBonus.minHours - liveHours);
     const missingDays  = Math.max(0, requirements.cashBonus.minDays - validDays);
     const parts = [];
     if (missingDays > 0)  parts.push(`${missingDays} día${missingDays !== 1 ? 's' : ''} válido${missingDays !== 1 ? 's' : ''}`);
     if (missingHours > 0) parts.push(`${missingHours.toFixed(1)}h de LIVE`);
-    return parts.length
+    return (parts.length
         ? `Te faltan ${parts.join(' y ')} para el bono en efectivo de este nivel.`
-        : 'Seguí así para mantener tu nivel este período.';
+        : 'Seguí así para mantener tu nivel este período.')
+        + ` Tus propias ganancias de TikTok este período rondarían los $${ownEarnings} USD.`;
 }
