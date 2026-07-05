@@ -33,7 +33,7 @@ export const env = {
     // ej. "5491100000000"). Es información pública — es el mismo número al
     // que cualquiera le puede escribir. Lo da tu proveedor de WhatsApp
     // (Twilio Sandbox mientras desarrollás, tu número de producción después).
-    WHATSAPP_BUSINESS_NUMBER: 'REEMPLAZA_WHATSAPP_BUSINESS_NUMBER',
+    WHATSAPP_BUSINESS_NUMBER: '14155238886', // Sandbox de Twilio (temporal, hasta tener el número de producción)
 };
 
 export const isSupabaseConfigured =
