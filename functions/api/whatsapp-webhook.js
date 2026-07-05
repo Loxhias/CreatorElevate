@@ -211,6 +211,21 @@ function buildUserContext(profile, metrics, managerName) {
     return ctx;
 }
 
+// ── Referencia de FAQ para la IA (RAG simple) ───────────────────────────────
+// Cuando ninguna FAQ matchea por palabras clave, la pregunta puede seguir
+// siendo exactamente una de estas mismas, solo que redactada distinto. Le
+// pasamos el contenido completo como referencia para que conteste con los
+// mismos hechos aunque no haya matcheado ninguna keyword, en vez de
+// inventar o contestar genérico. Reusa la misma lista ya traída para el
+// matching, sin consultas extra a la base.
+function buildFaqReference(faqs) {
+    if (!faqs || !faqs.length) return '';
+    const lines = faqs.map(f => `- ${f.question_label}: ${f.answer}`).join('\n');
+    return '\n\nInformación oficial de la agencia (fuente de verdad — la pregunta puede estar '
+        + 'formulada distinto a estos títulos, pero si el tema coincide, respondé usando estos '
+        + 'datos exactos, resumidos con tus palabras, no copiados literal):\n' + lines;
+}
+
 // ── Asistente de IA (fallback cuando no matchea ninguna FAQ predefinida) ───
 async function askClaude(apiKey, question, userContext) {
     let systemPrompt = 'Sos el asistente de Interactik Agency, una agencia de creadores de TikTok LIVE. '
@@ -327,7 +342,7 @@ export async function onRequestPost(context) {
             profile_id: profile.id, direction: 'inbound', message_type: 'faq_predefined', body, twilio_sid: twilioSid,
         });
 
-        const faqs = await sb.select('whatsapp_faq', { select: 'keywords,answer', active: 'eq.true' });
+        const faqs = await sb.select('whatsapp_faq', { select: 'keywords,question_label,answer', active: 'eq.true' });
         const matchedFaq = findFaqMatch(faqs, body);
 
         let answer, messageType;
@@ -354,7 +369,7 @@ export async function onRequestPost(context) {
                     managerName = manager?.display_name || manager?.email || null;
                 }
             }
-            const userContext = buildUserContext(profile, metrics, managerName);
+            const userContext = buildUserContext(profile, metrics, managerName) + buildFaqReference(faqs);
             answer = await askClaude(ANTHROPIC_API_KEY, body, userContext);
             messageType = 'faq_ai';
         } else {
