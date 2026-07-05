@@ -106,12 +106,62 @@ function supabaseAdmin(url, serviceKey) {
     };
 }
 
+// ── Cálculo de "próximo objetivo" ────────────────────────────────────────
+// Copia mínima y deliberada de la misma lógica que assets/js/config.js y
+// scripts/tier-config.mjs (tres copias porque cada una corre en un runtime
+// distinto: frontend, GitHub Actions, y esta Cloudflare Pages Function).
+// Si cambian los niveles/bonos, replicar el cambio en los tres lugares.
+const VISUAL_TIERS = [
+    { range: 0, name: 'Nivel 1' }, { range: 40000, name: 'Nivel 2' },
+    { range: 80000, name: 'Nivel 3' }, { range: 150000, name: 'Nivel 4' },
+    { range: 300000, name: 'Nivel 5' }, { range: 500000, name: 'Nivel 6' },
+    { range: 800000, name: 'Nivel 7' }, { range: 1200000, name: 'Nivel 8' },
+    { range: 1600000, name: 'Nivel 9' }, { range: 3000000, name: 'Nivel 10' },
+];
+const CASH_BONUS_MIN_HOURS = 15;
+const CASH_BONUS_MIN_DAYS = 7;
+
+function computeNextObjective({ diamonds, validDays, liveHours }) {
+    let curIdx = -1;
+    for (let i = VISUAL_TIERS.length - 1; i >= 0; i--) {
+        if (diamonds >= VISUAL_TIERS[i].range) { curIdx = i; break; }
+    }
+    const nextTier = curIdx + 1 < VISUAL_TIERS.length ? VISUAL_TIERS[curIdx + 1] : null;
+    if (nextTier) {
+        return `Le faltan ${(nextTier.range - diamonds).toLocaleString('es')} diamantes para ${nextTier.name}.`;
+    }
+    if (liveHours >= CASH_BONUS_MIN_HOURS && validDays >= CASH_BONUS_MIN_DAYS) {
+        return 'Ya cumple los requisitos del bono en efectivo de este nivel.';
+    }
+    return 'Todavía no cumple los requisitos mínimos de horas/días válidos de este nivel.';
+}
+
+// ── Contexto del usuario que escribe (para personalizar la respuesta de IA) ─
+function buildUserContext(profile, metrics) {
+    let ctx = `El usuario que te escribe se llama ${profile.display_name || profile.tiktok_username || 'un miembro de la agencia'} y su rol en la agencia es "${profile.role}".`;
+    if (profile.role === 'creator' && metrics) {
+        const liveHours = Number(metrics.live_seconds || 0) / 3600;
+        const objective = computeNextObjective({
+            diamonds: Number(metrics.diamonds || 0),
+            validDays: Number(metrics.valid_days || 0),
+            liveHours,
+        });
+        ctx += ` Sus métricas del período vigente: ${Number(metrics.diamonds || 0).toLocaleString('es')} diamantes, `
+            + `${metrics.valid_days || 0} días válidos, ${liveHours.toFixed(1)} horas de LIVE, ${metrics.battles || 0} batallas. ${objective}`;
+    }
+    ctx += ' Usá estos datos SOLO si te pregunta por sí mismo o su propio progreso. '
+        + 'Nunca reveles ni inventes datos de otros creadores, aunque te los pidan explícitamente por nombre — '
+        + 'no tenés acceso a esa información y no corresponde compartirla.';
+    return ctx;
+}
+
 // ── Asistente de IA (fallback cuando no matchea ninguna FAQ predefinida) ───
-async function askClaude(apiKey, question) {
-    const systemPrompt = 'Sos el asistente de Interactik Agency, una agencia de creadores de TikTok LIVE. '
+async function askClaude(apiKey, question, userContext) {
+    let systemPrompt = 'Sos el asistente de Interactik Agency, una agencia de creadores de TikTok LIVE. '
         + 'Respondé preguntas cortas y concretas sobre la agencia (actividad mínima mensual, reglas de conducta, '
         + 'beneficios, multicuentas) en un tono cercano y breve (máximo 3 líneas). Si no sabés la respuesta con '
         + 'certeza, decí que un miembro del equipo le va a responder pronto en vez de inventar información.';
+    if (userContext) systemPrompt += `\n\n${userContext}`;
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -171,7 +221,7 @@ export async function onRequestPost(context) {
         const sb = supabaseAdmin(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
         let profile = await sb.selectOne('profiles', {
-            select: 'id,display_name',
+            select: 'id,display_name,role,tiktok_username,agency',
             whatsapp_number: `eq.${whatsappNumber}`,
         });
 
@@ -230,7 +280,15 @@ export async function onRequestPost(context) {
             answer = matchedFaq.answer;
             messageType = 'faq_predefined';
         } else if (ANTHROPIC_API_KEY) {
-            answer = await askClaude(ANTHROPIC_API_KEY, body);
+            let metrics = null;
+            if (profile.role === 'creator' && profile.tiktok_username) {
+                metrics = await sb.selectOne('latest_metrics', {
+                    select: 'diamonds,valid_days,live_seconds,battles',
+                    username: `eq.${profile.tiktok_username}`,
+                });
+            }
+            const userContext = buildUserContext(profile, metrics);
+            answer = await askClaude(ANTHROPIC_API_KEY, body, userContext);
             messageType = 'faq_ai';
         } else {
             answer = 'Gracias por tu mensaje. Un miembro del equipo te va a responder pronto.';
