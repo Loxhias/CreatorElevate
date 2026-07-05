@@ -151,9 +151,12 @@ function keywordMatches(keywordPhrase, messageWords) {
     return kwWords.every(kw => messageWords.some(w => wordMatches(kw, w)));
 }
 
-function findFaqMatch(faqs, body) {
+// Devuelve TODAS las FAQ que matchean, no solo la primera — un mensaje que
+// matchea varias a la vez es una pregunta compuesta/ambigua (ej. "soy nuevo,
+// ¿qué beneficios tengo?"), y ahí ninguna respuesta fija sola es la correcta.
+function findFaqMatches(faqs, body) {
     const messageWords = normalizeText(body).split(' ').filter(Boolean);
-    return (faqs || []).find(f => (f.keywords || []).some(k => keywordMatches(k, messageWords)));
+    return (faqs || []).filter(f => (f.keywords || []).some(k => keywordMatches(k, messageWords)));
 }
 
 // ── Cálculo de "próximo objetivo" ────────────────────────────────────────
@@ -393,14 +396,19 @@ export async function onRequestPost(context) {
             profile_id: profile.id, direction: 'inbound', message_type: 'faq_predefined', body, twilio_sid: twilioSid,
         });
 
-        const faqs = await sb.select('whatsapp_faq', { select: 'keywords,question_label,answer', active: 'eq.true' });
-        const matchedFaq = findFaqMatch(faqs, body);
+        const faqs = await sb.select('whatsapp_faq', {
+            select: 'keywords,question_label,answer', active: 'eq.true', order: 'sort_order.asc',
+        });
+        const matches = findFaqMatches(faqs, body);
 
         let answer, messageType;
-        if (matchedFaq) {
-            answer = matchedFaq.answer;
+        if (matches.length === 1) {
+            // Matchea exactamente una FAQ: respuesta fija, gratis.
+            answer = matches[0].answer;
             messageType = 'faq_predefined';
         } else if (ANTHROPIC_API_KEY) {
+            // Cero o varias FAQ matchearon (pregunta ambigua/compuesta): la IA
+            // decide, con el contenido de todas las FAQ como referencia.
             let metrics = null;
             let managerName = null;
             if (profile.role === 'creator' && profile.tiktok_username) {
