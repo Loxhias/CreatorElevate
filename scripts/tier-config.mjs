@@ -4,6 +4,9 @@
 // IMPORTANTE: si cambian los niveles/bonos en assets/js/config.js, replicar el
 // cambio acá también.
 
+// Misma tasa que usa assets/js/views/creatorDashboard.js para "ganancias estimadas".
+const DIAMONDS_PER_USD = 200;
+
 export const visualTiers = [
     { level: 1, range: 0, name: 'Nivel 1' },
     { level: 2, range: 40000, name: 'Nivel 2' },
@@ -88,13 +91,15 @@ export function computeNextObjective({ diamonds, validDays, liveHours, agency })
         const missing = nextTier.range - diamonds;
         const cashTier = findBonusTier(nextTier.range, getCashBonuses(agency));
         const diamondTier = findBonusTier(nextTier.range, diamondRewards);
+        const ownEarnings = Math.round(nextTier.range / DIAMONDS_PER_USD);
         const perks = [];
         if (cashTier) perks.push(`hasta $${cashTier.subio} de bono en efectivo`);
         if (diamondTier) perks.push(`${diamondTier.reward.toLocaleString('es')} 💎 de premio`);
-        const perksText = perks.length
-            ? ` Si lo alcanzás, podrías ganar ${perks.join(' + ')} (cumpliendo el mínimo de días y horas de ese nivel).`
+        const agencyPerksText = perks.length
+            ? ` Si lo alcanzás, podrías ganar ${perks.join(' + ')} de la agencia (cumpliendo el mínimo de días y horas de ese nivel).`
             : '';
-        return `Te faltan ${missing.toLocaleString('es')} 💎 para llegar a ${nextTier.name}.${perksText}`;
+        return `Te faltan ${missing.toLocaleString('es')} 💎 para llegar a ${nextTier.name}.${agencyPerksText} `
+            + `Además, con ${nextTier.range.toLocaleString('es')} 💎 acumulados tus propias ganancias de TikTok rondarían los $${ownEarnings} USD.`;
     }
 
     const bonuses = getCashBonuses(agency);
