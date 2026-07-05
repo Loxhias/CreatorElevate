@@ -125,17 +125,15 @@ SET search_path = public
 AS $$
 DECLARE
     v_caller_id UUID := auth.uid();
-    v_role      TEXT;
     v_code      TEXT;
 BEGIN
     IF v_caller_id IS NULL THEN
         RAISE EXCEPTION 'No autenticado.';
     END IF;
 
-    SELECT role INTO v_role FROM public.profiles WHERE id = v_caller_id;
-    IF v_role IS DISTINCT FROM 'creator' THEN
-        RAISE EXCEPTION 'Solo los creadores pueden conectar WhatsApp.';
-    END IF;
+    -- Cualquier rol autenticado (creador, manager o admin) puede vincular su
+    -- WhatsApp y hablar con el asistente. El check-in de progreso semanal
+    -- sigue siendo solo para creadores (lo filtra whatsapp_checkin_candidates).
 
     -- Invalidar códigos previos no usados de este perfil (siempre queda uno vigente)
     DELETE FROM public.whatsapp_link_codes WHERE profile_id = v_caller_id AND used_at IS NULL;

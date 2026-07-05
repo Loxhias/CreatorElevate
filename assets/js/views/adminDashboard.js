@@ -1,11 +1,12 @@
 import { store } from '../store.js';
 import { appState } from '../main.js';
-import { metrics, profiles } from '../api.js';
+import { metrics, profiles, whatsapp } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
 import { profiles as profilesApi } from '../api.js';
 import { renderCanales } from './canales.js';
 import { renderMissionsAdmin } from './missionsAdmin.js';
+import { env, isWhatsappConfigured } from '../env.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
 
@@ -286,6 +287,22 @@ export async function renderAdminDashboard(container) {
                 </div>
             </div>
 
+            ${isWhatsappConfigured ? `
+            <div class="glass-panel" style="padding:1rem 1.25rem;margin-bottom:1.5rem;background:rgba(37,211,102,0.04);border-color:rgba(37,211,102,0.25);display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap;">
+                <div style="font-size:1.4rem;line-height:1;">💬</div>
+                <div style="flex:1;min-width:220px;">
+                    ${store.getProfile?.()?.whatsapp_number ? `
+                        <div style="font-weight:700;font-size:0.85rem;color:#25d366;">✓ WhatsApp conectado</div>
+                        <div style="font-size:0.72rem;color:var(--text-muted);">Ya podés escribirle al asistente para probarlo.</div>
+                    ` : `
+                        <div style="font-weight:700;font-size:0.85rem;">Hablar con el asistente de WhatsApp</div>
+                        <div style="font-size:0.72rem;color:var(--text-muted);">Conectá tu WhatsApp para probar el bot y hacerle preguntas.</div>
+                    `}
+                </div>
+                ${!store.getProfile?.()?.whatsapp_number ? `<button id="wa-connect-btn-admin" class="btn btn-sm" style="background:#25d366;color:#04150a;font-weight:700;">Conectar WhatsApp</button>` : ''}
+            </div>
+            ` : ''}
+
             <div id="admin-view-content">
                 <div class="metrics-grid">
                     <div class="glass-panel metric-card">
@@ -308,6 +325,25 @@ export async function renderAdminDashboard(container) {
     const viewContent = container.querySelector('#admin-view-content');
 
     wireAgencyToggle(container, () => renderAdminDashboard(container));
+
+    const waConnectBtnAdmin = container.querySelector('#wa-connect-btn-admin');
+    if (waConnectBtnAdmin) {
+        waConnectBtnAdmin.onclick = async () => {
+            waConnectBtnAdmin.disabled = true;
+            waConnectBtnAdmin.textContent = 'Generando...';
+            try {
+                const { code } = await whatsapp.generateLinkCode();
+                const text = encodeURIComponent(`Quiero conectar mi cuenta. Código: ${code}`);
+                window.open(`https://wa.me/${env.WHATSAPP_BUSINESS_NUMBER}?text=${text}`, '_blank', 'noopener');
+                appState.showToast('Mandá el mensaje que se abrió en WhatsApp para confirmar la conexión.', 'success');
+            } catch (err) {
+                appState.showToast('Error: ' + err.message, 'danger');
+            } finally {
+                waConnectBtnAdmin.disabled = false;
+                waConnectBtnAdmin.textContent = 'Conectar WhatsApp';
+            }
+        };
+    }
 
     container.querySelector('#nav-audit').onclick   = async () => {
         // Re-fetch si el caché fue invalidado (ej. tras cambio de roles)
