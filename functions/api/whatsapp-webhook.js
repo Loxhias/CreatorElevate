@@ -170,15 +170,48 @@ const VISUAL_TIERS = [
 ];
 const CASH_BONUS_MIN_HOURS = 15;
 const CASH_BONUS_MIN_DAYS = 7;
+const CASH_BONUSES = [
+    { range: 80000, subio: 30 }, { range: 150000, subio: 60 }, { range: 300000, subio: 110 },
+    { range: 500000, subio: 190 }, { range: 800000, subio: 300 }, { range: 1200000, subio: 450 },
+    { range: 1600000, subio: 600 },
+];
+const CASH_BONUSES_USA = [
+    { range: 100000, subio: 30 }, { range: 200000, subio: 60 }, { range: 300000, subio: 110 },
+    { range: 500000, subio: 190 }, { range: 1000000, subio: 300 }, { range: 1600000, subio: 450 },
+];
+const DIAMOND_REWARDS = [
+    { range: 80000, reward: 1000 }, { range: 150000, reward: 1800 }, { range: 300000, reward: 3600 },
+    { range: 500000, reward: 6000 }, { range: 800000, reward: 10000 }, { range: 1200000, reward: 15000 },
+    { range: 1600000, reward: 20000 }, { range: 3000000, reward: 37500 },
+];
 
-function computeNextObjective({ diamonds, validDays, liveHours }) {
+// Encuentra el tier de bono más alto cuyo umbral ya cubre "diamonds" (ej. el
+// umbral del PRÓXIMO nivel visual, para estimar cuánto podría ganar si llega).
+function findBonusTier(diamonds, bonusTable) {
+    let match = null;
+    for (const tier of bonusTable) {
+        if (diamonds >= tier.range) match = tier;
+    }
+    return match;
+}
+
+// Nota: el bono es una ESTIMACIÓN (el monto "subió de nivel"), no el cálculo
+// exacto — el monto real depende de comparar con el mes anterior, lógica que
+// ya vive en creatorDashboard.js y que deliberadamente no se replica acá.
+function computeNextObjective({ diamonds, validDays, liveHours, agency }) {
     let curIdx = -1;
     for (let i = VISUAL_TIERS.length - 1; i >= 0; i--) {
         if (diamonds >= VISUAL_TIERS[i].range) { curIdx = i; break; }
     }
     const nextTier = curIdx + 1 < VISUAL_TIERS.length ? VISUAL_TIERS[curIdx + 1] : null;
     if (nextTier) {
-        return `Le faltan ${(nextTier.range - diamonds).toLocaleString('es')} diamantes para ${nextTier.name}.`;
+        const cashTier = findBonusTier(nextTier.range, agency === 'usa' ? CASH_BONUSES_USA : CASH_BONUSES);
+        const diamondTier = findBonusTier(nextTier.range, DIAMOND_REWARDS);
+        const perks = [];
+        if (cashTier) perks.push(`hasta $${cashTier.subio} de bono en efectivo`);
+        if (diamondTier) perks.push(`${diamondTier.reward.toLocaleString('es')} 💎 de premio`);
+        const perksText = perks.length ? ` Si lo alcanza, podría ganar ${perks.join(' + ')} (cumpliendo el mínimo de días y horas de ese nivel).` : '';
+        return `Le faltan ${(nextTier.range - diamonds).toLocaleString('es')} diamantes para ${nextTier.name}.${perksText}`;
     }
     if (liveHours >= CASH_BONUS_MIN_HOURS && validDays >= CASH_BONUS_MIN_DAYS) {
         return 'Ya cumple los requisitos del bono en efectivo de este nivel.';
@@ -195,6 +228,7 @@ function buildUserContext(profile, metrics, managerName) {
             diamonds: Number(metrics.diamonds || 0),
             validDays: Number(metrics.valid_days || 0),
             liveHours,
+            agency: profile.agency,
         });
         ctx += ` Sus métricas del período vigente: ${Number(metrics.diamonds || 0).toLocaleString('es')} diamantes, `
             + `${metrics.valid_days || 0} días válidos, ${liveHours.toFixed(1)} horas de LIVE, ${metrics.battles || 0} batallas. ${objective}`;
