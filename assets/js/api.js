@@ -1066,6 +1066,53 @@ export const missions = {
 };
 
 // ────────────────────────────────────────────────────────────────────────────
+//  WHATSAPP — vinculación (creador) + FAQ (admin)
+// ────────────────────────────────────────────────────────────────────────────
+
+export const whatsapp = {
+    async generateLinkCode() {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { data, error } = await supabase.rpc('whatsapp_generate_link_code');
+        if (error) throw error;
+        return data;
+    },
+
+    async listFaq() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase
+            .from('whatsapp_faq')
+            .select('*')
+            .order('sort_order', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    },
+
+    async upsertFaq({ id, keywords, question_label, answer, active = true, sort_order = 0 }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const row = {
+            keywords: (keywords || []).map(k => san(k).toLowerCase().trim()).filter(Boolean),
+            question_label: san(question_label),
+            answer: san(answer),
+            active,
+            sort_order,
+        };
+        if (id) {
+            const { error } = await supabase.from('whatsapp_faq').update(row).eq('id', id);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from('whatsapp_faq').insert(row);
+            if (error) throw error;
+        }
+    },
+
+    async deleteFaq(id) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase.from('whatsapp_faq').delete().eq('id', id);
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
 //  NOTIFICACIONES AUTOMÁTICAS — cooldown anti-spam
 // ────────────────────────────────────────────────────────────────────────────
 

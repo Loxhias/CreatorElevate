@@ -2,9 +2,10 @@
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements, getCashBonuses } from '../config.js';
-import { auth, push, metrics } from '../api.js';
+import { auth, push, metrics, whatsapp } from '../api.js';
 import { t, getLang } from '../i18n.js';
 import { appState } from '../main.js';
+import { env, isWhatsappConfigured } from '../env.js';
 
 
 function getIdx(d, tiers) {
@@ -1030,6 +1031,24 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         </div>
         ` : ''}
 
+        ${(!isAuditing && user?.role === 'creator' && isWhatsappConfigured) ? `
+        <div class="glass-panel section-card animate-fadeIn" style="margin-bottom:0.85rem;background:rgba(37,211,102,0.04);border-color:rgba(37,211,102,0.25);">
+            <div style="display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap;">
+                <div style="font-size:1.6rem;line-height:1;">💬</div>
+                <div style="flex:1;min-width:220px;">
+                    ${profile?.whatsapp_number ? `
+                        <div style="font-weight:700;font-size:0.87rem;color:#25d366;margin-bottom:0.2rem;">✓ WhatsApp conectado</div>
+                        <div style="font-size:0.72rem;color:var(--text-muted);">Te vamos a mandar tu progreso y objetivos por acá.</div>
+                    ` : `
+                        <div style="font-weight:700;font-size:0.87rem;margin-bottom:0.2rem;">Seguimiento por WhatsApp</div>
+                        <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.5;">Conectá tu WhatsApp para recibir tu progreso, días válidos, horas, batallas y tus próximos objetivos. También podés preguntarle cosas de la agencia.</div>
+                    `}
+                </div>
+                ${!profile?.whatsapp_number ? `<button id="wa-connect-btn" class="btn btn-sm" style="background:#25d366;color:#04150a;font-weight:700;flex-shrink:0;">Conectar WhatsApp</button>` : ''}
+            </div>
+        </div>
+        ` : ''}
+
 
         <!-- Estimated Earnings Hero -->
         <div class="glass-panel" style="padding:1.4rem 1.5rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(0,217,166,0.07),rgba(124,110,247,0.05));border-color:rgba(0,217,166,0.2);text-align:center;">
@@ -1187,6 +1206,26 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
                 appState.showToast('Error al guardar la fecha: ' + err.message, 'danger');
                 bannerSaveBtn.disabled = false;
                 bannerSaveBtn.textContent = 'Activar Retos';
+            }
+        };
+    }
+
+    // Conectar WhatsApp: pide un código y abre el chat de WhatsApp con ese código
+    const waConnectBtn = container.querySelector('#wa-connect-btn');
+    if (waConnectBtn) {
+        waConnectBtn.onclick = async () => {
+            waConnectBtn.disabled = true;
+            waConnectBtn.textContent = 'Generando...';
+            try {
+                const { code } = await whatsapp.generateLinkCode();
+                const text = encodeURIComponent(`Quiero conectar mi cuenta. Código: ${code}`);
+                window.open(`https://wa.me/${env.WHATSAPP_BUSINESS_NUMBER}?text=${text}`, '_blank', 'noopener');
+                appState.showToast('Mandá el mensaje que se abrió en WhatsApp para confirmar la conexión.', 'success');
+            } catch (err) {
+                appState.showToast('Error: ' + err.message, 'danger');
+            } finally {
+                waConnectBtn.disabled = false;
+                waConnectBtn.textContent = 'Conectar WhatsApp';
             }
         };
     }

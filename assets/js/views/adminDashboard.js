@@ -279,6 +279,11 @@ export async function renderAdminDashboard(container) {
                     <h3 style="font-size:0.95rem;">Historial de Asignaciones</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Auditoría de quién asignó qué creador.</p>
                 </div>
+                <div class="glass-panel action-card" id="nav-whatsapp-faq">
+                    <i class="ph-bold ph-chat-circle-dots" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:#25d366;"></i>
+                    <h3 style="font-size:0.95rem;">FAQ del Asistente</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Preguntas frecuentes de WhatsApp.</p>
+                </div>
             </div>
 
             <div id="admin-view-content">
@@ -319,6 +324,14 @@ export async function renderAdminDashboard(container) {
     container.querySelector('#nav-missions').onclick = () => renderMissionsAdmin(viewContent);
     container.querySelector('#nav-preview-creator').onclick = () => renderCreatorPickerView(viewContent);
     container.querySelector('#nav-assignments').onclick = () => renderAssignmentHistoryView(viewContent);
+    container.querySelector('#nav-whatsapp-faq').onclick = () => {
+        import('./whatsappFaqAdmin.js')
+            .then(mod => mod.renderWhatsappFaqAdmin(viewContent))
+            .catch(err => {
+                console.error('[import] whatsappFaqAdmin.js falló:', err);
+                viewContent.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando FAQ: ${err.message}</p>`;
+            });
+    };
 }
 
 // ── VISTA: AUDITORÍA ────────────────────────────────────────────────────────

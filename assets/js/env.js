@@ -28,6 +28,12 @@ export const env = {
     // Dominio sintético usado cuando el usuario inicia sesión con su tiktok_username
     // (sirve como "fallback" si en el futuro decides loguear sin email).
     EMAIL_DOMAIN: 'creatorelevate.app',
+
+    // Número de WhatsApp del negocio (con código de país, sin "+" ni espacios,
+    // ej. "5491100000000"). Es información pública — es el mismo número al
+    // que cualquiera le puede escribir. Lo da tu proveedor de WhatsApp
+    // (Twilio Sandbox mientras desarrollás, tu número de producción después).
+    WHATSAPP_BUSINESS_NUMBER: 'REEMPLAZA_WHATSAPP_BUSINESS_NUMBER',
 };
 
 export const isSupabaseConfigured =
@@ -36,3 +42,6 @@ export const isSupabaseConfigured =
 
 export const isPushConfigured =
     !env.VAPID_PUBLIC_KEY.startsWith('REEMPLAZA_');
+
+export const isWhatsappConfigured =
+    !env.WHATSAPP_BUSINESS_NUMBER.startsWith('REEMPLAZA_');
