@@ -126,6 +126,36 @@ export const auth = {
         return data;
     },
 
+    /** Registro de manager: requiere que un admin haya habilitado el email antes (manager_whitelist). */
+    async signUpManager({ email, password, displayName }) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        email = String(email || '').trim().toLowerCase();
+        if (!email)    throw new Error('El email es obligatorio.');
+        if (!password || password.length < 6)
+            throw new Error('La contraseña debe tener al menos 6 caracteres.');
+
+        // Chequeo amigable — la validación real (que no se puede saltear) vive
+        // en el trigger handle_new_user() del lado de la base de datos.
+        const { data: wl, error: wlErr } = await supabase.rpc('is_manager_whitelisted', { p_email: email });
+        if (wlErr) throw wlErr;
+        if (!wl?.allowed) {
+            throw new Error('Tu email no está habilitado para registrarte como manager. Pedile a un admin que te habilite desde "Gestión de Managers".');
+        }
+
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    role: 'manager',
+                    display_name: displayName || email.split('@')[0],
+                },
+            },
+        });
+        if (error) throw error;
+        return data;
+    },
+
     async signOut() {
         if (!isSupabaseConfigured) return;
         await supabase.auth.signOut();
@@ -455,6 +485,17 @@ export const profiles = {
             .select();
         if (error) throw error;
         return data[0];
+    },
+
+    /** Admin: habilita un email para que pueda auto-registrarse como manager (pestaña "Soy manager" del signup). */
+    async addManagerWhitelist(email, agency = 'latam') {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { data, error } = await supabase.rpc('admin_add_manager_whitelist', {
+            p_email: san(String(email || '').trim().toLowerCase()),
+            p_agency: agency,
+        });
+        if (error) throw error;
+        return data;
     },
 
     async setAgency(userId, agency) {

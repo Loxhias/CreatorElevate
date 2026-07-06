@@ -472,6 +472,23 @@ async function renderAuditView(container, managers, metricsData) {
 // ── VISTA: GESTIÓN DE MANAGERS (FIX TECLADO) ────────────────────────────────
 function renderManageView(container) {
     container.innerHTML = `
+        <div class="glass-panel animate-fadeIn" style="margin-bottom:1.25rem;">
+            <h2 style="margin-bottom:1rem;">Habilitar registro de Manager</h2>
+            <p style="color:var(--text-secondary); margin-bottom:1.25rem; font-size:0.9rem;">
+                Un manager nuevo (que todavía no tiene cuenta) no puede auto-registrarse hasta que habilites su email acá.
+                Después puede ir a "Crear cuenta" → pestaña "Soy manager" y registrarse con ese mismo email.
+            </p>
+            <div id="m-wl-msg"></div>
+            <div style="display:flex; gap:0.8rem; flex-wrap:wrap;">
+                <input type="email" id="m-wl-email" class="input-control" placeholder="email@ejemplo.com" style="flex:1;min-width:200px;">
+                <select id="m-wl-agency" class="input-control" style="width:auto;">
+                    <option value="latam">🌎 LATAM</option>
+                    <option value="usa">🇺🇸 USA</option>
+                </select>
+                <button id="m-wl-btn" class="btn btn-primary" style="white-space:nowrap;">Habilitar</button>
+            </div>
+        </div>
+
         <div class="glass-panel animate-fadeIn">
             <h2 style="margin-bottom:1rem;">Gestión de Managers</h2>
             <p style="color:var(--text-secondary); margin-bottom:1.5rem; font-size:0.9rem;">Busca un usuario registrado por su email o nombre para asignarle el rol de Manager.</p>
@@ -484,6 +501,28 @@ function renderManageView(container) {
             <div id="m-search-results" style="display:flex; flex-direction:column; gap:0.8rem;"></div>
         </div>
     `;
+
+    const wlEmailInput = container.querySelector('#m-wl-email');
+    const wlAgencySelect = container.querySelector('#m-wl-agency');
+    const wlBtn = container.querySelector('#m-wl-btn');
+    const wlMsg = container.querySelector('#m-wl-msg');
+
+    wlBtn.onclick = async () => {
+        const email = wlEmailInput.value.trim();
+        if (!email) return;
+        wlBtn.disabled = true; wlBtn.textContent = 'Habilitando…';
+        wlMsg.innerHTML = '';
+        try {
+            await profiles.addManagerWhitelist(email, wlAgencySelect.value);
+            wlMsg.innerHTML = `<div class="form-success">✓ ${email} ya puede registrarse como manager.</div>`;
+            wlEmailInput.value = '';
+        } catch (err) {
+            wlMsg.innerHTML = `<div class="form-error">⚠ ${err.message || 'No se pudo habilitar el email.'}</div>`;
+        } finally {
+            wlBtn.disabled = false; wlBtn.textContent = 'Habilitar';
+        }
+    };
+    wlEmailInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); wlBtn.click(); } });
 
     const input = container.querySelector('#m-search-input');
     const results = container.querySelector('#m-search-results');

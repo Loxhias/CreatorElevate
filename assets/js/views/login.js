@@ -38,14 +38,14 @@ export function renderLogin(container) {
         const s = document.createElement('style');
         s.id = 'login-tab-styles';
         s.textContent = `
-            #login-tabs .tab-btn {
+            #login-tabs .tab-btn, #signup-role-tabs .tab-btn {
                 background:transparent;border:none;color:var(--text-muted);
                 font-family:var(--font-sans);font-size:0.82rem;font-weight:600;
                 padding:0.55rem 0.5rem;border-radius:var(--radius-sm);
                 cursor:pointer;transition:all 0.22s ease;
             }
-            #login-tabs .tab-btn:hover { color:var(--text-secondary); background:rgba(255,255,255,0.04);}
-            #login-tabs .tab-btn.active {
+            #login-tabs .tab-btn:hover, #signup-role-tabs .tab-btn:hover { color:var(--text-secondary); background:rgba(255,255,255,0.04);}
+            #login-tabs .tab-btn.active, #signup-role-tabs .tab-btn.active {
                 background:var(--bg-elevated,#141720);color:var(--text-primary);
                 box-shadow:0 2px 8px rgba(0,0,0,0.3);
             }
@@ -133,16 +133,26 @@ export function renderLogin(container) {
     }
 
     function renderSignUp() {
+        let signupRole = 'creator'; // 'creator' | 'manager'
+
         pane.innerHTML = `
             <form id="signup-form">
                 <div id="signup-msg"></div>
                 ${!isSupabaseConfigured ? `
                     <div class="form-error">⚠ El registro requiere Supabase configurado. Estás en modo DEMO.</div>
                 ` : ''}
-                <div class="input-group">
+                <div id="signup-role-tabs" style="display:flex;gap:0.4rem;margin-bottom:1.1rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;">
+                    <button type="button" class="tab-btn active" data-role="creator" style="flex:1;">Soy creador</button>
+                    <button type="button" class="tab-btn" data-role="manager" style="flex:1;">Soy manager</button>
+                </div>
+
+                <div class="input-group" id="su-tt-group">
                     <label for="su-tt">Usuario de TikTok <span style="color:var(--danger)">*</span></label>
                     <input type="text" id="su-tt" class="input-control" placeholder="ej: loxhias (sin @)" required autocomplete="username" ${!isSupabaseConfigured ? 'disabled' : ''}>
                     <small style="display:block;margin-top:0.3rem;font-size:0.7rem;color:var(--text-muted);">Solo puede haber una cuenta por usuario.</small>
+                </div>
+                <div id="su-manager-hint" class="hint-box" style="display:none;margin-bottom:1rem;font-size:0.75rem;">
+                    Un admin tiene que habilitar tu email antes desde "Gestión de Managers". Si todavía no lo hizo, pedíselo primero.
                 </div>
                 <div class="input-group">
                     <label for="su-email">Email</label>
@@ -159,6 +169,22 @@ export function renderLogin(container) {
 
         if (!isSupabaseConfigured) return;
 
+        const ttGroup = pane.querySelector('#su-tt-group');
+        const ttInput = pane.querySelector('#su-tt');
+        const managerHint = pane.querySelector('#su-manager-hint');
+
+        pane.querySelectorAll('#signup-role-tabs .tab-btn').forEach(rBtn => {
+            rBtn.addEventListener('click', () => {
+                pane.querySelectorAll('#signup-role-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+                rBtn.classList.add('active');
+                signupRole = rBtn.dataset.role;
+                const isManager = signupRole === 'manager';
+                ttGroup.style.display = isManager ? 'none' : '';
+                ttInput.required = !isManager;
+                managerHint.style.display = isManager ? '' : 'none';
+            });
+        });
+
         pane.querySelector('#signup-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const tt = pane.querySelector('#su-tt').value.trim().replace(/^@/, '').toLowerCase();
@@ -170,11 +196,9 @@ export function renderLogin(container) {
             const btn = pane.querySelector('button[type=submit]');
             btn.disabled = true; btn.textContent = 'Creando cuenta…';
             try {
-                const res = await auth.signUpCreator({
-                    tiktokUsername: tt,
-                    email,
-                    password: pass,
-                });
+                const res = signupRole === 'manager'
+                    ? await auth.signUpManager({ email, password: pass })
+                    : await auth.signUpCreator({ tiktokUsername: tt, email, password: pass });
 
                 // Si confirmEmail está activo en Supabase, no habrá session.
                 if (!res.session) {
