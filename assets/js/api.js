@@ -467,6 +467,25 @@ export const profiles = {
         return data[0];
     },
 
+    /**
+     * Vincula (o desvincula, con username='') el usuario de TikTok propio de
+     * un manager, para que vea sus propias métricas como creador (nav
+     * "Mis métricas" en main.js, ya condicionado a que este campo exista).
+     */
+    async setTiktokUsername(userId, username) {
+        const clean = san(username || '').trim();
+        const { data, error } = await supabase
+            .from('profiles')
+            .update({ tiktok_username: clean || null })
+            .eq('id', userId)
+            .select();
+        if (error) {
+            if (error.code === '23505') throw new Error('Ese usuario de TikTok ya está vinculado a otra cuenta.');
+            throw error;
+        }
+        return data[0];
+    },
+
     async getById(userId) {
         if (!isSupabaseConfigured) return null;
         const { data, error } = await supabase

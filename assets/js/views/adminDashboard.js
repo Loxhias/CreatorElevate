@@ -450,29 +450,57 @@ function renderManageView(container) {
         results.innerHTML = 'Buscando...';
         try {
             const found = await profiles.searchProfiles(q);
+            const metricsData = store.getMetricsData() || [];
             results.innerHTML = found.map(p => {
                 const ag = p.agency || 'latam';
+                const tk = p.tiktok_username || '';
+                const hasMetrics = tk && metricsData.some(c => (c.username || '').toLowerCase() === tk.toLowerCase());
                 return `
-                <div class="glass-panel" style="padding:0.85rem 1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.display_name || p.email}</div>
-                        <div style="font-size:0.72rem; color:var(--text-secondary);display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.15rem;">
-                            <span style="overflow:hidden;text-overflow:ellipsis;">${p.email}</span>
-                            <span style="background:rgba(124,110,247,0.12);border-radius:999px;padding:0.05rem 0.55rem;font-weight:700;color:var(--primary-light);flex-shrink:0;">${ag === 'usa' ? '🇺🇸 USA' : '🌎 LATAM'}</span>
+                <div class="glass-panel" style="padding:0.85rem 1rem; display:flex; flex-direction:column; gap:0.6rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.6rem;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.display_name || p.email}</div>
+                            <div style="font-size:0.72rem; color:var(--text-secondary);display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.15rem;">
+                                <span style="overflow:hidden;text-overflow:ellipsis;">${p.email}</span>
+                                <span style="background:rgba(124,110,247,0.12);border-radius:999px;padding:0.05rem 0.55rem;font-weight:700;color:var(--primary-light);flex-shrink:0;">${ag === 'usa' ? '🇺🇸 USA' : '🌎 LATAM'}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:0.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
+                            <select class="input-control btn-agency-select" data-id="${p.id}"
+                                style="padding:0.3rem 0.5rem;font-size:0.72rem;border-radius:var(--radius-sm);width:auto;">
+                                <option value="latam" ${ag==='latam'?'selected':''}>🌎 LATAM</option>
+                                <option value="usa"   ${ag==='usa'  ?'selected':''}>🇺🇸 USA</option>
+                            </select>
+                            <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}"
+                                style="background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
+                                ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
+                            </button>
                         </div>
                     </div>
-                    <div style="display:flex;gap:0.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;">
-                        <select class="input-control btn-agency-select" data-id="${p.id}"
-                            style="padding:0.3rem 0.5rem;font-size:0.72rem;border-radius:var(--radius-sm);width:auto;">
-                            <option value="latam" ${ag==='latam'?'selected':''}>🌎 LATAM</option>
-                            <option value="usa"   ${ag==='usa'  ?'selected':''}>🇺🇸 USA</option>
-                        </select>
-                        <button class="btn btn-sm btn-role-toggle" data-id="${p.id}" data-active="${p.is_manager}"
-                            style="background:${p.is_manager ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${p.is_manager ? 'var(--danger)' : 'white'};">
-                            ${p.is_manager ? 'Quitar Manager' : 'Hacer Manager'}
-                        </button>
+                    ${p.is_manager ? `
+                    <div style="display:flex; gap:0.4rem; align-items:center; border-top:1px solid var(--glass-border); padding-top:0.6rem;">
+                        <input type="text" class="input-control tk-username-input" data-id="${p.id}" value="${tk}"
+                            placeholder="Su propio usuario de TikTok (si también es creador)"
+                            style="flex:1;min-width:160px;padding:0.35rem 0.6rem;font-size:0.75rem;">
+                        <button class="btn btn-sm tk-username-save" data-id="${p.id}" style="font-size:0.7rem;padding:0.4rem 0.8rem;white-space:nowrap;">Guardar</button>
                     </div>
+                    ${tk ? `<div style="font-size:0.68rem;margin-left:0.1rem;color:${hasMetrics ? 'var(--accent)' : 'var(--warning)'};">
+                        ${hasMetrics ? '✓ Tiene métricas cargadas — ya puede ver "Mis métricas" en su panel.' : '⚠ Todavía no hay métricas cargadas para este usuario (subilas en "Cargar Datos Mensuales").'}
+                    </div>` : ''}
+                    ` : ''}
                 </div>`; }).join('') || '<p style="text-align:center; padding:1rem;">No se encontraron usuarios.</p>';
+
+            results.querySelectorAll('.tk-username-save').forEach(saveBtn => {
+                saveBtn.onclick = async () => {
+                    const uid = saveBtn.dataset.id;
+                    const tkInput = results.querySelector(`.tk-username-input[data-id="${uid}"]`);
+                    try {
+                        await profiles.setTiktokUsername(uid, tkInput.value);
+                        appState.showToast(tkInput.value.trim() ? 'Usuario de TikTok vinculado' : 'Usuario de TikTok removido', 'success');
+                        doSearch();
+                    } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
+                };
+            });
 
             // Selector de agencia
             results.querySelectorAll('.btn-agency-select').forEach(sel => {
