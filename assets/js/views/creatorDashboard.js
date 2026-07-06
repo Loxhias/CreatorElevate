@@ -209,7 +209,7 @@ function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
                 <div class="metric-left">
                     <div class="metric-title">Diamantes este mes</div>
                     <div class="metric-value text-gradient">${fmt(me.diamonds)}</div>
-                    <div class="metric-subtitle">Mes anterior: ${fmt(dLast)} ${me.diamonds>=dLast?'📈':'📉'}</div>
+                    <div class="metric-subtitle" style="color:var(--text-muted);">⏮ Mes anterior: <strong style="color:var(--text-secondary);">${fmt(dLast)}</strong> ${me.diamonds>=dLast?'📈':'📉'}</div>
                 </div>
                 <div class="metric-icon-box" style="background:rgba(124,110,247,0.12);">💎</div>
             </div>
@@ -246,6 +246,45 @@ function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
         </div>`;
 }
 
+// Notación compacta (69.958 -> "69.9k") para chips angostos donde el número
+// completo no entra o distrae del punto (cuánto falta), no del valor exacto.
+function fmtCompact(n) {
+    if (n >= 1000000) { const v = Math.floor(n / 100000) / 10; return (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1)) + 'M'; }
+    if (n >= 1000)    { const v = Math.floor(n / 100) / 10;    return (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1)) + 'k'; }
+    return String(n);
+}
+// Barra de progreso fina sin labels (van en la fila statRow de arriba) — para
+// listas compactas de requisitos (Premio en Diamantes, Suscripción).
+function miniBar(value, max, color) {
+    const p = Math.min(100, max > 0 ? (value / max) * 100 : 0);
+    return `<div style="height:4px;border-radius:999px;background:rgba(255,255,255,0.07);overflow:hidden;margin-bottom:0.65rem;">
+        <div style="height:100%;width:${p}%;background:${color};border-radius:999px;transition:width 0.5s ease;"></div>
+    </div>`;
+}
+// Fila label+valor de una línea (icono + texto a la izquierda, valor +
+// estado a la derecha) — reemplaza los checklists verbosos de 2 líneas.
+function statRow(icon, label, valueText, deltaText, deltaColor) {
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;margin-bottom:0.3rem;">
+        <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--text-secondary);"><span>${icon}</span>${label}</div>
+        <div style="font-size:0.78rem;text-align:right;white-space:nowrap;">
+            <strong style="color:var(--text-primary);">${valueText}</strong>
+            ${deltaText ? ` <span style="color:${deltaColor};font-weight:700;">${deltaText}</span>` : ''}
+        </div>
+    </div>`;
+}
+// Chip/pill de requisito — para la fila de "Horas / Días / Nivel" del bono en
+// efectivo. statusColor es un hex literal (no var()) porque se usa para
+// derivar el fondo/borde translúcidos vía alpha hex.
+function reqPill(icon, label, valueText, statusColor) {
+    return `<div style="display:flex;align-items:center;gap:0.55rem;padding:0.6rem 0.9rem;border-radius:999px;background:${statusColor}1a;border:1px solid ${statusColor}55;flex:1;min-width:150px;">
+        <span style="font-size:1rem;">${icon}</span>
+        <div style="display:flex;flex-direction:column;line-height:1.25;min-width:0;">
+            <span style="font-size:0.6rem;color:var(--text-muted);white-space:nowrap;">${label}</span>
+            <span style="font-size:0.78rem;font-weight:800;color:${statusColor};white-space:nowrap;">${valueText}</span>
+        </div>
+    </div>`;
+}
+
 function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, proj, projStatus, cashAmt) {
     const agencyCashBonuses = getCashBonuses(me.agency);
     const advanceTarget = nextTier ? nextTier.range : me.diamonds;
@@ -253,9 +292,9 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
 
     // ── 1. Nivel / progreso de diamantes ──────────────────────────────────
     const levelCard = `
-        <div class="glass-panel section-card" style="margin-bottom:0.85rem;${pct>=70&&nextTier?'border-color:rgba(255,181,71,0.25);':''}">
+        <div class="glass-panel section-card" style="margin-bottom:0.85rem;border-left:3px solid var(--primary);${pct>=70&&nextTier?'border-color:rgba(255,181,71,0.25);border-left-color:var(--warning);':''}">
             <div class="section-header">
-                <div class="section-icon">💎</div>
+                <div class="section-icon" style="background:rgba(124,110,247,0.12);color:var(--primary);">💎</div>
                 <div>
                     <h3 style="font-size:0.92rem;">${nextTier?`Subir a ${renderTier(nextTier, '1rem')} ${nextTier.name}`:'¡Nivel máximo!'}</h3>
                     <p class="text-xs text-muted">Nivel actual: ${renderTier(curTier, '0.85rem')} ${curTier.name} · Meta: ${fmt(advanceTarget)} 💎</p>
@@ -322,7 +361,7 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
         </div>`;
 
     const cashCard = `
-        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:${cashOk?'rgba(0,217,166,0.04)':'rgba(255,181,71,0.03)'};">
+        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:${cashOk?'rgba(0,217,166,0.04)':'rgba(255,181,71,0.03)'};border-left:3px solid ${cashOk?'var(--accent)':'var(--warning)'};">
             <!-- Header -->
             <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.15rem;">
                 <div style="display:flex;align-items:center;gap:0.6rem;">
@@ -382,21 +421,11 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                 <p class="text-sm" style="color:${cashOk?'var(--accent)':projStatus==='ahead'||projStatus==='on-track'?'var(--warning)':'var(--text-secondary)'};">${inspireMsg}</p>
             </div>
 
-            <!-- Requirements checklist (compact) -->
-            <div style="display:flex;flex-direction:column;gap:0.35rem;">
-                <div style="display:flex;align-items:center;gap:0.45rem;font-size:0.78rem;">
-                    <span>${reqH15?'✅':'🔲'}</span>
-                    <span style="color:var(--text-secondary);">Horas LIVE: <strong style="color:var(--text-primary);">${h.toFixed(1)}h / 15h</strong> ${reqH15?'✓':`— ¡faltan solo ${(15-h).toFixed(1)}h!`}</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:0.45rem;font-size:0.78rem;">
-                    <span>${reqDy7?'✅':'🔲'}</span>
-                    <span style="color:var(--text-secondary);">Días activos: <strong style="color:var(--text-primary);">${dy} / 7 días</strong> ${reqDy7?'✓':`— ¡${7-dy} día${7-dy===1?'':'s'} más y lo activas!`}</span>
-                </div>
-                ${assignedTier ? `
-                <div style="display:flex;align-items:center;gap:0.45rem;font-size:0.78rem;">
-                    <span>${reqMaintains?'✅':'🔲'}</span>
-                    <span style="color:var(--text-secondary);">Nivel asignado: <strong style="color:var(--text-primary);">${fmt(me.diamonds)} / ${fmt(assignedTier.range)} 💎</strong> ${reqMaintains?'✓':`— ¡${fmt(diamMissing)} para activarlo!`}</span>
-                </div>` : ''}
+            <!-- Requisitos (chips compactos) -->
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.75rem;">
+                ${reqPill(reqH15?'✅':'⏱️', 'Horas LIVE', `${h.toFixed(1)}h / ${requirements.cashBonus.minHours}h`, reqH15?'#00d9a6':'#ffb547')}
+                ${reqPill(reqDy7?'✅':'📅', 'Días activos', `${dy} / ${requirements.cashBonus.minDays} días`, reqDy7?'#00d9a6':'#ffb547')}
+                ${assignedTier ? reqPill('📈', 'Nivel Mínimo', `${fmtCompact(me.diamonds)} / ${fmtCompact(assignedTier.range)}`, '#7c6ef7') : ''}
             </div>
         </div>`;
 
@@ -416,110 +445,77 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
     const estimatedTotal = estimatedBase ? Math.round(estimatedBase * (1 + battleBonus / 100)) : null;
 
     const diamCard = `
-        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:rgba(124,110,247,0.03);">
+        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:rgba(0,217,166,0.03);border-left:3px solid var(--accent);">
             <!-- Header -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.85rem;">
                 <div style="display:flex;align-items:center;gap:0.6rem;">
-                    <div class="section-icon" style="background:rgba(124,110,247,0.1);">💎</div>
+                    <div class="section-icon" style="background:rgba(0,217,166,0.12);color:var(--accent);">💎</div>
                     <div>
                         <h3 style="font-size:0.92rem;">Premio en Diamantes</h3>
-                        <p class="text-xs text-muted">Req: ${requirements.diamondPrize.minHours}h · ${requirements.diamondPrize.minDays} días activos</p>
+                        <p class="text-xs text-muted">Requisitos: <strong style="color:var(--accent);">${requirements.diamondPrize.minHours}h</strong> · <strong style="color:var(--accent);">${requirements.diamondPrize.minDays} días activos</strong></p>
                     </div>
                 </div>
                 ${estimatedTotal !== null ? `
                 <div style="text-align:right;flex-shrink:0;">
                     <div style="font-size:0.62rem;color:var(--text-muted);margin-bottom:0.1rem;">${diamOk ? 'Premio estimado' : 'Objetivo'}</div>
-                    <div style="font-size:1.1rem;font-weight:800;color:${diamOk ? 'var(--primary)' : 'rgba(124,110,247,0.6)'};">${fmt(estimatedTotal)} 💎</div>
+                    <div style="font-size:1.1rem;font-weight:800;color:${diamOk ? 'var(--accent)' : 'rgba(0,217,166,0.55)'};">${fmt(estimatedTotal)} 💎</div>
                     ${battleBonus > 0 ? `<div style="font-size:0.62rem;color:var(--gold);">+${battleBonus}% por batallas</div>` : ''}
                 </div>` : ''}
             </div>
 
-            <!-- Horas de LIVE -->
-            <div style="margin-bottom:0.6rem;">
-                <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.2rem;">
-                    <span>${reqH90 ? '✅' : '🔲'}</span>
-                    <span style="font-size:0.78rem;color:var(--text-secondary);">Horas LIVE <strong style="color:var(--text-primary);">${h.toFixed(1)}h / ${requirements.diamondPrize.minHours}h</strong> ${reqH90 ? '✓' : `— faltan ${(requirements.diamondPrize.minHours - h).toFixed(1)}h`}</span>
-                </div>
-                ${pBar(Math.min(h, requirements.diamondPrize.minHours), requirements.diamondPrize.minHours,
-                    reqH90 ? 'linear-gradient(90deg,var(--primary),var(--accent))' : 'linear-gradient(90deg,var(--primary),var(--secondary))',
-                    `${h.toFixed(1)}h`, `${requirements.diamondPrize.minHours}h`)}
-            </div>
+            ${statRow('🕐', 'Horas LIVE', `${h.toFixed(1)}h / ${requirements.diamondPrize.minHours}h`, reqH90 ? '✓' : `(Faltan ${(requirements.diamondPrize.minHours - h).toFixed(1)}h)`, reqH90 ? 'var(--accent)' : 'var(--text-muted)')}
+            ${miniBar(h, requirements.diamondPrize.minHours, reqH90 ? 'linear-gradient(90deg,var(--accent),#00b891)' : 'linear-gradient(90deg,var(--primary),var(--secondary))')}
 
-            <!-- Días activos -->
-            <div style="margin-bottom:0.6rem;">
-                <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.2rem;">
-                    <span>${reqDy22 ? '✅' : '🔲'}</span>
-                    <span style="font-size:0.78rem;color:var(--text-secondary);">Días activos <strong style="color:var(--text-primary);">${dy} / ${requirements.diamondPrize.minDays}</strong> ${reqDy22 ? '✓' : `— faltan ${requirements.diamondPrize.minDays - dy}`}</span>
-                </div>
-                ${pBar(Math.min(dy, requirements.diamondPrize.minDays), requirements.diamondPrize.minDays,
-                    reqDy22 ? 'linear-gradient(90deg,var(--secondary),var(--accent))' : 'linear-gradient(90deg,var(--secondary),#c026d3)',
-                    `${dy} días`, `${requirements.diamondPrize.minDays} días`)}
-            </div>
+            ${statRow('📅', 'Días Activos', `${dy} / ${requirements.diamondPrize.minDays}`, reqDy22 ? '✓' : `(Faltan ${requirements.diamondPrize.minDays - dy})`, reqDy22 ? 'var(--accent)' : 'var(--text-muted)')}
+            ${miniBar(dy, requirements.diamondPrize.minDays, reqDy22 ? 'linear-gradient(90deg,var(--accent),#00b891)' : 'linear-gradient(90deg,var(--secondary),#c026d3)')}
 
-            <!-- Batallas (bonus extra) -->
-            <div>
-                <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.2rem;">
-                    <span>⚔️</span>
-                    <span style="font-size:0.78rem;color:var(--text-secondary);">Batallas <strong style="color:var(--text-primary);">${me.battles} / ${maxBattlesCfg}</strong>
-                    ${battleBonus > 0
-                        ? `→ <strong style="color:var(--gold);">+${battleBonus}%</strong> extra${me.battles < maxBattlesCfg ? ` · con ${nextBattleMilestone - me.battles} más sumas +10%` : ' · ¡máximo!'}`
-                        : `— con ${nextBattleMilestone} batallas ganas +10% de premio`}
-                    </span>
-                </div>
-                ${pBar(Math.min(me.battles, maxBattlesCfg), maxBattlesCfg,
-                    'linear-gradient(90deg,var(--warning),#f97316)',
-                    `${me.battles} batallas`, `${maxBattlesCfg} máx.`)}
-            </div>
+            ${statRow('⚔️', 'Batallas', `${me.battles} / ${maxBattlesCfg}`, battleBonus > 0 ? `+${battleBonus}% Premio` : `(A las ${nextBattleMilestone} bonificás)`, battleBonus > 0 ? 'var(--gold)' : 'var(--text-muted)')}
+            ${miniBar(me.battles, maxBattlesCfg, 'linear-gradient(90deg,var(--warning),#f97316)')}
 
-            <p class="text-sm" style="color:${diamOk ? 'var(--primary)' : 'var(--text-muted)'};margin-top:0.6rem;">
-                ${diamOk
-                    ? `✅ ¡Premio desbloqueado! ${battleBonus > 0 ? `Con el +${battleBonus}% de batallas recibes ${fmt(estimatedTotal)} 💎.` : `Recibes ${fmt(estimatedBase)} 💎.`}`
-                    : `⚠ Completa las horas y días para desbloquear el Premio en Diamantes.`}
-            </p>
+            <div style="display:flex;align-items:center;gap:0.5rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);padding:0.55rem 0.75rem;margin-top:0.5rem;font-size:0.76rem;color:${diamOk ? 'var(--accent)' : 'var(--text-muted)'};">
+                <span>${diamOk ? '✅' : '🔒'}</span>
+                <span>${diamOk
+                    ? `¡Premio desbloqueado! ${battleBonus > 0 ? `Con el +${battleBonus}% de batallas recibís ${fmt(estimatedTotal)} 💎.` : `Recibís ${fmt(estimatedBase)} 💎.`}`
+                    : 'Completa las horas y días solicitados para desbloquear tu Premio en Diamantes.'}</span>
+            </div>
         </div>`;
 
     // ── 4. Suscripción Interactik App ──────────────────────────────────────
     const reqDy15 = dy>=subscriptionRequirements.minDays, reqD80 = me.diamonds>=subscriptionRequirements.minDiamonds;
     const subOk = reqDy15 && reqD80;
+    // "Casi listo": al menos uno de los dos requisitos está a >=80% aunque el
+    // otro esté lejos — igual vale la pena avisar que está cerca de algo.
+    const subPctDays  = subscriptionRequirements.minDays > 0 ? dy / subscriptionRequirements.minDays : 1;
+    const subPctDiam  = subscriptionRequirements.minDiamonds > 0 ? me.diamonds / subscriptionRequirements.minDiamonds : 1;
+    const subAlmostThere = !subOk && (subPctDays >= 0.8 || subPctDiam >= 0.8);
+
     const subCard = `
-        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:rgba(244,113,181,0.03);">
+        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:rgba(244,113,181,0.03);border-left:3px solid var(--secondary);">
             <!-- Header -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.85rem;">
                 <div style="display:flex;align-items:center;gap:0.6rem;">
-                    <div class="section-icon" style="background:rgba(244,113,181,0.1);">🎟️</div>
+                    <div class="section-icon" style="background:rgba(244,113,181,0.12);color:var(--secondary);">🎟️</div>
                     <div>
                         <h3 style="font-size:0.92rem;">Suscripción Interactik App</h3>
-                        <p class="text-xs text-muted">Req: ${subscriptionRequirements.minDays} días activos · ${fmt(subscriptionRequirements.minDiamonds)} 💎</p>
+                        <p class="text-xs text-muted">Req: <strong style="color:var(--secondary);">${subscriptionRequirements.minDays} días activos</strong> · <strong style="color:var(--secondary);">${fmt(subscriptionRequirements.minDiamonds)} 💎</strong></p>
                     </div>
                 </div>
-                ${subOk ? `<div style="background:rgba(244,113,181,0.15);border:1px solid rgba(244,113,181,0.35);border-radius:999px;padding:0.2rem 0.75rem;font-size:0.68rem;font-weight:700;color:#f471b5;">✓ Activa</div>` : ''}
+                ${subOk ? `<div style="background:rgba(244,113,181,0.15);border:1px solid rgba(244,113,181,0.35);border-radius:999px;padding:0.2rem 0.75rem;font-size:0.68rem;font-weight:700;color:#f471b5;flex-shrink:0;">✓ Activa</div>` : ''}
             </div>
 
-            <!-- Días activos -->
-            <div style="margin-bottom:0.6rem;">
-                <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.2rem;">
-                    <span>${reqDy15 ? '✅' : '🔲'}</span>
-                    <span style="font-size:0.78rem;color:var(--text-secondary);">Días activos <strong style="color:var(--text-primary);">${dy} / ${subscriptionRequirements.minDays}</strong> ${reqDy15 ? '✓' : `— faltan ${subscriptionRequirements.minDays - dy}`}</span>
+            ${statRow('📅', 'Días Activos', `${dy} / ${subscriptionRequirements.minDays}`, reqDy15 ? '✓' : `(Faltan ${subscriptionRequirements.minDays - dy})`, reqDy15 ? '#f471b5' : 'var(--text-muted)')}
+            ${miniBar(dy, subscriptionRequirements.minDays, reqDy15 ? 'linear-gradient(90deg,#f471b5,#ec4899)' : 'linear-gradient(90deg,rgba(244,113,181,0.4),#f471b5)')}
+
+            ${statRow('💎', 'Diamantes Requeridos', `${fmt(me.diamonds)} / ${fmt(subscriptionRequirements.minDiamonds)}`, reqD80 ? '✓' : `(${Math.round(subPctDiam * 100)}%)`, reqD80 ? '#f471b5' : 'var(--accent)')}
+            ${miniBar(me.diamonds, subscriptionRequirements.minDiamonds, reqD80 ? 'linear-gradient(90deg,#f471b5,#ec4899)' : 'linear-gradient(90deg,rgba(244,113,181,0.4),#f471b5)')}
+
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);padding:0.55rem 0.75rem;margin-top:0.5rem;">
+                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.76rem;color:${subOk ? '#f471b5' : 'var(--text-muted)'};">
+                    <span>${subOk ? '✅' : '🔒'}</span>
+                    <span>${subOk ? '¡Elegible para la Suscripción Interactik App gratuita!' : 'Completa los requisitos para obtener el acceso.'}</span>
                 </div>
-                ${pBar(Math.min(dy, subscriptionRequirements.minDays), subscriptionRequirements.minDays,
-                    reqDy15 ? 'linear-gradient(90deg,#f471b5,#ec4899)' : 'linear-gradient(90deg,rgba(244,113,181,0.4),#f471b5)',
-                    `${dy} días`, `${subscriptionRequirements.minDays} días`)}
+                ${subAlmostThere ? `<div style="background:rgba(244,113,181,0.18);border:1px solid rgba(244,113,181,0.4);border-radius:999px;padding:0.15rem 0.6rem;font-size:0.65rem;font-weight:800;color:#f471b5;flex-shrink:0;">¡CASI LISTO!</div>` : ''}
             </div>
-
-            <!-- Diamantes -->
-            <div>
-                <div style="display:flex;align-items:center;gap:0.45rem;margin-bottom:0.2rem;">
-                    <span>${reqD80 ? '✅' : '🔲'}</span>
-                    <span style="font-size:0.78rem;color:var(--text-secondary);">Diamantes <strong style="color:var(--text-primary);">${fmt(me.diamonds)} / ${fmt(subscriptionRequirements.minDiamonds)} 💎</strong> ${reqD80 ? '✓' : `— faltan ${fmt(subscriptionRequirements.minDiamonds - me.diamonds)}`}</span>
-                </div>
-                ${pBar(Math.min(me.diamonds, subscriptionRequirements.minDiamonds), subscriptionRequirements.minDiamonds,
-                    reqD80 ? 'linear-gradient(90deg,#f471b5,#ec4899)' : 'linear-gradient(90deg,rgba(244,113,181,0.4),#f471b5)',
-                    `${fmt(me.diamonds)} 💎`, `${fmt(subscriptionRequirements.minDiamonds)} 💎`)}
-            </div>
-
-            <p class="text-sm" style="color:${subOk ? '#f471b5' : 'var(--text-muted)'};margin-top:0.6rem;">
-                ${subOk ? '✅ ¡Elegible para la Suscripción Interactik App gratuita!' : '⚠ Completa los requisitos para obtener la suscripción.'}
-            </p>
         </div>`;
 
 
@@ -1044,6 +1040,25 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const monthName = now.toLocaleString(getLang() === 'en' ? 'en' : 'es', { month: 'long' });
     const year = now.getFullYear();
 
+    // ── "Potencial" del header: si este mes llega al próximo nivel, sus
+    // propias ganancias de TikTok a ESE nivel + el bono en efectivo que
+    // desbloquearía (mismo cash-bonus-por-nivel-anterior que cashCard más
+    // abajo, en tabGoals). Es el número que más motiva — por eso va grande y
+    // destacado en el header, mientras que lo ya ganado hoy queda chico
+    // (dashboard de incentivos: importa lo que falta, no lo ya hecho).
+    const potentialTarget      = nextTier ? nextTier.range : curTier.range;
+    const potentialOwnEarnings = potentialTarget / DIAMONDS_PER_USD;
+    const nextTierIdxForBonus  = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx + 1;
+    const potentialCashBonus   = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus].subio : null;
+    const potentialTotal       = potentialOwnEarnings + (potentialCashBonus || 0);
+    const potentialDiamIdx     = getIdx(potentialTarget, diamondRewards);
+    const potentialDiamPrize   = potentialDiamIdx >= 0 ? diamondRewards[potentialDiamIdx].reward : null;
+    const hasUpside            = potentialTarget > me.diamonds || (potentialCashBonus || 0) > cashAmt;
+    // Si ya no hay upside (tope real superado), mostrar el total REAL de este
+    // mes (ganancias + bono ya asegurado), no el del umbral del tier — que
+    // podría quedar más bajo que lo ya ganado.
+    const realTotal = Number(estimatedEarnings) + cashAmt;
+
     // Inject shell with tab nav
     container.innerHTML = `
         <!-- Brand line / Back Button -->
@@ -1052,23 +1067,46 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             ${isAuditing ? `<button id="back-to-list" class="btn btn-sm" style="padding:0.4rem 0.8rem;font-size:0.7rem;background:rgba(255,255,255,0.05);border:1px solid var(--glass-border);">← Volver al Listado</button>` : ''}
         </div>
 
-        <!-- Creator Profile -->
-        <div style="display:flex;align-items:center;gap:0.85rem;margin-bottom:1rem;padding:0.75rem 1rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-md);border:1px solid rgba(255,255,255,0.07);">
-            <div id="creator-avatar" style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-size:1.15rem;font-weight:800;flex-shrink:0;border:2px solid rgba(0,217,166,0.3);overflow:hidden;position:relative;">
-                <span id="creator-avatar-initial" style="position:absolute;">${me.username ? me.username.charAt(0).toUpperCase() : '?'}</span>
-                    <img
-                        id="creator-avatar-img"
-                        src="https://unavatar.io/tiktok/${encodeURIComponent(me.username)}"
-                        alt="@${me.username}"
-                        style="width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.3s ease;"
-                        referrerpolicy="no-referrer"
-                        onload="this.style.opacity='1';document.getElementById('creator-avatar-initial').style.opacity='0';"
-                        onerror="this.style.display='none';"
-                    />
-            </div>
-            <div>
-                <div style="font-weight:700;font-size:0.9rem;color:var(--text-primary);">@${me.username}</div>
-                <div style="display:flex;align-items:center;gap:0.3rem;font-size:0.67rem;color:var(--text-muted);">${renderTier(curTier, '0.9rem')} ${curTier.name} · Panel personal · ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
+        <!-- Header: perfil + ganancias potenciales (fusionados — dashboard de incentivos, el número grande es el que motiva) -->
+        <div class="glass-panel animate-fadeIn" style="position:relative;overflow:hidden;padding:1.1rem 1.3rem;margin-bottom:1rem;border-color:${hasUpside ? 'rgba(255,181,71,0.35)' : 'rgba(0,217,166,0.3)'};background:${hasUpside ? 'linear-gradient(135deg,rgba(255,181,71,0.07),rgba(255,85,105,0.03))' : 'linear-gradient(135deg,rgba(0,217,166,0.07),rgba(124,110,247,0.04))'};">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:0.85rem;min-width:0;">
+                    <div style="position:relative;flex-shrink:0;">
+                        <div id="creator-avatar" style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--secondary));display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:800;overflow:hidden;position:relative;border:2px solid rgba(0,217,166,0.3);">
+                            <span id="creator-avatar-initial" style="position:absolute;">${me.username ? me.username.charAt(0).toUpperCase() : '?'}</span>
+                            <img
+                                id="creator-avatar-img"
+                                src="https://unavatar.io/tiktok/${encodeURIComponent(me.username)}"
+                                alt="@${me.username}"
+                                style="width:100%;height:100%;object-fit:cover;border-radius:50%;position:absolute;top:0;left:0;opacity:0;transition:opacity 0.3s ease;"
+                                referrerpolicy="no-referrer"
+                                onload="this.style.opacity='1';document.getElementById('creator-avatar-initial').style.opacity='0';"
+                                onerror="this.style.display='none';"
+                            />
+                        </div>
+                        <div style="position:absolute;bottom:-3px;right:-6px;background:var(--primary);color:#fff;font-size:0.58rem;font-weight:800;padding:0.1rem 0.4rem;border-radius:999px;border:2px solid var(--bg-surface);white-space:nowrap;line-height:1.3;">LVL ${curTier.level}</div>
+                    </div>
+                    <div style="min-width:0;">
+                        <div style="display:flex;align-items:center;gap:0.3rem;font-weight:700;font-size:0.9rem;color:var(--text-primary);">
+                            <span style="overflow:hidden;text-overflow:ellipsis;">@${me.username}</span>
+                            ${profile?.whatsapp_number ? `<span title="WhatsApp verificado" style="color:#25d366;font-size:0.75rem;flex-shrink:0;">✓</span>` : ''}
+                        </div>
+                        <div style="font-size:0.67rem;color:var(--text-muted);white-space:nowrap;">Ganancias actuales: <strong style="color:var(--text-secondary);">$${Number(estimatedEarnings).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2})}</strong> · ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
+                    </div>
+                </div>
+
+                <div style="text-align:right;flex-shrink:0;">
+                    ${hasUpside ? `
+                    <div style="font-size:0.66rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--gold);margin-bottom:0.1rem;">📣 Tu potencial ${nextTier ? `si llegás a ${nextTier.name}` : 'este mes'}</div>
+                    <div style="font-size:clamp(1.7rem,6vw,2.3rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#ffb547,#ff5569);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 14px rgba(255,181,71,0.3));">$${fmt(potentialTotal)}</div>
+                    <div style="font-size:0.65rem;color:var(--text-secondary);margin-top:0.2rem;">${fmt(potentialTarget)} 💎 (~$${fmt(potentialOwnEarnings)})${potentialCashBonus ? ` + $${potentialCashBonus} bono en efectivo` : ''}</div>
+                    ${potentialDiamPrize ? `<div style="font-size:0.6rem;color:var(--text-muted);margin-top:0.1rem;">Y hasta ${fmt(potentialDiamPrize)} 💎 de premio cumpliendo objetivos de nivel</div>` : ''}
+                    ` : `
+                    <div style="font-size:0.66rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:var(--accent);margin-bottom:0.1rem;">🏆 ¡Ya estás en tu tope de este mes!</div>
+                    <div style="font-size:clamp(1.7rem,6vw,2.3rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">$${fmt(realTotal)}</div>
+                    <div style="font-size:0.65rem;color:var(--text-secondary);margin-top:0.2rem;">Sos de los mejores creadores de la agencia.</div>
+                    `}
+                </div>
             </div>
         </div>
 
@@ -1125,54 +1163,6 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
         ${!isAuditing ? renderIncentiveHero({ me, h, dy, dLeft, meetsCash, currCashIdx, lastMonthIdx, trend, agencyCashBonuses, nextTier, curTier }) : ''}
 
-        <!-- Estimated Earnings Hero -->
-        ${(() => {
-            // "Potencial" = si este mes llega al próximo nivel: sus propias
-            // ganancias de TikTok a ESE nivel + el bono en efectivo que
-            // desbloquearía (mismo cash-bonus-por-nivel-anterior que usa
-            // cashCard más abajo). Es el número que más motiva — por eso va
-            // grande y destacado, mientras que lo ya ganado hoy queda chico
-            // (dashboard de incentivos: lo importante es lo que falta, no lo
-            // que ya está hecho).
-            const potentialTarget      = nextTier ? nextTier.range : curTier.range;
-            const potentialOwnEarnings = potentialTarget / DIAMONDS_PER_USD;
-            const nextTierIdxForBonus  = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx + 1;
-            const potentialCashBonus   = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus].subio : null;
-            const potentialTotal       = potentialOwnEarnings + (potentialCashBonus || 0);
-            const potentialDiamIdx     = getIdx(potentialTarget, diamondRewards);
-            const potentialDiamPrize   = potentialDiamIdx >= 0 ? diamondRewards[potentialDiamIdx].reward : null;
-            const hasUpside = potentialTarget > me.diamonds || (potentialCashBonus || 0) > cashAmt;
-            // Si ya no hay upside (tope real superado), mostrar el total REAL
-            // de este mes (ganancias + bono ya asegurado), no el del umbral
-            // del tier — que podría quedar más bajo que lo ya ganado.
-            const realTotal = Number(estimatedEarnings) + cashAmt;
-
-            return `
-            <div class="glass-panel animate-fadeIn" style="padding:1.2rem 1.4rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,181,71,0.08),rgba(255,85,105,0.04));border-color:rgba(255,181,71,0.3);text-align:center;overflow:hidden;position:relative;">
-                <div style="display:flex;align-items:baseline;justify-content:center;gap:0.5rem;margin-bottom:0.15rem;">
-                    <span style="font-size:0.65rem;color:var(--text-muted);">Ganancias actuales:</span>
-                    <span style="font-size:0.95rem;font-weight:800;color:var(--text-secondary);">$${Number(estimatedEarnings).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-                </div>
-
-                ${hasUpside ? `
-                <div style="font-size:0.7rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);margin:0.6rem 0 0.2rem;">🚀 Tu potencial ${nextTier ? `si llegás a ${nextTier.name}` : 'este mes'}</div>
-                <div style="font-size:clamp(2.3rem,9vw,3.4rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#ffb547,#ff5569);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 20px rgba(255,181,71,0.35));">
-                    $${fmt(potentialTotal)}
-                </div>
-                <div style="font-size:0.68rem;color:var(--text-secondary);margin-top:0.4rem;">
-                    ${fmt(potentialTarget)} 💎 (~$${fmt(potentialOwnEarnings)})${potentialCashBonus ? ` + $${potentialCashBonus} de bono en efectivo` : ''}
-                </div>
-                ${potentialDiamPrize ? `<div style="font-size:0.62rem;color:var(--text-muted);margin-top:0.15rem;">+ hasta ${fmt(potentialDiamPrize)} 💎 de premio (cumpliendo horas/días de ese nivel)</div>` : ''}
-                ` : `
-                <div style="font-size:0.7rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin:0.6rem 0 0.2rem;">🏆 ¡Ya estás en tu tope de este mes!</div>
-                <div style="font-size:clamp(2.3rem,9vw,3.4rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
-                    $${fmt(realTotal)}
-                </div>
-                <div style="font-size:0.68rem;color:var(--text-secondary);margin-top:0.4rem;">Sos de los mejores creadores de la agencia este mes.</div>
-                `}
-            </div>`;
-        })()}
-
         <!-- Tab Nav -->
         <div id="creator-tabs" style="display:flex;gap:0.35rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
             <button class="tab-btn active" data-tab="metrics"  style="flex-shrink:0;white-space:nowrap;">${t('tab.metrics')}</button>
@@ -1201,7 +1191,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
                 cursor: pointer; transition: all 0.22s ease; letter-spacing: 0.02em;
             }
             .tab-btn:hover { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
-            .tab-btn.active { background: var(--bg-elevated, #141720); color: var(--text-primary); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+            .tab-btn.active { background: linear-gradient(135deg, rgba(0,217,166,0.16), rgba(124,110,247,0.1)); color: var(--text-primary); box-shadow: 0 2px 10px rgba(0,217,166,0.12), inset 0 0 0 1px rgba(0,217,166,0.25); }
             #creator-tabs::-webkit-scrollbar { display: none; }
         `;
         document.head.appendChild(s);
