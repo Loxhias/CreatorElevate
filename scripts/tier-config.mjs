@@ -59,76 +59,106 @@ export const requirements = {
     diamondPrize: { minHours: 90, minDays: 22, maxBattles: 500 },
 };
 
-// Encuentra el tier de bono más alto cuyo umbral ya cubre "diamonds" (ej. el
-// umbral del PRÓXIMO nivel visual, para estimar cuánto podría ganar si llega).
-function findBonusTier(diamonds, bonusTable) {
-    let match = null;
-    for (const tier of bonusTable) {
-        if (diamonds >= tier.range) match = tier;
+function fmt(n) { return Math.round(n).toLocaleString('es'); }
+
+// Índice del tier más alto de bonusTable cuyo umbral ya cubre "diamonds"
+// (-1 si todavía no llega ni al primero). Misma lógica que getIdx() en
+// creatorDashboard.js, aplicada acá a las tablas de bono en efectivo.
+function tierIdx(diamonds, bonusTable) {
+    for (let i = bonusTable.length - 1; i >= 0; i--) {
+        if (diamonds >= bonusTable[i].range) return i;
     }
-    return match;
+    return -1;
+}
+
+function daysElapsedInMonth() { return new Date().getDate(); }
+function daysInCurrentMonth() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 }
 
 /**
- * Calcula el objetivo más relevante para mostrar en el mensaje de progreso.
- * Devuelve un string corto en texto plano, listo para la variable {{6}} del template.
- *
- * Nota: el bono que menciona es una ESTIMACIÓN (el monto "subió de nivel" de
- * ese umbral), no el cálculo exacto — el monto real depende de comparar con
- * el mes anterior (subió/mantuvo/bajó), lógica que ya vive en
- * creatorDashboard.js y que deliberadamente no se replica acá para no
- * mantener el mismo cálculo en 3 lugares distintos.
+ * Arma el mensaje de progreso detallado para la variable {{6}} del template
+ * de WhatsApp (texto libre, no requiere re-aprobación de Meta). Incluye:
+ *   - Tendencia de ritmo diario vs. el mes anterior.
+ *   - Estado de días válidos y horas de LIVE (mínimo del bono / tope élite).
+ *   - Bono en efectivo objetivo calculado según el NIVEL DEL MES ANTERIOR
+ *     (retener ese nivel o subir al siguiente), no un umbral genérico.
+ * Devuelve un string con saltos de línea, listo para mandar tal cual.
  */
-export function computeNextObjective({ diamonds, validDays, liveHours, agency }) {
-    const tiers = visualTiers;
-    let curIdx = -1;
-    for (let i = tiers.length - 1; i >= 0; i--) {
-        if (diamonds >= tiers[i].range) { curIdx = i; break; }
-    }
-    const nextTier = curIdx + 1 < tiers.length ? tiers[curIdx + 1] : null;
-
-    if (nextTier) {
-        const missing = nextTier.range - diamonds;
-        const cashTier = findBonusTier(nextTier.range, getCashBonuses(agency));
-        const diamondTier = findBonusTier(nextTier.range, diamondRewards);
-        const ownEarnings = Math.round(nextTier.range / DIAMONDS_PER_USD);
-        const perks = [];
-        if (cashTier) perks.push(`hasta $${cashTier.subio} de bono en efectivo`);
-        if (diamondTier) perks.push(`${diamondTier.reward.toLocaleString('es')} 💎 de premio`);
-        const agencyPerksText = perks.length
-            ? ` Si lo alcanzás, podrías ganar ${perks.join(' + ')} de la agencia (cumpliendo el mínimo de días y horas de ese nivel).`
-            : '';
-        return `Te faltan ${missing.toLocaleString('es')} 💎 para llegar a ${nextTier.name}.${agencyPerksText} `
-            + `Además, con ${nextTier.range.toLocaleString('es')} 💎 acumulados tus propias ganancias de TikTok rondarían los $${ownEarnings} USD.`;
-    }
-
-    // Ya está en el nivel máximo (Nivel 10) — no hay "próximo", pero merece el
-    // mismo detalle que cualquier otro nivel: bono real de ESE nivel + estimado
-    // de ganancias propias, no solo si cumple o no los requisitos mínimos.
-    const cashTier = findBonusTier(diamonds, getCashBonuses(agency));
-    const diamondTier = findBonusTier(diamonds, diamondRewards);
+export function computeNextObjective({ diamonds, diamondsLastMonth = 0, validDays, liveHours, agency }) {
+    const agencyCashBonuses = getCashBonuses(agency);
+    const { minHours: cashH, minDays: cashDy } = requirements.cashBonus;
+    const { minHours: eliteH, minDays: eliteDy } = requirements.diamondPrize;
     const ownEarnings = Math.round(diamonds / DIAMONDS_PER_USD);
-    const meetsHours = liveHours >= requirements.cashBonus.minHours;
-    const meetsDays  = validDays >= requirements.cashBonus.minDays;
 
-    if (meetsHours && meetsDays) {
-        const perks = [];
-        if (cashTier) perks.push(`hasta $${cashTier.subio} de bono en efectivo`);
-        if (diamondTier) perks.push(`${diamondTier.reward.toLocaleString('es')} 💎 de premio`);
-        const perksText = perks.length
-            ? ` ¡Ya cumplís los requisitos y podrías ganar ${perks.join(' + ')} de la agencia este período! 🎉`
-            : ' ¡Ya cumplís los requisitos del bono en efectivo de este nivel! 🎉';
-        return `Estás en el nivel máximo (${tiers[tiers.length - 1].name}).${perksText} `
-            + `Tus propias ganancias de TikTok este período rondarían los $${ownEarnings} USD.`;
+    // ── Tendencia: ritmo diario de este mes vs. el mes anterior ─────────────
+    const elapsed   = daysElapsedInMonth();
+    const totalDays = daysInCurrentMonth();
+    const rateThis  = elapsed > 0 ? diamonds / elapsed : 0;
+    const rateLast  = diamondsLastMonth > 0 ? diamondsLastMonth / 31 : 0;
+    let trendLine;
+    if (rateLast <= 0) {
+        trendLine = rateThis > 0
+            ? `📈 Vas a ${fmt(rateThis)} 💎/día (el mes pasado no tuviste actividad registrada).`
+            : `Todavía no registrás actividad este mes.`;
+    } else {
+        const paceRatio = (rateThis / rateLast) * 100;
+        if (paceRatio >= 105) trendLine = `📈 Vas mejor que el mes pasado: ${fmt(rateThis)} 💎/día (mes pasado: ${fmt(rateLast)} 💎/día).`;
+        else if (paceRatio >= 85) trendLine = `➡️ Vas a un ritmo parecido al mes pasado: ${fmt(rateThis)} 💎/día (mes pasado: ${fmt(rateLast)} 💎/día).`;
+        else trendLine = `📉 Vas por debajo del mes pasado: ${fmt(rateThis)} 💎/día (mes pasado: ${fmt(rateLast)} 💎/día).`;
     }
 
-    const missingHours = Math.max(0, requirements.cashBonus.minHours - liveHours);
-    const missingDays  = Math.max(0, requirements.cashBonus.minDays - validDays);
-    const parts = [];
-    if (missingDays > 0)  parts.push(`${missingDays} día${missingDays !== 1 ? 's' : ''} válido${missingDays !== 1 ? 's' : ''}`);
-    if (missingHours > 0) parts.push(`${missingHours.toFixed(1)}h de LIVE`);
-    return (parts.length
-        ? `Te faltan ${parts.join(' y ')} para el bono en efectivo de este nivel.`
-        : 'Seguí así para mantener tu nivel este período.')
-        + ` Tus propias ganancias de TikTok este período rondarían los $${ownEarnings} USD.`;
+    // ── Días válidos y horas de LIVE: mínimo del bono vs. tope élite ────────
+    const daysLine = validDays >= eliteDy
+        ? `✅ Días válidos: ya cumplís el máximo (${eliteDy}+).`
+        : validDays >= cashDy
+            ? `✓ Días válidos: activo — te faltan ${eliteDy - validDays} para el tope élite (${eliteDy}).`
+            : `⚠️ Días válidos: te faltan ${cashDy - validDays} para activar el bono en efectivo (mínimo ${cashDy}).`;
+
+    const hoursLine = liveHours >= eliteH
+        ? `✅ Horas de LIVE: ya cumplís el máximo (${eliteH}h+).`
+        : liveHours >= cashH
+            ? `✓ Horas de LIVE: activo — te faltan ${(eliteH - liveHours).toFixed(1)}h para el tope élite (${eliteH}h).`
+            : `⚠️ Horas de LIVE: te faltan ${(cashH - liveHours).toFixed(1)}h para activar el bono en efectivo (mínimo ${cashH}h).`;
+
+    // ── Bono en efectivo: objetivo según el nivel del MES ANTERIOR ──────────
+    const lastMonthIdx = tierIdx(diamondsLastMonth, agencyCashBonuses);
+    const currIdx      = tierIdx(diamonds, agencyCashBonuses);
+    const meetsCash     = liveHours >= cashH && validDays >= cashDy;
+    let bonusLine;
+
+    if (lastMonthIdx < 0) {
+        const first = agencyCashBonuses[0];
+        const missing = Math.max(0, first.range - diamonds);
+        bonusLine = missing > 0
+            ? `💵 Bono en efectivo: te faltan ${fmt(missing)} 💎 para desbloquear tu primer nivel (hasta $${first.mantiene}).`
+            : `💵 Bono en efectivo: ¡ya alcanzaste tu primer nivel! Vas a cobrar hasta $${first.mantiene}.`;
+    } else {
+        const retain = agencyCashBonuses[lastMonthIdx];
+        const up     = agencyCashBonuses[lastMonthIdx + 1] || null;
+        if (diamonds < retain.range) {
+            const missing = retain.range - diamonds;
+            bonusLine = `⚠️ Bono en efectivo: vas a BAJAR de tu nivel del mes pasado (${retain.level}) si no sumás ${fmt(missing)} 💎 más. Mantené el nivel para asegurar $${retain.mantiene}.`;
+        } else if (up && diamonds < up.range) {
+            const missing = up.range - diamonds;
+            bonusLine = `✅ Bono en efectivo: ya asegurás mantener tu nivel del mes pasado (${retain.level}, $${retain.mantiene}). Te faltan ${fmt(missing)} 💎 para subir a ${up.level} y cobrar $${up.subio}.`;
+        } else {
+            const topLevel = up ? up.level : retain.level;
+            const topAmt   = up ? up.subio : retain.subio;
+            bonusLine = `🚀 Bono en efectivo: ¡superaste tu nivel del mes pasado! Vas camino a ${topLevel} y podrías cobrar hasta $${topAmt}.`;
+        }
+        if (!meetsCash) {
+            bonusLine += ` (Ojo: para cobrar necesitás mínimo ${cashDy} días válidos y ${cashH}h de LIVE — todavía no los cumplís.)`;
+        }
+    }
+
+    return [
+        `Día ${elapsed} de ${totalDays} del mes.`,
+        trendLine,
+        daysLine,
+        hoursLine,
+        bonusLine,
+        `Tus propias ganancias de TikTok este mes rondarían los $${ownEarnings} USD.`,
+    ].join('\n');
 }

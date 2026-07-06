@@ -117,6 +117,7 @@ async function main() {
             const liveHours = Number(c.live_seconds || 0) / 3600;
             const objective = computeNextObjective({
                 diamonds: Number(c.diamonds || 0),
+                diamondsLastMonth: Number(c.diamonds_last_month || 0),
                 validDays: Number(c.valid_days || 0),
                 liveHours,
                 agency: c.agency,

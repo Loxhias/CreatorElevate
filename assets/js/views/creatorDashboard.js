@@ -324,7 +324,7 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
     const cashCard = `
         <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:${cashOk?'rgba(0,217,166,0.04)':'rgba(255,181,71,0.03)'};">
             <!-- Header -->
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.15rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.15rem;">
                 <div style="display:flex;align-items:center;gap:0.6rem;">
                     <div class="section-icon" style="background:rgba(0,217,166,0.1);">💵</div>
                     <div>
@@ -341,28 +341,33 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                     const nextAboveAssigned = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus] : null;
                     const bonusIfNextTier   = nextAboveAssigned ? nextAboveAssigned.subio : null;
 
+                    // Tile helper: el destacado ("si subís") se ve más grande e
+                    // iluminado a propósito — es el número que más motiva, no el
+                    // que ya está asegurado.
+                    const tile = (label, amount, highlight) => `
+                        <div style="text-align:center;padding:0.4rem 0.7rem;border-radius:var(--radius-sm);flex-shrink:0;${highlight
+                            ? 'background:linear-gradient(135deg,rgba(255,181,71,0.22),rgba(255,181,71,0.05));border:1px solid rgba(255,181,71,0.45);box-shadow:0 0 16px rgba(255,181,71,0.18);'
+                            : 'background:rgba(255,255,255,0.03);border:1px solid transparent;'}">
+                            <div style="font-size:0.58rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:${highlight ? 'var(--gold)' : 'var(--text-muted)'};margin-bottom:0.2rem;white-space:nowrap;">${label}</div>
+                            <div style="font-size:${highlight ? '1.4rem' : '0.95rem'};font-weight:${highlight ? 900 : 700};line-height:1;color:${highlight ? 'var(--gold)' : 'var(--text-secondary)'};">$${amount}</div>
+                        </div>`;
 
                     if (cashOk) {
-                        // Already earning — show current + what they'd get if they go up
-                        return `<div style="text-align:right;flex-shrink:0;">
-                            <div style="font-size:1.15rem;font-weight:800;color:var(--accent);">$${cashAmt} <span style="font-size:0.65rem;font-weight:500;color:var(--text-muted);">USD</span></div>
-                            <div style="font-size:0.62rem;color:var(--text-muted);">Bono activo este mes</div>
-                            ${bonusIfNextTier ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:0.2rem;">⬆ Si subes: $${bonusIfNextTier}</div>` : ''}
+                        // Already earning — show current (small) + what they'd get if they go up (big)
+                        return `<div style="display:flex;align-items:stretch;gap:0.45rem;flex-shrink:0;">
+                            ${tile('Asegurado', cashAmt, false)}
+                            ${bonusIfNextTier ? tile('🚀 Si subís', bonusIfNextTier, true) : ''}
                         </div>`;
                     } else if (bonusIfMaintains !== null) {
-                        // Not yet earning — show what they'd get if they maintain their assigned level
-                        return `<div style="text-align:right;flex-shrink:0;">
-                            <div style="font-size:0.65rem;color:var(--text-muted);margin-bottom:0.15rem;">Objetivo actual</div>
-                            <div style="font-size:1.1rem;font-weight:800;color:var(--warning);">$${bonusIfMaintains}</div>
-                            <div style="font-size:0.62rem;color:var(--text-muted);">si mantienes nivel</div>
-                            ${bonusIfNextTier ? `<div style="font-size:0.65rem;color:var(--gold);margin-top:0.2rem;">⬆ Si subes: $${bonusIfNextTier}</div>` : ''}
+                        // Not yet earning — retention target (small) vs. level-up upside (big)
+                        return `<div style="display:flex;align-items:stretch;gap:0.45rem;flex-shrink:0;">
+                            ${tile('Mantenés', bonusIfMaintains, false)}
+                            ${bonusIfNextTier ? tile('🚀 Si subís', bonusIfNextTier, true) : ''}
                         </div>`;
                     } else {
-                        // Below first tier — show first reachable bonus
-                        return `<div style="text-align:right;flex-shrink:0;">
-                            <div style="font-size:0.65rem;color:var(--text-muted);margin-bottom:0.15rem;">Primer bono</div>
-                            <div style="font-size:1.1rem;font-weight:800;color:rgba(255,255,255,0.4);">$${agencyCashBonuses[0].mantiene}</div>
-                            <div style="font-size:0.62rem;color:var(--text-muted);">al llegar a ${fmt(agencyCashBonuses[0].range)} 💎</div>
+                        // Below first tier — show first reachable bonus, highlighted (es la meta más cercana)
+                        return `<div style="flex-shrink:0;">
+                            ${tile(`Al llegar a ${fmt(agencyCashBonuses[0].range)} 💎`, agencyCashBonuses[0].mantiene, true)}
                         </div>`;
                     }
                 })()}
@@ -1121,15 +1126,52 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         ${!isAuditing ? renderIncentiveHero({ me, h, dy, dLeft, meetsCash, currCashIdx, lastMonthIdx, trend, agencyCashBonuses, nextTier, curTier }) : ''}
 
         <!-- Estimated Earnings Hero -->
-        <div class="glass-panel" style="padding:1.4rem 1.5rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(0,217,166,0.07),rgba(124,110,247,0.05));border-color:rgba(0,217,166,0.2);text-align:center;">
-            <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.35rem;">Ganancias Estimadas — ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
-            <div style="font-size:clamp(2rem,8vw,3rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.3rem;">
-                $${Number(estimatedEarnings).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2})}
-            </div>
-            <div style="font-size:0.62rem;color:var(--text-muted);">
-                Estimación basada en ${fmt(me.diamonds)} 💎 × $1 / 200 diamantes · No incluye bonos
-            </div>
-        </div>
+        ${(() => {
+            // "Potencial" = si este mes llega al próximo nivel: sus propias
+            // ganancias de TikTok a ESE nivel + el bono en efectivo que
+            // desbloquearía (mismo cash-bonus-por-nivel-anterior que usa
+            // cashCard más abajo). Es el número que más motiva — por eso va
+            // grande y destacado, mientras que lo ya ganado hoy queda chico
+            // (dashboard de incentivos: lo importante es lo que falta, no lo
+            // que ya está hecho).
+            const potentialTarget      = nextTier ? nextTier.range : curTier.range;
+            const potentialOwnEarnings = potentialTarget / DIAMONDS_PER_USD;
+            const nextTierIdxForBonus  = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx + 1;
+            const potentialCashBonus   = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus].subio : null;
+            const potentialTotal       = potentialOwnEarnings + (potentialCashBonus || 0);
+            const potentialDiamIdx     = getIdx(potentialTarget, diamondRewards);
+            const potentialDiamPrize   = potentialDiamIdx >= 0 ? diamondRewards[potentialDiamIdx].reward : null;
+            const hasUpside = potentialTarget > me.diamonds || (potentialCashBonus || 0) > cashAmt;
+            // Si ya no hay upside (tope real superado), mostrar el total REAL
+            // de este mes (ganancias + bono ya asegurado), no el del umbral
+            // del tier — que podría quedar más bajo que lo ya ganado.
+            const realTotal = Number(estimatedEarnings) + cashAmt;
+
+            return `
+            <div class="glass-panel animate-fadeIn" style="padding:1.2rem 1.4rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(255,181,71,0.08),rgba(255,85,105,0.04));border-color:rgba(255,181,71,0.3);text-align:center;overflow:hidden;position:relative;">
+                <div style="display:flex;align-items:baseline;justify-content:center;gap:0.5rem;margin-bottom:0.15rem;">
+                    <span style="font-size:0.65rem;color:var(--text-muted);">Ganancias actuales:</span>
+                    <span style="font-size:0.95rem;font-weight:800;color:var(--text-secondary);">$${Number(estimatedEarnings).toLocaleString('es',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+                </div>
+
+                ${hasUpside ? `
+                <div style="font-size:0.7rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);margin:0.6rem 0 0.2rem;">🚀 Tu potencial ${nextTier ? `si llegás a ${nextTier.name}` : 'este mes'}</div>
+                <div style="font-size:clamp(2.3rem,9vw,3.4rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#ffb547,#ff5569);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 20px rgba(255,181,71,0.35));">
+                    $${fmt(potentialTotal)}
+                </div>
+                <div style="font-size:0.68rem;color:var(--text-secondary);margin-top:0.4rem;">
+                    ${fmt(potentialTarget)} 💎 (~$${fmt(potentialOwnEarnings)})${potentialCashBonus ? ` + $${potentialCashBonus} de bono en efectivo` : ''}
+                </div>
+                ${potentialDiamPrize ? `<div style="font-size:0.62rem;color:var(--text-muted);margin-top:0.15rem;">+ hasta ${fmt(potentialDiamPrize)} 💎 de premio (cumpliendo horas/días de ese nivel)</div>` : ''}
+                ` : `
+                <div style="font-size:0.7rem;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin:0.6rem 0 0.2rem;">🏆 ¡Ya estás en tu tope de este mes!</div>
+                <div style="font-size:clamp(2.3rem,9vw,3.4rem);font-weight:900;line-height:1;background:linear-gradient(135deg,#00d9a6,#7c6ef7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+                    $${fmt(realTotal)}
+                </div>
+                <div style="font-size:0.68rem;color:var(--text-secondary);margin-top:0.4rem;">Sos de los mejores creadores de la agencia este mes.</div>
+                `}
+            </div>`;
+        })()}
 
         <!-- Tab Nav -->
         <div id="creator-tabs" style="display:flex;gap:0.35rem;margin-bottom:1.25rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.3rem;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
