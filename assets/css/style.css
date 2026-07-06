@@ -295,6 +295,35 @@ select.input-control optgroup {
     animation: skel-pulse 1.5s ease-in-out infinite;
 }
 
+/* ---- Incentive Hero (objetivo/bono destacado en el dashboard del creador) ---- */
+.incentive-hero { isolation: isolate; }
+.incentive-hero__glow {
+    position: absolute; inset: -50% -15% auto auto; width: 240px; height: 240px;
+    background: radial-gradient(circle, var(--glow-color) 0%, transparent 70%);
+    opacity: 0.16; pointer-events: none; z-index: 0;
+}
+.incentive-hero--urgent .incentive-hero__glow { animation: incentive-glow-pulse 2.4s ease-in-out infinite; }
+.incentive-hero__number { display: inline-block; animation: incentive-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+.incentive-hero__dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--glow-color);
+    box-shadow: 0 0 6px var(--glow-color); animation: incentive-dot-pulse 1.4s ease-in-out infinite;
+}
+@keyframes incentive-glow-pulse {
+    0%, 100% { opacity: 0.14; transform: scale(1); }
+    50%      { opacity: 0.3;  transform: scale(1.12); }
+}
+@keyframes incentive-dot-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+}
+@keyframes incentive-pop {
+    0%   { opacity: 0; transform: translateY(6px) scale(0.94); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .incentive-hero__glow, .incentive-hero__dot, .incentive-hero__number { animation: none; }
+}
+
 /* ---- Toast ---- */
 .toast-container { position:fixed; bottom:1.5rem; right:1.5rem; display:flex; flex-direction:column; gap:0.5rem; z-index:9999; }
 .toast-msg { padding:0.8rem 1.2rem; font-size:0.85rem; font-weight:600; min-width:220px; pointer-events:none; transition:opacity 0.3s ease; }

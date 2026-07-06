@@ -40,6 +40,74 @@ function daysInMonth() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
 }
+// Tarjeta destacada de "objetivo/bono" — arriba del todo del dashboard, visible
+// sin tener que entrar a la pestaña Objetivos. Reutiliza los mismos cálculos
+// de tabGoals (cashAmt, meetsCash, currCashIdx, etc.), no duplica la lógica de
+// negocio, solo decide CUÁL de los objetivos ya calculados destacar y cómo.
+function renderIncentiveHero({ me, h, dy, dLeft, meetsCash, currCashIdx, lastMonthIdx, trend, agencyCashBonuses, nextTier, curTier }) {
+    const { minHours: cashH, minDays: cashDy } = requirements.cashBonus;
+    let kicker, big, sub, icon, accent, urgent;
+
+    if (currCashIdx < 0) {
+        // Todavía no llega al primer nivel de bono en efectivo
+        const first = agencyCashBonuses[0];
+        icon = '💵'; accent = '#00d9a6';
+        kicker = '¡NO TE PIERDAS TU BONO!';
+        big = `$${first.mantiene}`;
+        sub = `Te faltan ${fmt(Math.max(0, first.range - me.diamonds))} 💎 para desbloquearlo`;
+        urgent = dLeft <= 7;
+    } else if (!meetsCash && trend !== 'baja') {
+        // Ya tiene el nivel de diamantes, le faltan horas/días para activarlo
+        const tierC = agencyCashBonuses[currCashIdx];
+        const potential = trend === 'subio' ? tierC.subio : tierC.mantiene;
+        const missingH = Math.max(0, cashH - h);
+        const missingDy = Math.max(0, cashDy - dy);
+        const parts = [];
+        if (missingDy > 0) parts.push(`${missingDy} día${missingDy !== 1 ? 's' : ''}`);
+        if (missingH > 0) parts.push(`${missingH.toFixed(1)}h de LIVE`);
+        icon = '💵'; accent = '#00d9a6';
+        kicker = '¡NO TE PIERDAS TU BONO!';
+        big = `$${potential}`;
+        sub = parts.length ? `Te faltan ${parts.join(' y ')} para activarlo` : '¡Ya casi lo tenés!';
+        urgent = dLeft <= 7;
+    } else if (meetsCash && nextTier) {
+        // Bono asegurado este mes — empujar al próximo nivel
+        icon = '🚀'; accent = '#7c6ef7';
+        kicker = '¡BONO ASEGURADO! SEGUÍ ASÍ';
+        big = `${fmt(nextTier.range - me.diamonds)} 💎`;
+        sub = `para alcanzar ${nextTier.name}`;
+        urgent = false;
+    } else if (nextTier) {
+        icon = '🎯'; accent = '#ffb547';
+        kicker = 'TU PRÓXIMO OBJETIVO';
+        big = `${fmt(nextTier.range - me.diamonds)} 💎`;
+        sub = `para alcanzar ${nextTier.name}`;
+        urgent = dLeft <= 7;
+    } else {
+        icon = '🏆'; accent = '#00d9a6';
+        kicker = '¡NIVEL MÁXIMO!';
+        big = curTier.name;
+        sub = 'Sos de los mejores creadores de la agencia';
+        urgent = false;
+    }
+
+    return `
+        <div class="glass-panel incentive-hero animate-fadeIn${urgent ? ' incentive-hero--urgent' : ''}" style="position:relative;overflow:hidden;padding:1.2rem 1.35rem;margin-bottom:1rem;border-color:${accent}55;background:linear-gradient(135deg,${accent}17,transparent 65%);">
+            <div class="incentive-hero__glow" style="--glow-color:${accent};"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                <div style="font-size:2rem;line-height:1;filter:drop-shadow(0 0 8px ${accent}66);flex-shrink:0;">${icon}</div>
+                <div style="flex:1;min-width:190px;">
+                    <div style="font-size:0.66rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:${accent};margin-bottom:0.2rem;display:flex;align-items:center;gap:0.4rem;">
+                        ${urgent ? `<span class="incentive-hero__dot" style="--glow-color:${accent};"></span>` : ''}${kicker}
+                    </div>
+                    <div class="incentive-hero__number" style="font-size:clamp(1.5rem,6vw,2.1rem);font-weight:900;line-height:1.1;color:#fff;">${big}</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.15rem;">${sub}</div>
+                </div>
+                <button class="btn btn-sm incentive-hero__cta" data-goto-tab="goals" style="flex-shrink:0;background:${accent};color:#04150a;font-weight:800;white-space:nowrap;">Ver objetivos</button>
+            </div>
+        </div>`;
+}
+
 function getPaceData(currentDiamonds, lastMonthDiamonds) {
     const elapsed  = daysElapsed();
     const totalDays = daysInMonth();
@@ -1050,6 +1118,8 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         ` : ''}
 
 
+        ${!isAuditing ? renderIncentiveHero({ me, h, dy, dLeft, meetsCash, currCashIdx, lastMonthIdx, trend, agencyCashBonuses, nextTier, curTier }) : ''}
+
         <!-- Estimated Earnings Hero -->
         <div class="glass-panel" style="padding:1.4rem 1.5rem;margin-bottom:1rem;background:linear-gradient(135deg,rgba(0,217,166,0.07),rgba(124,110,247,0.05));border-color:rgba(0,217,166,0.2);text-align:center;">
             <div style="font-size:0.7rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:0.35rem;">Ganancias Estimadas — ${monthName.charAt(0).toUpperCase()+monthName.slice(1)} ${year}</div>
@@ -1178,6 +1248,17 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
             btn.classList.add('active');
             renderTab(btn.dataset.tab);
         });
+    });
+
+    // Botón "Ver objetivos" del hero de incentivo → salta directo a la pestaña Objetivos
+    container.querySelector('.incentive-hero__cta')?.addEventListener('click', (e) => {
+        const targetTab = e.currentTarget.dataset.gotoTab;
+        const tabBtn = container.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+        if (!tabBtn) return;
+        container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        tabBtn.classList.add('active');
+        renderTab(targetTab);
+        tabBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     });
 
     // Invocar la carga por defecto de la pestaña
