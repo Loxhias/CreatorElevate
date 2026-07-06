@@ -280,12 +280,33 @@ function buildFaqReference(faqs) {
         + 'datos exactos, resumidos con tus palabras, no copiados literal):\n' + lines;
 }
 
+// ── Conocimiento base de la agencia (fuente de verdad para la IA) ──────────
+// Copia en texto plano del contenido real de assets/js/views/normas.js (que
+// está en HTML, pensado para renderizarse en el navegador, no para pasarle a
+// un LLM). Si cambian las normas ahí, replicar el cambio acá también.
+const AGENCY_KNOWLEDGE = `
+NORMAS Y REGLAS DE LA AGENCIA (fuente de verdad — usalas para responder con precisión):
+
+Actividad mínima mensual (obligatorio): para ser creador activo hay que cumplir un mínimo de 10 días válidos por mes. Un día válido es transmitir en TikTok LIVE más de 1 hora continua sin cortes en el mismo día — varias transmisiones cortas que sumen 1 hora NO cuentan, tiene que ser continua.
+
+Multicuentas en LIVE (tolerancia cero): está estrictamente prohibido usar más de una cuenta de TikTok para transmitir en vivo. Viola los términos de TikTok. Consecuencias: TikTok puede bloquear permanentemente TODAS las cuentas vinculadas al usuario (no solo la infractora), y la agencia desvincula al creador de inmediato.
+
+Conducta y representación: todo creador es embajador de la agencia. Se espera trato respetuoso con la audiencia y otros creadores, comunicar a su manager cualquier problema técnico o personal, y reportar actividades sospechosas o violaciones de normas que observe.
+
+Beneficios: bono en efectivo mensual, premio en diamantes, y suscripción gratis a Interactik App — todos sujetos a cumplir las métricas mensuales (días válidos, horas). El detalle de niveles y montos exactos está en la sección Objetivos del panel de cada creador.
+
+Directrices de TikTok que aplican (resumen): prohibido contenido con menores en situaciones inapropiadas, contenido violento o peligroso, acoso o bullying, discurso de odio, manipulación de alcance con bots o cuentas falsas, compartir datos privados de terceros sin consentimiento (doxing), promover actividades ilegales, usar música o contenido con derechos de autor sin licencia (usar la biblioteca de sonidos de TikTok en su lugar). Específicamente en LIVE: prohibido contenido sexual explícito, pedir dinero de forma coercitiva o engañosa, transmitir bajo efectos de alcohol o sustancias, mostrar armas reales o conducir, y usar multicuentas.
+
+Ante cualquier duda sobre estas normas que no puedas responder con certeza, decile al creador que contacte a su manager asignado.
+`.trim();
+
 // ── Asistente de IA (fallback cuando no matchea ninguna FAQ predefinida) ───
 async function askClaude(apiKey, question, userContext) {
     let systemPrompt = 'Sos el asistente de Interactik Agency, una agencia de creadores de TikTok LIVE. '
-        + 'Respondé preguntas cortas y concretas sobre la agencia (actividad mínima mensual, reglas de conducta, '
-        + 'beneficios, multicuentas) en un tono cercano y breve (máximo 3 líneas). Si no sabés la respuesta con '
-        + 'certeza, decí que un miembro del equipo le va a responder pronto en vez de inventar información.';
+        + 'Respondé preguntas cortas y concretas en un tono cercano y breve (máximo 4 líneas). Si no sabés la '
+        + 'respuesta con certeza incluso con el conocimiento de base de abajo, decí que un miembro del equipo '
+        + 'le va a responder pronto en vez de inventar información.'
+        + `\n\n${AGENCY_KNOWLEDGE}`;
     if (userContext) systemPrompt += `\n\n${userContext}`;
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {

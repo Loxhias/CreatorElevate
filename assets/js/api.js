@@ -1110,6 +1110,27 @@ export const whatsapp = {
         const { error } = await supabase.from('whatsapp_faq').delete().eq('id', id);
         if (error) throw error;
     },
+
+    /**
+     * Dispara el envío de "progreso actual" por WhatsApp a todos los
+     * creadores vinculados (Pages Function "whatsapp-send-checkins").
+     * Se llama después de publicar un Excel nuevo — no lanza si falla, para
+     * no bloquear la publicación de datos por un problema de WhatsApp.
+     */
+    async sendCheckins() {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || '';
+        const response = await fetch('/api/whatsapp-send-checkins', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        });
+        let payload = null;
+        try { payload = await response.json(); } catch { /* respuesta no-JSON */ }
+        if (!response.ok || (payload && payload.success === false)) {
+            throw new Error(payload?.error || `Error HTTP ${response.status}`);
+        }
+        return payload;
+    },
 };
 
 // ────────────────────────────────────────────────────────────────────────────

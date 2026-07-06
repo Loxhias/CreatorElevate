@@ -614,6 +614,17 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             appState.showToast('Datos publicados con éxito', 'success');
             await store.refreshMetrics();
             renderAdminDashboard(mainContainer);
+
+            // Paso 4: avisa por WhatsApp a los creadores ya vinculados con
+            // su progreso actualizado. No bloquea ni revierte la publicación
+            // si esto falla (ej. Twilio caído) — los datos ya se publicaron.
+            if (isWhatsappConfigured) {
+                whatsapp.sendCheckins()
+                    .then(r => appState.showToast(
+                        `WhatsApp: ${r.sent} enviados, ${r.skipped} en cooldown${r.failed ? `, ${r.failed} fallidos` : ''}`,
+                        r.failed ? 'warning' : 'success'))
+                    .catch(err => appState.showToast('No se pudo avisar por WhatsApp: ' + (err.message || 'error desconocido'), 'error'));
+            }
         } catch (err) {
             appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error');
             uBtn.disabled = false;
