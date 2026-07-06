@@ -17,6 +17,46 @@ const AGENCY_OPTS = [
     { id: 'usa',   label: '🇺🇸 USA'  },
 ];
 
+// Tarjeta destacada arriba del panel del admin — mismo tratamiento visual que
+// el "incentive hero" del creador/manager (ver assets/css/style.css
+// .incentive-hero*), a nivel de toda la agencia seleccionada.
+function renderAgencyIncentiveHero({ data, creatorsCount }) {
+    if (!data.length) return '';
+    const inactiveCount = data.filter(c => Number(c.validDays) === 0).length;
+    const totalDiamonds = data.reduce((s, c) => s + Number(c.diamonds || 0), 0);
+    let kicker, big, sub, icon, accent, urgent;
+
+    if (inactiveCount > 0) {
+        icon = '🔴'; accent = 'var(--danger)';
+        kicker = '¡REQUIERE ATENCIÓN!';
+        big = `${inactiveCount}`;
+        sub = `creador${inactiveCount !== 1 ? 'es' : ''} sin actividad este período — revisá quién puede necesitar seguimiento`;
+        urgent = true;
+    } else {
+        icon = '🏆'; accent = 'var(--accent)';
+        kicker = '¡TODO EN ORDEN!';
+        big = `${fmt(totalDiamonds)} 💎`;
+        sub = `generados por ${creatorsCount} creador${creatorsCount !== 1 ? 'es' : ''} este período`;
+        urgent = false;
+    }
+
+    return `
+        <div class="glass-panel incentive-hero animate-fadeIn${urgent ? ' incentive-hero--urgent' : ''}" style="position:relative;overflow:hidden;padding:1.2rem 1.35rem;margin-bottom:1.5rem;border-color:${accent}55;background:linear-gradient(135deg,${accent}17,transparent 65%);">
+            <div class="incentive-hero__glow" style="--glow-color:${accent};"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                <div style="font-size:2rem;line-height:1;filter:drop-shadow(0 0 8px ${accent}66);flex-shrink:0;">${icon}</div>
+                <div style="flex:1;min-width:190px;">
+                    <div style="font-size:0.66rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:${accent};margin-bottom:0.2rem;display:flex;align-items:center;gap:0.4rem;">
+                        ${urgent ? `<span class="incentive-hero__dot" style="--glow-color:${accent};"></span>` : ''}${kicker}
+                    </div>
+                    <div class="incentive-hero__number" style="font-size:clamp(1.5rem,6vw,2.1rem);font-weight:900;line-height:1.1;color:#fff;">${big}</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.15rem;">${sub}</div>
+                </div>
+                <button class="btn btn-sm incentive-hero__cta" id="agency-hero-cta" style="flex-shrink:0;background:${accent};color:#04150a;font-weight:800;white-space:nowrap;">Auditar equipos</button>
+            </div>
+        </div>`;
+}
+
 function agencyToggleHtml() {
     return `<div style="display:flex;gap:0.3rem;background:rgba(0,0,0,0.25);border-radius:var(--radius-md);padding:0.2rem;">
         ${AGENCY_OPTS.map(a => `
@@ -303,6 +343,8 @@ export async function renderAdminDashboard(container) {
             </div>
             ` : ''}
 
+            ${renderAgencyIncentiveHero({ data, creatorsCount: creators.length })}
+
             <div id="admin-view-content">
                 <div class="metrics-grid">
                     <div class="glass-panel metric-card">
@@ -344,6 +386,10 @@ export async function renderAdminDashboard(container) {
             }
         };
     }
+
+    container.querySelector('#agency-hero-cta')?.addEventListener('click', () => {
+        container.querySelector('#nav-audit')?.click();
+    });
 
     container.querySelector('#nav-audit').onclick   = async () => {
         // Re-fetch si el caché fue invalidado (ej. tras cambio de roles)

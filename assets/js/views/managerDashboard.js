@@ -9,6 +9,51 @@ function liveHours(seconds) {
     return h > 0 ? `${h}h` : '—';
 }
 
+// Tarjeta destacada arriba del panel del manager — resalta lo más urgente de
+// su equipo (mismo tratamiento visual que el "incentive hero" del creador,
+// ver assets/css/style.css .incentive-hero*). No duplica lógica: usa los
+// mismos conteos (atRiskCount/inactiveCount/activeCount) ya calculados.
+function renderTeamIncentiveHero({ total, activeCount, inactiveCount, atRiskCount }) {
+    if (!total) return '';
+    let kicker, big, sub, icon, accent, urgent;
+
+    if (atRiskCount > 0) {
+        icon = '⚠️'; accent = '#f59e0b';
+        kicker = 'EQUIPO EN RIESGO';
+        big = `${atRiskCount}`;
+        sub = `creador${atRiskCount !== 1 ? 'es' : ''} con bajo rendimiento — escribeles antes de que pierdan el bono`;
+        urgent = true;
+    } else if (inactiveCount > 0) {
+        icon = '🔴'; accent = 'var(--danger)';
+        kicker = '¡ACTIVÁ A TU EQUIPO!';
+        big = `${inactiveCount}`;
+        sub = `sin ningún día válido este mes — un mensaje a tiempo puede salvarlos`;
+        urgent = true;
+    } else {
+        icon = '🏆'; accent = 'var(--accent)';
+        kicker = '¡EQUIPO AL 100%!';
+        big = `${activeCount}/${total}`;
+        sub = 'creadores activos este mes — excelente supervisión';
+        urgent = false;
+    }
+
+    return `
+        <div class="glass-panel incentive-hero animate-fadeIn${urgent ? ' incentive-hero--urgent' : ''}" style="position:relative;overflow:hidden;padding:1.2rem 1.35rem;margin-bottom:1.5rem;border-color:${accent}55;background:linear-gradient(135deg,${accent}17,transparent 65%);">
+            <div class="incentive-hero__glow" style="--glow-color:${accent};"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                <div style="font-size:2rem;line-height:1;filter:drop-shadow(0 0 8px ${accent}66);flex-shrink:0;">${icon}</div>
+                <div style="flex:1;min-width:190px;">
+                    <div style="font-size:0.66rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:${accent};margin-bottom:0.2rem;display:flex;align-items:center;gap:0.4rem;">
+                        ${urgent ? `<span class="incentive-hero__dot" style="--glow-color:${accent};"></span>` : ''}${kicker}
+                    </div>
+                    <div class="incentive-hero__number" style="font-size:clamp(1.5rem,6vw,2.1rem);font-weight:900;line-height:1.1;color:#fff;">${big}</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.15rem;">${sub}</div>
+                </div>
+                <button class="btn btn-sm incentive-hero__cta" id="team-hero-cta" style="flex-shrink:0;background:${accent};color:#04150a;font-weight:800;white-space:nowrap;">Ver equipo</button>
+            </div>
+        </div>`;
+}
+
 function creatorStatus(c, groupAvg) {
     if (c.validDays === 0)
         return { label: 'Inactivo', color: 'var(--danger)', bg: 'rgba(255,85,105,0.12)', icon: '🔴' };
@@ -186,6 +231,7 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
                 </div>
             </div>` : ''}
 
+            ${!isAuditing ? renderTeamIncentiveHero({ total: myCreators.length, activeCount, inactiveCount, atRiskCount }) : ''}
 
             <!-- Métricas resumen -->
             <div class="metrics-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));">
@@ -227,7 +273,7 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
             </div>
 
             <!-- Tabla de creadores -->
-            <h3 style="margin:2rem 0 1rem;font-size:1rem;">Rendimiento Individual</h3>
+            <h3 id="team-table-section" style="margin:2rem 0 1rem;font-size:1rem;">Rendimiento Individual</h3>
             <div class="glass-panel table-container no-pad">
                 <table class="data-table" style="min-width:520px;">
                     <thead>
@@ -245,6 +291,10 @@ export async function renderManagerDashboard(container, targetManagerId = null) 
             </div>
         </div>
     `;
+
+    container.querySelector('#team-hero-cta')?.addEventListener('click', () => {
+        container.querySelector('#team-table-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     container.addEventListener('click', (e) => {
         const btnCreator = e.target.closest('.view-creator');
