@@ -498,40 +498,36 @@ CREATE POLICY "assignment_events_own_select" ON public.creator_assignment_events
 -- 4) BACKFILL — migrar asignaciones existentes desde los dos mecanismos viejos
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- Working set temporal (se descarta al final de este script).
-CREATE TEMP TABLE _backfill_assignments AS
+-- Nota: cada paso repite el mismo CTE "bf" (en vez de compartir una sola
+-- TEMP TABLE) para que cada INSERT sea una única sentencia autosuficiente.
+-- El SQL Editor de Supabase puede ejecutar un script largo repartido en más
+-- de una conexión/transacción — con eso, una TEMP TABLE creada en una
+-- sentencia puede no existir ya para la siguiente ("relation does not
+-- exist"), aunque el script sea válido. Un CTE no tiene ese problema porque
+-- vive y muere dentro de la misma sentencia.
+
+-- 4.1) Casos resolubles: coinciden, o solo un mecanismo tiene valor, y ese
+--      manager sigue teniendo el rol 'manager' hoy.
 WITH mech_a AS (
-    -- Mecanismo A: profiles.manager_id (solo creadores con cuenta)
     SELECT tiktok_username AS username, manager_id
       FROM public.profiles
      WHERE role = 'creator' AND manager_id IS NOT NULL AND tiktok_username IS NOT NULL
 ),
 mech_b AS (
-    -- Mecanismo B: creator_metrics.manager_id (el que usa hoy la UI del admin);
-    -- se toma el valor más reciente por updated_at para cada username.
     SELECT DISTINCT ON (username) username, manager_id
       FROM public.creator_metrics
      WHERE manager_id IS NOT NULL
      ORDER BY username, updated_at DESC
 ),
-all_usernames AS (
-    SELECT username FROM mech_a
-    UNION
-    SELECT username FROM mech_b
+bf AS (
+    SELECT u.username, a.manager_id AS manager_a, b.manager_id AS manager_b
+      FROM (SELECT username FROM mech_a UNION SELECT username FROM mech_b) u
+      LEFT JOIN mech_a a ON a.username = u.username
+      LEFT JOIN mech_b b ON b.username = u.username
 )
-SELECT
-    u.username,
-    a.manager_id AS manager_a,
-    b.manager_id AS manager_b
-FROM all_usernames u
-LEFT JOIN mech_a a ON a.username = u.username
-LEFT JOIN mech_b b ON b.username = u.username;
-
--- 4.1) Casos resolubles: coinciden, o solo un mecanismo tiene valor, y ese
---      manager sigue teniendo el rol 'manager' hoy.
 INSERT INTO public.creator_assignments (username, manager_id, assigned_by, assigned_via)
 SELECT bf.username, COALESCE(bf.manager_a, bf.manager_b), NULL, 'admin'
-  FROM _backfill_assignments bf
+  FROM bf
   JOIN public.profiles pr ON pr.id = COALESCE(bf.manager_a, bf.manager_b) AND pr.role = 'manager'
  WHERE (bf.manager_a IS NULL OR bf.manager_b IS NULL OR bf.manager_a = bf.manager_b)
 ON CONFLICT (username) DO NOTHING;
@@ -539,10 +535,27 @@ ON CONFLICT (username) DO NOTHING;
 -- 4.2) Conflictos: los dos mecanismos discrepan → NO se elige uno a ciegas,
 --      queda sin asignar y se deja registrado para revisión manual del admin.
 --      Guardado contra re-ejecución: no duplica el evento si ya se registró antes.
+WITH mech_a AS (
+    SELECT tiktok_username AS username, manager_id
+      FROM public.profiles
+     WHERE role = 'creator' AND manager_id IS NOT NULL AND tiktok_username IS NOT NULL
+),
+mech_b AS (
+    SELECT DISTINCT ON (username) username, manager_id
+      FROM public.creator_metrics
+     WHERE manager_id IS NOT NULL
+     ORDER BY username, updated_at DESC
+),
+bf AS (
+    SELECT u.username, a.manager_id AS manager_a, b.manager_id AS manager_b
+      FROM (SELECT username FROM mech_a UNION SELECT username FROM mech_b) u
+      LEFT JOIN mech_a a ON a.username = u.username
+      LEFT JOIN mech_b b ON b.username = u.username
+)
 INSERT INTO public.creator_assignment_events
     (username, event_type, old_manager_id, new_manager_id, actor_id, actor_role)
 SELECT bf.username, 'backfill_conflict', bf.manager_a, bf.manager_b, NULL, 'system_backfill'
-  FROM _backfill_assignments bf
+  FROM bf
  WHERE bf.manager_a IS NOT NULL AND bf.manager_b IS NOT NULL AND bf.manager_a <> bf.manager_b
    AND NOT EXISTS (
        SELECT 1 FROM public.creator_assignment_events ev
@@ -553,10 +566,27 @@ SELECT bf.username, 'backfill_conflict', bf.manager_a, bf.manager_b, NULL, 'syst
 --      (ej. fue degradado y el sistema viejo nunca limpió la referencia) →
 --      tampoco se asigna, queda registrado para revisión manual.
 --      Mismo guardado contra re-ejecución que 4.2.
+WITH mech_a AS (
+    SELECT tiktok_username AS username, manager_id
+      FROM public.profiles
+     WHERE role = 'creator' AND manager_id IS NOT NULL AND tiktok_username IS NOT NULL
+),
+mech_b AS (
+    SELECT DISTINCT ON (username) username, manager_id
+      FROM public.creator_metrics
+     WHERE manager_id IS NOT NULL
+     ORDER BY username, updated_at DESC
+),
+bf AS (
+    SELECT u.username, a.manager_id AS manager_a, b.manager_id AS manager_b
+      FROM (SELECT username FROM mech_a UNION SELECT username FROM mech_b) u
+      LEFT JOIN mech_a a ON a.username = u.username
+      LEFT JOIN mech_b b ON b.username = u.username
+)
 INSERT INTO public.creator_assignment_events
     (username, event_type, old_manager_id, new_manager_id, actor_id, actor_role)
 SELECT bf.username, 'backfill_conflict', COALESCE(bf.manager_a, bf.manager_b), NULL, NULL, 'system_backfill'
-  FROM _backfill_assignments bf
+  FROM bf
  WHERE (bf.manager_a IS NULL OR bf.manager_b IS NULL OR bf.manager_a = bf.manager_b)
    AND NOT EXISTS (
        SELECT 1 FROM public.profiles pr
@@ -566,8 +596,6 @@ SELECT bf.username, 'backfill_conflict', COALESCE(bf.manager_a, bf.manager_b), N
        SELECT 1 FROM public.creator_assignment_events ev
         WHERE ev.username = bf.username AND ev.event_type = 'backfill_conflict'
    );
-
-DROP TABLE _backfill_assignments;
 
 
 -- ═══════════════════════════════════════════════════════════════════════════
