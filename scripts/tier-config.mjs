@@ -153,6 +153,9 @@ export function computeNextObjective({ diamonds, diamondsLastMonth = 0, validDay
         }
     }
 
+    // WhatsApp/Meta rechaza parámetros de plantilla con más de 1 salto de
+    // línea — por eso se unen con " · " y no con "\n" (5 saltos acá tiraban
+    // error de Twilio y NINGÚN mensaje salía, ver incidente del 2026-07-06).
     return [
         `Día ${elapsed} de ${totalDays} del mes.`,
         trendLine,
@@ -160,5 +163,5 @@ export function computeNextObjective({ diamonds, diamondsLastMonth = 0, validDay
         hoursLine,
         bonusLine,
         `Tus propias ganancias de TikTok este mes rondarían los $${ownEarnings} USD.`,
-    ].join('\n');
+    ].join(' · ');
 }
