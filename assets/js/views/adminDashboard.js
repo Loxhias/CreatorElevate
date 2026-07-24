@@ -1,11 +1,15 @@
 import { store } from '../store.js';
 import { appState } from '../main.js';
-import { metrics, profiles, whatsapp } from '../api.js';
+import { metrics, profiles, whatsapp, managerComp } from '../api.js';
 import { isSupabaseConfigured } from '../supabase.js';
 import { visualTiers } from '../config.js';
 import { profiles as profilesApi } from '../api.js';
 import { renderCanales } from './canales.js';
 import { renderMissionsAdmin } from './missionsAdmin.js';
+import { renderCompSettingsView } from './managerCompAdmin.js';
+import { estimateManagerPayout } from '../managerComp.js';
+
+const fmtUsd = (n) => '$' + Number(n || 0).toLocaleString('es', { maximumFractionDigits: 0 });
 import { env, isWhatsappConfigured } from '../env.js';
 
 const fmt = (n) => Number(n || 0).toLocaleString('es');
@@ -53,6 +57,44 @@ function renderAgencyIncentiveHero({ data, creatorsCount }) {
                     <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.15rem;">${sub}</div>
                 </div>
                 <button class="btn btn-sm incentive-hero__cta" id="agency-hero-cta" style="flex-shrink:0;background:${accent};color:#04150a;font-weight:800;white-space:nowrap;">Auditar equipos</button>
+            </div>
+        </div>`;
+}
+
+// "Mi equipo" — cuánto aporta el equipo de ESTE admin (sus managers + los
+// creadores de esos managers, más los que tenga asignados directamente) al
+// total de la agencia y al objetivo mensual. No restringe ningún acceso —
+// es solo la métrica (Fase 1 de ADMIN_TEAM_SQL.sql); cualquier admin sigue
+// viendo todo lo demás igual que antes.
+function renderMyTeamHero({ myManagersCount, myTeamCount, myTeamDiamonds, totalAgencyDiamonds, objetivoMensual }) {
+    if (!myManagersCount) {
+        return `
+            <div class="glass-panel" style="padding:1rem 1.25rem;margin-bottom:1.5rem;color:var(--text-muted);font-size:0.82rem;">
+                💡 Todavía no tenés managers asignados a vos como admin. Se asignan cargando el excel mensual con la columna "Admin" completa (ver "Cargar Datos Mensuales").
+            </div>`;
+    }
+
+    const pctAgencia   = totalAgencyDiamonds ? (myTeamDiamonds / totalAgencyDiamonds * 100) : 0;
+    const pctObjetivo  = objetivoMensual ? (myTeamDiamonds / objetivoMensual * 100) : 0;
+    const accent = 'var(--primary-light)';
+
+    return `
+        <div class="glass-panel incentive-hero animate-fadeIn" style="position:relative;overflow:hidden;padding:1.2rem 1.35rem;margin-bottom:1.5rem;border-color:${accent}55;background:linear-gradient(135deg,${accent}17,transparent 65%);">
+            <div class="incentive-hero__glow" style="--glow-color:${accent};"></div>
+            <div style="position:relative;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
+                <div style="font-size:2rem;line-height:1;filter:drop-shadow(0 0 8px ${accent}66);flex-shrink:0;">👑</div>
+                <div style="flex:1;min-width:190px;">
+                    <div style="font-size:0.66rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:${accent};margin-bottom:0.2rem;">MI EQUIPO</div>
+                    <div style="font-size:0.78rem;color:var(--text-secondary);">${myManagersCount} manager${myManagersCount !== 1 ? 'es' : ''} · ${myTeamCount} creador${myTeamCount !== 1 ? 'es' : ''} · ${fmt(myTeamDiamonds)} 💎</div>
+                </div>
+                <div style="text-align:center;">
+                    <div class="incentive-hero__number" style="font-size:clamp(1.3rem,5vw,1.8rem);font-weight:900;color:#fff;">${pctAgencia.toFixed(1)}%</div>
+                    <div style="font-size:0.68rem;color:var(--text-secondary);">de la agencia</div>
+                </div>
+                <div style="text-align:center;">
+                    <div class="incentive-hero__number" style="font-size:clamp(1.3rem,5vw,1.8rem);font-weight:900;color:#fff;">${pctObjetivo.toFixed(1)}%</div>
+                    <div style="font-size:0.68rem;color:var(--text-secondary);">del objetivo mensual</div>
+                </div>
             </div>
         </div>`;
 }
@@ -161,6 +203,8 @@ const EXCEL_COLS = {
     statusActive:       ['Estado', 'Status'],
     groupName:          ['Grupo', 'Group'],
     joinDate:           ['Hora de incorporación', 'Fecha de incorporación', 'Join date'],
+    managerEmail:       ['Agente', 'Manager', 'Manager Email', 'Email del manager'],
+    adminEmail:         ['Admin', 'Dueño', 'Admin Email', 'Email del admin'],
 };
 
 function normalizeRow(row) {
@@ -244,6 +288,8 @@ function normalizeRow(row) {
         statusActive:       String(get(EXCEL_COLS.statusActive) || '').trim() || '',
         groupName:          String(get(EXCEL_COLS.groupName) || '').trim() || null,
         joinDate:           String(get(EXCEL_COLS.joinDate) || '').trim() || null,
+        managerEmail:       String(get(EXCEL_COLS.managerEmail) || '').trim().toLowerCase() || null,
+        adminEmail:         String(get(EXCEL_COLS.adminEmail) || '').trim().toLowerCase() || null,
     };
 }
 
@@ -268,6 +314,27 @@ export async function renderAdminDashboard(container) {
     const managers = allProfs.filter(p => p.is_manager && (p.agency || 'latam') === selectedAgency);
     const creators = allProfs.filter(p => p.is_creator && (p.agency || 'latam') === selectedAgency);
     const period = store.getPeriod();
+
+    // "Mi equipo" — managers cuyo admin_id soy yo, más lo que yo mismo tenga
+    // asignado directamente. Ver ADMIN_TEAM_SQL.sql (Fase 1: solo métrica,
+    // no restringe acceso).
+    const me = store.getProfile?.();
+    const myManagers = me ? allProfs.filter(p => p.role === 'manager' && p.admin_id === me.id) : [];
+    const ownerIds = me ? new Set([me.id, ...myManagers.map(m => m.id)]) : new Set();
+    let myTeamDiamonds = 0, myTeamCount = 0, objetivoMensual = 0;
+    if (me && ownerIds.size) {
+        try {
+            const assignments = await profiles.listAllAssignments();
+            const myUsernames = new Set(
+                assignments.filter(a => ownerIds.has(a.manager_id)).map(a => (a.username || '').toLowerCase())
+            );
+            const myTeamMetrics = data.filter(d => myUsernames.has((d.username || '').toLowerCase()));
+            myTeamDiamonds = myTeamMetrics.reduce((s, d) => s + Number(d.diamonds || 0), 0);
+            myTeamCount = myTeamMetrics.length;
+            const compSettings = await managerComp.getSettings(selectedAgency);
+            objetivoMensual = Number(compSettings?.objetivo_mensual || 0);
+        } catch (e) { console.warn('Error calculando "Mi equipo":', e); }
+    }
 
     container.innerHTML = `
         <div class="animate-fadeIn">
@@ -325,6 +392,11 @@ export async function renderAdminDashboard(container) {
                     <h3 style="font-size:0.95rem;">FAQ del Asistente</h3>
                     <p style="font-size:0.75rem; color:var(--text-secondary);">Preguntas frecuentes de WhatsApp.</p>
                 </div>
+                <div class="glass-panel action-card" id="nav-comp-settings">
+                    <i class="ph-bold ph-sliders-horizontal" style="font-size:1.6rem;margin-bottom:0.5rem;display:block;color:var(--accent);"></i>
+                    <h3 style="font-size:0.95rem;">Configuración de Comisiones</h3>
+                    <p style="font-size:0.75rem; color:var(--text-secondary);">Objetivo mensual y tasas de pago a managers.</p>
+                </div>
             </div>
 
             ${isWhatsappConfigured ? `
@@ -342,6 +414,8 @@ export async function renderAdminDashboard(container) {
                 ${!store.getProfile?.()?.whatsapp_number ? `<button id="wa-connect-btn-admin" class="btn btn-sm" style="background:#25d366;color:#04150a;font-weight:700;">Conectar WhatsApp</button>` : ''}
             </div>
             ` : ''}
+
+            ${renderMyTeamHero({ myManagersCount: myManagers.length, myTeamCount, myTeamDiamonds, totalAgencyDiamonds: data.reduce((s,c)=>s+Number(c.diamonds||0),0), objetivoMensual })}
 
             ${renderAgencyIncentiveHero({ data, creatorsCount: creators.length })}
 
@@ -406,6 +480,7 @@ export async function renderAdminDashboard(container) {
     container.querySelector('#nav-missions').onclick = () => renderMissionsAdmin(viewContent);
     container.querySelector('#nav-preview-creator').onclick = () => renderCreatorPickerView(viewContent);
     container.querySelector('#nav-assignments').onclick = () => renderAssignmentHistoryView(viewContent);
+    container.querySelector('#nav-comp-settings').onclick = () => renderCompSettingsView(viewContent);
     container.querySelector('#nav-whatsapp-faq').onclick = () => {
         import('./whatsappFaqAdmin.js')
             .then(mod => mod.renderWhatsappFaqAdmin(viewContent))
@@ -425,31 +500,54 @@ async function renderAuditView(container, managers, metricsData) {
     const managerByUsername = {};
     assignments.forEach(a => { managerByUsername[(a.username || '').toLowerCase()] = a.manager_id; });
 
+    // Config de comisión y total de diamantes de la agencia — una sola vez
+    // por agencia presente entre los managers, no por manager.
+    const agenciesInPlay = [...new Set(managers.map(m => m.agency || 'latam'))];
+    const settingsByAgency = {};
+    const agencyTotalsByAgency = {};
+    await Promise.all(agenciesInPlay.map(async (ag) => {
+        try { settingsByAgency[ag] = await managerComp.getSettings(ag); } catch (e) { console.warn('Error cargando config de comisión:', e); }
+        agencyTotalsByAgency[ag] = metricsData
+            .filter(d => (d.agency || 'latam') === ag)
+            .reduce((s, d) => s + Number(d.diamonds || 0), 0);
+    }));
+
+    let nominaTotal = 0;
+
+    const cards = managers.map(m => {
+        // Grupo resuelto desde la fuente única de asignaciones (creator_assignments)
+        const groupMetrics = metricsData.filter(d => managerByUsername[(d.username || '').toLowerCase()] === m.id);
+        const groupDiamonds = groupMetrics.reduce((s, d) => s + Number(d.diamonds || 0), 0);
+
+        const agency = m.agency || 'latam';
+        const settings = settingsByAgency[agency];
+        const payout = settings ? estimateManagerPayout(groupMetrics, settings, agencyTotalsByAgency[agency]) : null;
+        if (payout) nominaTotal += payout.totalMes;
+
+        return `
+            <div class="glass-panel" style="display:flex; flex-direction:column; gap:1rem;">
+                <div style="font-weight:700;">${m.display_name || m.email}</div>
+                <div style="background:rgba(255,255,255,0.02); padding:1rem; border-radius:8px;">
+                    <div style="font-size:0.65rem; color:var(--text-secondary);">RENDIMIENTO GRUPO</div>
+                    <div style="font-size:1.4rem; font-weight:800; color:var(--accent);">${fmt(groupDiamonds)} 💎</div>
+                    <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:0.4rem;">${groupMetrics.length} CREADORES</div>
+                    ${payout ? `<div style="font-size:0.9rem; font-weight:800; color:var(--primary-light); margin-top:0.5rem;">💰 Estimado: ${fmtUsd(payout.totalMes)}</div>` : ''}
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem;">
+                    <button class="btn btn-ghost v-m-dash" data-id="${m.id}" style="font-size:0.68rem;padding:0.4rem;">Dashboard</button>
+                    <button class="btn btn-ghost v-m-group" data-id="${m.id}" style="font-size:0.68rem;padding:0.4rem;">Creadores</button>
+                    <button class="btn btn-ghost v-m-earnings" data-id="${m.id}" style="font-size:0.68rem;padding:0.4rem;">Ganancias</button>
+                </div>
+            </div>`;
+    }).join('') || '<p>No hay managers asignados.</p>';
+
     container.innerHTML = `
         <div class="animate-fadeIn">
-            <h2 style="margin-bottom:1.5rem;">Auditoría de Managers</h2>
-            <div class="metrics-grid">
-                ${managers.map(m => {
-                    // Grupo resuelto desde la fuente única de asignaciones (creator_assignments)
-                    const groupMetrics = metricsData.filter(d => managerByUsername[(d.username || '').toLowerCase()] === m.id);
-
-                    const groupDiamonds = groupMetrics.reduce((s, d) => s + Number(d.diamonds || 0), 0);
-
-                    return `
-                    <div class="glass-panel" style="display:flex; flex-direction:column; gap:1rem;">
-                        <div style="font-weight:700;">${m.display_name || m.email}</div>
-                        <div style="background:rgba(255,255,255,0.02); padding:1rem; border-radius:8px;">
-                            <div style="font-size:0.65rem; color:var(--text-secondary);">RENDIMIENTO GRUPO</div>
-                            <div style="font-size:1.4rem; font-weight:800; color:var(--accent);">${fmt(groupDiamonds)} 💎</div>
-                            <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:0.4rem;">${groupMetrics.length} CREADORES</div>
-                        </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
-                            <button class="btn btn-ghost v-m-dash" data-id="${m.id}" style="font-size:0.7rem;">Dashboard</button>
-                            <button class="btn btn-ghost v-m-group" data-id="${m.id}" style="font-size:0.7rem;">Gestionar Creadores</button>
-                        </div>
-                    </div>`;
-                }).join('') || '<p>No hay managers asignados.</p>'}
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;margin-bottom:1.5rem;">
+                <h2 style="margin:0;">Auditoría de Managers</h2>
+                ${managers.length ? `<div class="badge" style="background:rgba(0,217,166,0.12);color:var(--accent);font-weight:800;">💰 Nómina proyectada: ${fmtUsd(nominaTotal)}</div>` : ''}
             </div>
+            <div class="metrics-grid">${cards}</div>
         </div>
     `;
 
@@ -466,6 +564,17 @@ async function renderAuditView(container, managers, metricsData) {
     });
     container.querySelectorAll('.v-m-group').forEach(btn => {
         btn.onclick = () => renderGroupEditor(container, btn.dataset.id);
+    });
+    container.querySelectorAll('.v-m-earnings').forEach(btn => {
+        btn.onclick = () => {
+            container.innerHTML = skelRows(3);
+            import('./managerEarnings.js')
+                .then(mod => mod.renderManagerEarningsView(container, btn.dataset.id))
+                .catch(err => {
+                    console.error('[import] managerEarnings.js falló:', err);
+                    container.innerHTML = `<p style="color:var(--danger);padding:2rem;">Error cargando ganancias: ${err.message}</p>`;
+                });
+        };
     });
 }
 
@@ -690,6 +799,8 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             const withLive    = rows.filter(r => (r.liveSeconds ?? 0) > 0).length;
             const withDays    = rows.filter(r => (r.daysSinceJoining ?? 0) > 0).length;
             const abandoned   = rows.filter(r => r.statusActive === 'Abandonó').length;
+            const withManager = rows.filter(r => r.managerEmail).length;
+            const withAdmin   = rows.filter(r => r.adminEmail).length;
 
             const ok  = 'color:var(--accent)';
             const dim = 'color:var(--text-muted)';
@@ -700,6 +811,8 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
                     <span style="${withMetrics > 0 ? ok : dim};">· ${withMetrics} con diamantes / días válidos</span>
                     <span style="${withLive > 0 ? ok : dim};">· ${withLive} con horas de live</span>
                     <span style="${withDays > 0 ? ok : dim};">· ${withDays} con días desde incorporación</span>
+                    <span style="${withManager > 0 ? ok : dim};">· ${withManager} con manager asignado (columna "Agente")</span>
+                    <span style="${withAdmin > 0 ? ok : dim};">· ${withAdmin} con admin dueño (columna "Admin")</span>
                     ${abandoned > 0 ? `<span style="color:var(--danger);font-weight:600;">· ${abandoned} con estado "Abandonó" — sus cuentas serán desactivadas</span>` : ''}
                 </div>`;
 
@@ -724,11 +837,24 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             await metrics.upsertJoiningData(`${m}-01`, lbl, rows, agency);
             // Paso 3: sincroniza whitelist y desactiva cuentas "Abandonó"
             await metrics.syncWhitelist(rows, agency);
-            appState.showToast('Datos publicados con éxito', 'success');
+            // Paso 4: asigna creador→manager y manager→admin por email
+            // (columnas "Agente"/"Admin" del excel — ver ADMIN_TEAM_SQL.sql).
+            // No bloquea la publicación si falla: los datos ya se publicaron.
+            try {
+                const r = await profiles.bulkAssignFromExcel(rows);
+                const parts = [`${r.assigned} asignados a su manager`];
+                if (r.admin_linked) parts.push(`${r.admin_linked} managers vinculados a un admin`);
+                if (r.manager_not_found) parts.push(`${r.manager_not_found} sin manager encontrado por email`);
+                if (r.admin_not_found) parts.push(`${r.admin_not_found} sin admin encontrado por email`);
+                appState.showToast('Datos publicados con éxito · ' + parts.join(' · '), 'success');
+            } catch (err) {
+                appState.showToast('Datos publicados, pero falló la asignación de equipos: ' + err.message, 'warning');
+            }
             await store.refreshMetrics();
+            await store.refreshAdminLists();
             renderAdminDashboard(mainContainer);
 
-            // Paso 4: avisa por WhatsApp a los creadores ya vinculados con
+            // Paso 5: avisa por WhatsApp a los creadores ya vinculados con
             // su progreso actualizado. No bloquea ni revierte la publicación
             // si esto falla (ej. Twilio caído) — los datos ya se publicaron.
             if (isWhatsappConfigured) {

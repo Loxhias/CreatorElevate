@@ -278,6 +278,20 @@ export const metrics = {
         return data.map(rowFromDb);
     },
 
+    // Total de diamantes de TODA la agencia en un período — vía RPC porque,
+    // desde RESTRICT_CREATOR_METRICS_SQL.sql, un manager ya no puede leer
+    // filas de creator_metrics fuera de su propio equipo (necesario para
+    // que "Mis Ganancias" siga calculando bien la comisión de incremento de
+    // ingresos, que depende del total real de la agencia, no solo su equipo).
+    async agencyTotal(periodId, agency = 'latam') {
+        if (!isSupabaseConfigured || !periodId) return null;
+        const { data, error } = await supabase.rpc('agency_total_diamonds', {
+            p_period_id: periodId, p_agency: agency,
+        });
+        if (error) throw error;
+        return Number(data) || 0;
+    },
+
     /** Bulk upsert (admin) — invoca la RPC. */
     async upsertPeriod(periodDate, label, rows) {
         if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
@@ -594,6 +608,15 @@ export const profiles = {
         if (error) throw error;
     },
 
+    // Asigna creador→manager y manager→admin en bloque a partir de las
+    // columnas managerEmail/adminEmail del excel mensual (ver ADMIN_TEAM_SQL.sql).
+    async bulkAssignFromExcel(rows) {
+        if (!isSupabaseConfigured) return { assigned: 0, admin_linked: 0, manager_not_found: 0, admin_not_found: 0 };
+        const { data, error } = await supabase.rpc('admin_bulk_assign_from_excel', { p_rows: rows });
+        if (error) throw error;
+        return data;
+    },
+
     async lookupCreator(username) {
         if (!isSupabaseConfigured) return null;
         const { data, error } = await supabase.rpc('manager_lookup_creator', { p_username: username });
@@ -905,6 +928,57 @@ export const content = {
             .from('agency_content')
             .upsert({ slug, title: san(title), body: san(body), updated_at: new Date().toISOString() },
                     { onConflict: 'slug' });
+        if (error) throw error;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  COMPENSACIÓN DE MANAGERS — objetivo mensual y tasas de comisión, por
+//  agencia. Editable solo por admin (ver RLS en MANAGER_COMP_SQL.sql); el
+//  manager y el admin pueden leerlo. Los defaults de demo replican los
+//  valores reales validados en el Panel de Creadores (DEFAULT_COMP).
+// ────────────────────────────────────────────────────────────────────────────
+
+const DEMO_COMP_DEFAULTS = {
+    latam: {
+        agency: 'latam', objetivo_mensual: 7660000,
+        tier1_nuevos: 25, tier1_monetizan: 10, tier1_graduados: 4, tier1_pago: 250,
+        tier2_nuevos: 20, tier2_monetizan: 5, tier2_graduados: 1, tier2_pago: 200,
+        umbral_monetizan_completo: 80000, umbral_monetizan_parcial: 40000, peso_monetizan_parcial: 0.5,
+        tasa_subir: 4, tasa_mantener: 2,
+        tasas_actividad: [0.5, 1, 1.5, 2, 2.5],
+        tasas_incremento: [5.5, 9], incremento_tiers_min: [90, 100],
+        pct_reparto_comisiones: 40,
+    },
+    usa: {
+        agency: 'usa', objetivo_mensual: 7660000,
+        tier1_nuevos: 25, tier1_monetizan: 10, tier1_graduados: 4, tier1_pago: 250,
+        tier2_nuevos: 20, tier2_monetizan: 5, tier2_graduados: 1, tier2_pago: 200,
+        umbral_monetizan_completo: 80000, umbral_monetizan_parcial: 40000, peso_monetizan_parcial: 0.5,
+        tasa_subir: 4, tasa_mantener: 2,
+        tasas_actividad: [0.5, 1, 1.5, 2, 2.5],
+        tasas_incremento: [5.5, 9], incremento_tiers_min: [90, 100],
+        pct_reparto_comisiones: 40,
+    },
+};
+
+export const managerComp = {
+    async getSettings(agency = 'latam') {
+        if (!isSupabaseConfigured) return DEMO_COMP_DEFAULTS[agency] || DEMO_COMP_DEFAULTS.latam;
+        const { data, error } = await supabase
+            .from('manager_comp_settings')
+            .select('*')
+            .eq('agency', agency)
+            .maybeSingle();
+        if (error) throw error;
+        return data || DEMO_COMP_DEFAULTS[agency] || DEMO_COMP_DEFAULTS.latam;
+    },
+
+    async updateSettings(agency, settings) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('manager_comp_settings')
+            .upsert({ agency, ...settings, updated_at: new Date().toISOString() }, { onConflict: 'agency' });
         if (error) throw error;
     },
 };

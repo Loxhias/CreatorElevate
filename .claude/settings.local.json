@@ -6,7 +6,12 @@
       "WebFetch(domain:www.tiktok.com)",
       "Bash(node -e ' *)",
       "Bash(node --input-type=module)",
-      "Bash(del \"c:\\\\Users\\\\PatricioSalgueroFría\\\\Desktop\\\\CreatorElevate\\\\_redirects\")"
+      "Bash(del \"c:\\\\Users\\\\PatricioSalgueroFría\\\\Desktop\\\\CreatorElevate\\\\_redirects\")",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__search_docs",
+      "mcp__supabase__execute_sql",
+      "PowerShell(winget install --id Git.Git -e --source winget --accept-package-agreements --accept-source-agreements)",
+      "PowerShell(git config --global --add safe.directory B:/CreatorElevate-main)"
     ]
   }
 }

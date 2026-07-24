@@ -8,11 +8,11 @@ import { appState } from '../main.js';
 import { env, isWhatsappConfigured } from '../env.js';
 
 
-function getIdx(d, tiers) {
+export function getIdx(d, tiers) {
     for (let i = tiers.length - 1; i >= 0; i--) if (d >= tiers[i].range) return i;
     return -1;
 }
-function parseHours(str) {
+export function parseHours(str) {
     if (!str) return 0;
     if (typeof str === 'number') return str;
     str = String(str);
@@ -21,13 +21,13 @@ function parseHours(str) {
     const s = (str.match(/(\d+)s/)   || [0,0])[1];
     return +h + +m/60 + +s/3600;
 }
-function fmt(n) { return Number(n).toLocaleString('es'); }
+export function fmt(n) { return Number(n).toLocaleString('es'); }
 function levelClass(n) { return `lv${Math.min(n, 10)}`; }
 function daysLeft() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth()+1, 0).getDate() - now.getDate();
 }
-function daysElapsed() {
+export function daysElapsed() {
     return new Date().getDate();
 }
 function renderTier(tier, size='1.1rem') {
@@ -36,7 +36,7 @@ function renderTier(tier, size='1.1rem') {
     }
     return `<span style="margin-right:0.3rem;">${tier.emoji}</span>`;
 }
-function daysInMonth() {
+export function daysInMonth() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
 }
@@ -108,7 +108,23 @@ function renderIncentiveHero({ me, h, dy, dLeft, meetsCash, currCashIdx, lastMon
         </div>`;
 }
 
-function getPaceData(currentDiamonds, lastMonthDiamonds) {
+// Resuelve la fila de creator_metrics que corresponde al usuario actual (o a
+// targetUsername en modo auditoría/vista previa): primero por tiktok_id
+// estable, luego por username normalizado. Compartido con otras vistas que
+// necesitan "mis métricas" sin reimplementar el matching (ej. creatorGoals.js).
+export function resolveMe(data, targetUsername, isAuditing) {
+    const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || store.getCurrentUser()?.username || '').toLowerCase();
+    const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
+    const searchName = cleanMatch(myUsername);
+    const profileTiktokId = isAuditing ? null : (store.getProfile?.()?.tiktok_id || null);
+    const me = data?.find(c =>
+        (profileTiktokId && c.tiktokId && profileTiktokId === c.tiktokId) ||
+        cleanMatch(c.username) === searchName
+    );
+    return { me, myUsername };
+}
+
+export function getPaceData(currentDiamonds, lastMonthDiamonds) {
     const elapsed  = daysElapsed();
     const totalDays = daysInMonth();
     // Approximate last month as same number of days
@@ -119,11 +135,6 @@ function getPaceData(currentDiamonds, lastMonthDiamonds) {
     const paceRatio = rateLast > 0 ? (rateThis / rateLast) * 100 : 0;
     const status    = paceRatio >= 105 ? 'ahead' : paceRatio >= 85 ? 'on-track' : 'behind';
     return { rateThis: Math.round(rateThis), rateLast: Math.round(rateLast), proj, paceRatio: Math.round(paceRatio), status };
-}
-function getRanking(me, data) {
-    const sorted = [...data].sort((a,b) => b.diamonds - a.diamonds);
-    const pos = sorted.findIndex(c => c.username === me.username) + 1;
-    return { pos, total: data.length, pct: Math.round((pos/data.length)*100) };
 }
 function pBar(val, max, color='linear-gradient(90deg,var(--primary),var(--secondary))', leftLabel=null, rightLabel=null) {
     const p     = Math.min(100, max > 0 ? (val / max) * 100 : 0);
@@ -157,7 +168,7 @@ function pBar(val, max, color='linear-gradient(90deg,var(--primary),var(--second
 }
 
 // ── Tab rendering ──────────────────────────────────────────────────────────
-function tabMetrics(me, rank, lastMonthTier, pace, dLeft) {
+function tabMetrics(me, lastMonthTier, pace, dLeft) {
     const statusColor = pace.status==='ahead'?'var(--accent)':pace.status==='on-track'?'var(--warning)':'var(--danger)';
     const statusIcon  = pace.status==='ahead'?'🔥':pace.status==='on-track'?'✓':'⚠';
     const statusText  = pace.status==='ahead'?'Vas mejor que el mes pasado':pace.status==='on-track'?'Vas al ritmo del mes pasado':'Vas por debajo del mes pasado';
@@ -929,17 +940,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
 
     // Si hay targetUsername, estamos en "Modo Auditoría"
     const isAuditing = !!targetUsername;
-    const myUsername = (targetUsername || store.getProfile?.()?.tiktok_username || user?.username || '').toLowerCase();
-
-    // Buscamos al creador: primero por tiktok_id estable, luego por username
-    // En modo auditoría solo buscamos por username — profileTiktokId es del manager logueado, no del target
-    const cleanMatch = (u) => String(u || '').trim().toLowerCase().replace(/^@/, '');
-    const searchName = cleanMatch(myUsername);
-    const profileTiktokId = isAuditing ? null : (store.getProfile?.()?.tiktok_id || null);
-    const me = data?.find(c =>
-        (profileTiktokId && c.tiktokId && profileTiktokId === c.tiktokId) ||
-        cleanMatch(c.username) === searchName
-    );
+    const { me, myUsername } = resolveMe(data, targetUsername, isAuditing);
 
     if (!me) {
         container.innerHTML = emptyState(
@@ -1015,7 +1016,6 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const hasSub = dy >= subscriptionRequirements.minDays && me.diamonds >= subscriptionRequirements.minDiamonds;
 
     const dLeft = daysLeft();
-    const rank  = getRanking(me, data);
 
     const profile = store.getProfile?.();
     let dsj = null;
@@ -1242,7 +1242,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         }
 
         if (!tabs[name]) {
-            if (name === 'metrics')   tabs[name] = tabMetrics(me, rank, curTier, pace, dLeft);
+            if (name === 'metrics')   tabs[name] = tabMetrics(me, curTier, pace, dLeft);
             if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
             if (name === 'benefits')  tabs[name] = tabBenefits(me, null, null, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
             if (name === 'missions')  tabs[name] = tabMissions(me);

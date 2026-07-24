@@ -71,12 +71,14 @@ function getNavItems(role) {
         items.push({ view: 'inicio',      icon: pi('chart-bar'),        label: t('nav.dashboard') });
         items.push({ view: 'mensajes',    icon: pi('bell'),             label: t('nav.messages') });
         items.push({ view: 'misiones',    icon: pi('target'),           label: 'Misiones' });
+        items.push({ view: 'objetivos',   icon: pi('trophy'),           label: 'Mis Objetivos' });
         items.push({ view: 'mis-puntos',  icon: pi('star'),             label: 'Mis Puntos' });
         items.push({ view: 'normas',      icon: pi('clipboard-text'),   label: t('nav.rules') });
         items.push({ view: 'canales',     icon: pi('megaphone-simple'), label: t('nav.channels') });
     } else if (role === 'manager') {
-        items.push({ view: 'inicio',   icon: pi('chart-bar'), label: 'Panel' });
-        items.push({ view: 'mensajes', icon: pi('bell'),      label: 'Mensajes' });
+        items.push({ view: 'inicio',    icon: pi('chart-bar'),        label: 'Panel' });
+        items.push({ view: 'mensajes',  icon: pi('bell'),             label: 'Mensajes' });
+        items.push({ view: 'ganancias', icon: pi('currency-dollar'),  label: 'Mis Ganancias' });
         const managerProfile = store.getProfile?.();
         if (managerProfile?.tiktok_username?.trim()) {
             items.push({ view: 'mis-metricas', icon: pi('video-camera'), label: 'Mis métricas' });
@@ -210,6 +212,9 @@ function renderCreatorPreviewLayout(container, targetUsername) {
             else if (view === 'misiones') {
                 safeImport('./views/missions.js', contentArea).then(m => m && safeRender(m.renderMissionsView, contentArea));
             }
+            else if (view === 'objetivos') {
+                safeImport('./views/creatorGoals.js', contentArea).then(m => m && safeRender((c) => m.renderCreatorGoalsView(c, targetUsername), contentArea));
+            }
             else if (view === 'mis-puntos') {
                 safeImport('./views/points.js', contentArea).then(m => m && safeRender(m.renderPointsView, contentArea));
             }
@@ -328,8 +333,14 @@ function renderDashboardLayout(container, renderContentFn, role) {
             else if (view === 'mis-metricas') {
                 safeImport('./views/creatorDashboard.js', contentArea).then(m => m && safeRender(m.renderCreatorDashboard, contentArea));
             }
+            else if (view === 'ganancias') {
+                safeImport('./views/managerEarnings.js', contentArea).then(m => m && safeRender(m.renderManagerEarningsView, contentArea));
+            }
             else if (view === 'misiones') {
                 safeImport('./views/missions.js', contentArea).then(m => m && safeRender(m.renderMissionsView, contentArea));
+            }
+            else if (view === 'objetivos') {
+                safeImport('./views/creatorGoals.js', contentArea).then(m => m && safeRender(m.renderCreatorGoalsView, contentArea));
             }
             else if (view === 'misiones-admin') {
                 safeImport('./views/missionsAdmin.js', contentArea).then(m => m && safeRender(m.renderMissionsAdmin, contentArea));
