@@ -364,6 +364,30 @@ export const metrics = {
         return data;
     },
 
+    /**
+     * Evalúa a los creadores con Magic By Loxhias activo (trialing/active)
+     * contra el período recién publicado — mismo patrón que
+     * whatsapp.sendCheckins(): se llama después de publicar el Excel, no
+     * bloquea ni revierte la publicación si falla (Pages Function
+     * "magic-sync-subscriptions"). Ver CLAUDE.md de Magic, "Integración con
+     * Creator Elevate".
+     */
+    async syncMagicSubscriptions(periodDate) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || '';
+        const response = await fetch('/api/magic-sync-subscriptions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ periodDate }),
+        });
+        let payload = null;
+        try { payload = await response.json(); } catch { /* respuesta no-JSON */ }
+        if (!response.ok || (payload && payload.success === false)) {
+            throw new Error(payload?.error || `Error HTTP ${response.status}`);
+        }
+        return payload;
+    },
+
     /** Admin: sincroniza la whitelist desde el Excel y desactiva creadores "Abandonó". */
     async syncWhitelist(rows, agency = 'latam') {
         if (!isSupabaseConfigured) return 0;
@@ -615,6 +639,43 @@ export const profiles = {
         const { data, error } = await supabase.rpc('admin_bulk_assign_from_excel', { p_rows: rows });
         if (error) throw error;
         return data;
+    },
+
+    // ── Referentes (creadores que reclutaron a otros creadores) ─────────────
+    // Distinto de manager: cobran de forma separada (fórmula a definir),
+    // acá solo se administra el flag y el vínculo con quién reclutaron.
+    // Ver referentes.sql.
+
+    async setReferente(userId, isReferente) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase
+            .from('profiles')
+            .update({ is_referente: !!isReferente })
+            .eq('id', userId);
+        if (error) throw error;
+    },
+
+    async listReferrals() {
+        if (!isSupabaseConfigured) return [];
+        const { data, error } = await supabase.from('creator_referrals').select('*');
+        if (error) throw error;
+        return data;
+    },
+
+    async assignReferral(username, referenteId) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { data, error } = await supabase.rpc('admin_assign_referral', {
+            p_username: username,
+            p_referente_id: referenteId,
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    async unassignReferral(username) {
+        if (!isSupabaseConfigured) throw new Error('Supabase no está configurado.');
+        const { error } = await supabase.rpc('admin_unassign_referral', { p_username: username });
+        if (error) throw error;
     },
 
     async lookupCreator(username) {
@@ -1196,6 +1257,33 @@ export const missions = {
         const counts = {};
         for (const r of data || []) counts[r.mission_id] = (counts[r.mission_id] || 0) + 1;
         return counts;
+    },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+//  MAGIC BY LOXHIAS — activación de suscripción por desempeño
+//  Ver CLAUDE.md de Magic ("Integración con Creator Elevate") para el diseño
+//  completo: 1 mes de prueba gratis (una única vez por siempre), mantenido
+//  mes a mes según si el creador sube/mantiene su nivel de diamantes (misma
+//  tabla que assets/js/config.js#cashBonuses, ver metrics.syncMagicSubscriptions
+//  más arriba para el lado de mantenimiento/revocación).
+// ────────────────────────────────────────────────────────────────────────────
+
+export const magic = {
+    /** El propio creador pide su mes de prueba gratis (Pages Function "magic-request-trial"). */
+    async requestTrial() {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token || '';
+        const response = await fetch('/api/magic-request-trial', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        });
+        let payload = null;
+        try { payload = await response.json(); } catch { /* respuesta no-JSON */ }
+        if (!response.ok || (payload && payload.success === false)) {
+            throw new Error(payload?.error || `Error HTTP ${response.status}`);
+        }
+        return payload;
     },
 };
 

@@ -850,8 +850,8 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
             } catch (err) {
                 appState.showToast('Datos publicados, pero falló la asignación de equipos: ' + err.message, 'warning');
             }
-            await store.refreshMetrics();
-            await store.refreshAdminLists();
+            await store.refreshMetrics(true);
+            await store.refreshAdminLists(true);
             renderAdminDashboard(mainContainer);
 
             // Paso 5: avisa por WhatsApp a los creadores ya vinculados con
@@ -864,6 +864,16 @@ function renderUploadView(container, mainContainer, agency = 'latam') {
                         r.failed ? 'warning' : 'success'))
                     .catch(err => appState.showToast('No se pudo avisar por WhatsApp: ' + (err.message || 'error desconocido'), 'error'));
             }
+
+            // Paso 6: evalúa a los creadores con Magic By Loxhias activo contra
+            // el período recién publicado (sube/mantiene/pierde la suscripción
+            // según diamantes vs. el mes anterior) — no bloquea ni revierte la
+            // publicación si falla.
+            metrics.syncMagicSubscriptions(`${m}-01`)
+                .then(r => {
+                    if (r.evaluated > 0) appState.showToast(`Magic: ${r.evaluated} creador(es) evaluado(s)`, 'success');
+                })
+                .catch(err => appState.showToast('No se pudo sincronizar Magic: ' + (err.message || 'error desconocido'), 'error'));
         } catch (err) {
             appState.showToast('Error al publicar: ' + (err.message || 'Desconocido'), 'error');
             uBtn.disabled = false;
@@ -1015,6 +1025,16 @@ export async function renderCreatorsList(container) {
     const managerByUsername = {};
     assignments.forEach(a => { managerByUsername[(a.username || '').toLowerCase()] = a.manager_id; });
 
+    // Referentes: creadores que reclutaron a otros creadores (creator_referrals).
+    let referrals = [];
+    try { referrals = await profiles.listReferrals(); } catch (e) { console.warn('Error cargando referidos:', e); }
+    const referenteByUsername = {};   // username reclutado (lowercase) -> id del referente
+    const referralCountByReferente = {}; // id del referente -> cuántos reclutó
+    referrals.forEach(r => {
+        referenteByUsername[(r.username || '').toLowerCase()] = r.referente_id;
+        referralCountByReferente[r.referente_id] = (referralCountByReferente[r.referente_id] || 0) + 1;
+    });
+
     // Construir lista de managers únicos presentes en las métricas
     const managersInData = [];
     const seenManagerIds = new Set();
@@ -1083,6 +1103,15 @@ export async function renderCreatorsList(container) {
                     </select>
                 </div>
                 <div>
+                    <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">REFERENTE</label>
+                    <select id="cr-filter-referente" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
+                        <option value="all">Todos</option>
+                        <option value="is_referente">⭐ Es referente</option>
+                        <option value="has_referente">Tiene referente asignado</option>
+                        <option value="none">Sin marcar</option>
+                    </select>
+                </div>
+                <div>
                     <label style="display:block; font-size:0.7rem; color:var(--text-secondary); margin-bottom:0.3rem;">ORDENAR POR</label>
                     <select id="cr-sort" class="input-control" style="padding:0.5rem 0.7rem; font-size:0.8rem;">
                         <option value="diamonds">Diamantes ↓</option>
@@ -1115,6 +1144,11 @@ export async function renderCreatorsList(container) {
             const isActive = prof?.active !== false;
             const uid = prof?.id;
 
+            const isReferente = prof?.is_referente === true;
+            const referenteId = referenteByUsername[c.username.toLowerCase()];
+            const referenteProf = referenteId ? store.getProfiles().find(p => p.id === referenteId) : null;
+            const referenteLabel = referenteProf?.tiktok_username || referenteProf?.display_name || referenteProf?.email || null;
+
             return `
             <div class="glass-panel" style="padding:1rem; display:flex; align-items:center; gap:1rem; margin-bottom:0.6rem;${!isActive ? ' opacity:0.55;' : ''}">
                 <div style="width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--primary),var(--secondary)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; flex-shrink:0; overflow:hidden; position:relative; border:1px solid rgba(255,255,255,0.1);">
@@ -1128,10 +1162,12 @@ export async function renderCreatorsList(container) {
                     <div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">
                         <span style="font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${c.username}</span>
                         ${!isActive ? '<span style="background:rgba(255,85,105,0.15);color:var(--danger);font-size:0.62rem;font-weight:700;padding:0.1rem 0.45rem;border-radius:999px;border:1px solid rgba(255,85,105,0.3);flex-shrink:0;">DADO DE BAJA</span>' : ''}
+                        ${isReferente ? `<span style="background:rgba(255,181,71,0.15);color:var(--warning);font-size:0.62rem;font-weight:700;padding:0.1rem 0.45rem;border-radius:999px;border:1px solid rgba(255,181,71,0.3);flex-shrink:0;">⭐ Referente${referralCountByReferente[uid] ? ` (${referralCountByReferente[uid]})` : ''}</span>` : ''}
                     </div>
                     <div style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.15rem;">
                         <span style="color:${daysColor};">${vDays}d</span>
                         ${managerName ? `· <span style="color:var(--text-muted);">${managerName}</span>` : '<span style="color:rgba(255,255,255,0.2);">· sin manager</span>'}
+                        ${referenteLabel ? `· <span style="color:var(--primary-light);">🔗 referido por @${referenteLabel}</span>` : ''}
                     </div>
                 </div>
                 <div style="text-align:right; flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:0.2rem;">
@@ -1140,8 +1176,10 @@ export async function renderCreatorsList(container) {
                         <span>${tier.name}</span>
                     </div>
                     <div style="font-weight:800; color:var(--accent); font-size:0.95rem;">${fmt(c.diamonds)} 💎</div>
-                    <div style="display:flex; gap:0.3rem; margin-top:0.15rem; justify-content:flex-end;">
+                    <div style="display:flex; gap:0.3rem; margin-top:0.15rem; justify-content:flex-end; flex-wrap:wrap;">
                         ${isActive ? `<button class="btn btn-sm btn-ghost v-c-dash" data-username="${c.username}" style="font-size:0.65rem; padding:0.2rem 0.6rem;">Ver →</button>` : ''}
+                        ${uid ? `<button class="btn btn-sm btn-ghost v-c-referrals" data-uid="${uid}" data-username="${c.username}"
+                            style="font-size:0.62rem;padding:0.2rem 0.55rem;">🔗 Referidos</button>` : ''}
                         ${uid ? `<button class="btn btn-sm v-c-toggle" data-uid="${uid}" data-active="${isActive}"
                             style="font-size:0.62rem;padding:0.2rem 0.55rem;background:${isActive ? 'rgba(255,85,105,0.1)' : 'rgba(0,217,166,0.1)'};color:${isActive ? 'var(--danger)' : 'var(--accent)'};border:1px solid ${isActive ? 'rgba(255,85,105,0.3)' : 'rgba(0,217,166,0.3)'};border-radius:var(--radius-sm);cursor:pointer;">
                             ${isActive ? 'Desactivar' : 'Reactivar'}
@@ -1158,11 +1196,13 @@ export async function renderCreatorsList(container) {
         const level        = container.querySelector('#cr-filter-level').value;
         const days         = container.querySelector('#cr-filter-days').value;
         const activeFilter = container.querySelector('#cr-filter-active').value;
+        const referenteFilter = container.querySelector('#cr-filter-referente').value;
         const sort         = container.querySelector('#cr-sort').value;
 
         let list = data.filter(c => {
             const vDays = c.validDays ?? 0;
             const cManagerId = managerByUsername[(c.username || '').toLowerCase()];
+            const p = profilesByUsername[c.username.toLowerCase()];
             if (q && !c.username.toLowerCase().includes(q)) return false;
             if (manager === 'none' && cManagerId) return false;
             if (manager !== 'all' && manager !== 'none' && cManagerId !== manager) return false;
@@ -1170,10 +1210,16 @@ export async function renderCreatorsList(container) {
             if (days === '0' && vDays > 0) return false;
             if (days !== 'all' && days !== '0' && vDays < Number(days)) return false;
             if (activeFilter !== 'all') {
-                const p = profilesByUsername[c.username.toLowerCase()];
                 const isActive = p?.active !== false;
                 if (activeFilter === 'active' && !isActive) return false;
                 if (activeFilter === 'inactive' && isActive) return false;
+            }
+            if (referenteFilter !== 'all') {
+                const hasReferente = !!referenteByUsername[c.username.toLowerCase()];
+                const isReferente = p?.is_referente === true;
+                if (referenteFilter === 'is_referente' && !isReferente) return false;
+                if (referenteFilter === 'has_referente' && !hasReferente) return false;
+                if (referenteFilter === 'none' && (isReferente || hasReferente)) return false;
             }
             return true;
         });
@@ -1186,7 +1232,7 @@ export async function renderCreatorsList(container) {
         container.querySelector('#cr-results').innerHTML = renderItems(list);
     };
 
-    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-active', '#cr-sort'].forEach(sel => {
+    ['#cr-search', '#cr-filter-manager', '#cr-filter-level', '#cr-filter-days', '#cr-filter-active', '#cr-filter-referente', '#cr-sort'].forEach(sel => {
         const el = container.querySelector(sel);
         el.addEventListener(sel === '#cr-search' ? 'input' : 'change', applyFilters);
     });
@@ -1223,6 +1269,136 @@ export async function renderCreatorsList(container) {
                 appState.showToast('Error: ' + err.message, 'error');
             }
         }
+
+        const referralsBtn = e.target.closest('.v-c-referrals');
+        if (referralsBtn) {
+            renderReferralsEditor(container, referralsBtn.dataset.uid, referralsBtn.dataset.username);
+        }
+    });
+}
+
+// ── VISTA: REFERIDOS DE UN REFERENTE ────────────────────────────────────────
+// "Referente" = creador de la agencia que reclutó a otros creadores. Cobra
+// distinto de un manager (fórmula todavía no definida) — acá solo se
+// administra el flag profiles.is_referente y el vínculo creator_referrals.
+async function renderReferralsEditor(container, referenteId, referenteUsername) {
+    container.innerHTML = '<div style="padding:2rem;">Cargando referidos...</div>';
+
+    const allProfs = store.getProfiles() || [];
+    const referenteProf = allProfs.find(p => p.id === referenteId) || {};
+    const isReferente = referenteProf.is_referente === true;
+
+    const allData = store.getMetricsData() || [];
+    const data = allData.filter(d => (d.agency || 'latam') === selectedAgency);
+
+    let referrals = [];
+    try { referrals = await profiles.listReferrals(); } catch (e) { console.warn('Error cargando referidos:', e); }
+    const referenteOfUsername = {};
+    referrals.forEach(r => { referenteOfUsername[(r.username || '').toLowerCase()] = r.referente_id; });
+
+    const myRecruits = data.filter(c => referenteOfUsername[c.username.toLowerCase()] === referenteId);
+    const otherCreators = data.filter(c =>
+        c.username.toLowerCase() !== referenteUsername.toLowerCase() &&
+        referenteOfUsername[c.username.toLowerCase()] !== referenteId
+    );
+
+    const renderRecruitRow = (c) => `
+        <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎</div>
+            </div>
+            <button class="rem-r" data-username="${c.username}" style="background:none; border:none; color:var(--danger); cursor:pointer; font-weight:700; font-size:0.8rem;">Quitar</button>
+        </div>`;
+
+    const renderAvailableRow = (c) => {
+        const otherRefId = referenteOfUsername[c.username.toLowerCase()];
+        const otherRefProf = otherRefId ? allProfs.find(p => p.id === otherRefId) : null;
+        const otherRefLabel = otherRefProf?.tiktok_username || otherRefProf?.display_name || null;
+        return `
+        <div class="glass-panel" style="padding:0.6rem; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-size:0.85rem; font-weight:600;">@${c.username}</div>
+                <div style="font-size:0.65rem; color:var(--text-secondary);">${fmt(c.diamonds)} 💎${otherRefLabel ? ` · ya referido por @${otherRefLabel}` : ''}</div>
+            </div>
+            <button class="add-r" data-username="${c.username}" style="background:none; border:none; color:var(--primary); cursor:pointer; font-weight:700; font-size:0.8rem;">Añadir</button>
+        </div>`;
+    };
+
+    container.innerHTML = `
+        <div class="animate-fadeIn">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; flex-wrap:wrap; gap:0.75rem;">
+                <h3 style="margin:0;">Referidos de @${referenteUsername}</h3>
+                <button id="close-ref" class="btn btn-ghost btn-sm">← Volver</button>
+            </div>
+
+            <div class="glass-panel" style="padding:0.9rem 1rem; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap;">
+                <div>
+                    <div style="font-weight:700; font-size:0.85rem;">${isReferente ? '⭐ Marcado como referente' : 'Todavía no está marcado como referente'}</div>
+                    <p style="font-size:0.72rem; color:var(--text-secondary); margin-top:0.2rem;">La monetización para referentes se define más adelante — por ahora solo se guarda el flag y a quién reclutó.</p>
+                </div>
+                <button id="toggle-referente" class="btn btn-sm" style="background:${isReferente ? 'rgba(255,85,105,0.1)' : 'var(--primary)'}; color:${isReferente ? 'var(--danger)' : 'white'}; white-space:nowrap;">
+                    ${isReferente ? 'Quitar marca de referente' : 'Marcar como referente'}
+                </button>
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1.5rem;">
+                <div class="glass-panel">
+                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">RECLUTÓ (${myRecruits.length})</h5>
+                    <div id="ref-current-list" style="display:flex; flex-direction:column; gap:0.5rem;">
+                        ${myRecruits.map(renderRecruitRow).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">Todavía no tiene reclutados asignados.</p>'}
+                    </div>
+                </div>
+                <div class="glass-panel">
+                    <h5 style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:1rem;">OTROS CREADORES (${otherCreators.length})</h5>
+                    <div style="margin-bottom:0.8rem;">
+                        <input type="text" id="ref-filter" class="input-control" placeholder="Filtrar creadores..." style="padding:0.5rem 0.8rem; font-size:0.8rem;">
+                    </div>
+                    <div id="ref-available-list" style="display:flex; flex-direction:column; gap:0.5rem; max-height:400px; overflow-y:auto;">
+                        ${otherCreators.map(renderAvailableRow).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">No hay más creadores para asignar.</p>'}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.querySelector('#close-ref').onclick = () => renderCreatorsList(container);
+
+    container.querySelector('#toggle-referente').onclick = async () => {
+        try {
+            await profiles.setReferente(referenteId, !isReferente);
+            await store.refreshAdminLists(true);
+            appState.showToast(!isReferente ? 'Marcado como referente' : 'Se quitó la marca de referente', 'success');
+            renderReferralsEditor(container, referenteId, referenteUsername);
+        } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
+    };
+
+    const filterInput = container.querySelector('#ref-filter');
+    const availableListEl = container.querySelector('#ref-available-list');
+    filterInput.addEventListener('input', () => {
+        const q = filterInput.value.toLowerCase().trim();
+        const filtered = otherCreators.filter(c => c.username.toLowerCase().includes(q));
+        availableListEl.innerHTML = filtered.map(renderAvailableRow).join('') || '<p style="font-size:0.8rem; color:var(--text-muted);">No hay más creadores para asignar.</p>';
+        bindReferralBtns(availableListEl, referenteId, referenteUsername, container);
+    });
+
+    bindReferralBtns(container, referenteId, referenteUsername, container);
+}
+
+function bindReferralBtns(el, referenteId, referenteUsername, rootContainer) {
+    el.querySelectorAll('.add-r').forEach(b => b.onclick = async () => {
+        try {
+            await profiles.assignReferral(b.dataset.username, referenteId);
+            appState.showToast(`@${b.dataset.username} asignado como reclutado`, 'success');
+            renderReferralsEditor(rootContainer, referenteId, referenteUsername);
+        } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
+    });
+    el.querySelectorAll('.rem-r').forEach(b => b.onclick = async () => {
+        try {
+            await profiles.unassignReferral(b.dataset.username);
+            appState.showToast('Referido desvinculado', 'info');
+            renderReferralsEditor(rootContainer, referenteId, referenteUsername);
+        } catch (err) { appState.showToast('Error: ' + err.message, 'error'); }
     });
 }
 

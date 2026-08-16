@@ -1,7 +1,7 @@
 // v2
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
-import { visualTiers, cashBonuses, diamondRewards, subscriptionRequirements, requirements, getCashBonuses } from '../config.js';
+import { visualTiers, cashBonuses, diamondRewards, requirements, getCashBonuses } from '../config.js';
 import { auth, push, metrics, whatsapp } from '../api.js';
 import { t, getLang } from '../i18n.js';
 import { appState } from '../main.js';
@@ -491,44 +491,11 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
             </div>
         </div>`;
 
-    // ── 4. Suscripción Interactik App ──────────────────────────────────────
-    const reqDy15 = dy>=subscriptionRequirements.minDays, reqD80 = me.diamonds>=subscriptionRequirements.minDiamonds;
-    const subOk = reqDy15 && reqD80;
-    // "Casi listo": al menos uno de los dos requisitos está a >=80% aunque el
-    // otro esté lejos — igual vale la pena avisar que está cerca de algo.
-    const subPctDays  = subscriptionRequirements.minDays > 0 ? dy / subscriptionRequirements.minDays : 1;
-    const subPctDiam  = subscriptionRequirements.minDiamonds > 0 ? me.diamonds / subscriptionRequirements.minDiamonds : 1;
-    const subAlmostThere = !subOk && (subPctDays >= 0.8 || subPctDiam >= 0.8);
-
-    const subCard = `
-        <div class="glass-panel section-card" style="margin-bottom:0.85rem;background:rgba(244,113,181,0.03);border-left:3px solid var(--secondary);">
-            <!-- Header -->
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.85rem;">
-                <div style="display:flex;align-items:center;gap:0.6rem;">
-                    <div class="section-icon" style="background:rgba(244,113,181,0.12);color:var(--secondary);">🎟️</div>
-                    <div>
-                        <h3 style="font-size:0.92rem;">Suscripción Interactik App</h3>
-                        <p class="text-xs text-muted">Req: <strong style="color:var(--secondary);">${subscriptionRequirements.minDays} días activos</strong> · <strong style="color:var(--secondary);">${fmt(subscriptionRequirements.minDiamonds)} 💎</strong></p>
-                    </div>
-                </div>
-                ${subOk ? `<div style="background:rgba(244,113,181,0.15);border:1px solid rgba(244,113,181,0.35);border-radius:999px;padding:0.2rem 0.75rem;font-size:0.68rem;font-weight:700;color:#f471b5;flex-shrink:0;">✓ Activa</div>` : ''}
-            </div>
-
-            ${statRow('📅', 'Días Activos', `${dy} / ${subscriptionRequirements.minDays}`, reqDy15 ? '✓' : `(Faltan ${subscriptionRequirements.minDays - dy})`, reqDy15 ? '#f471b5' : 'var(--text-muted)')}
-            ${miniBar(dy, subscriptionRequirements.minDays, reqDy15 ? 'linear-gradient(90deg,#f471b5,#ec4899)' : 'linear-gradient(90deg,rgba(244,113,181,0.4),#f471b5)')}
-
-            ${statRow('💎', 'Diamantes Requeridos', `${fmt(me.diamonds)} / ${fmt(subscriptionRequirements.minDiamonds)}`, reqD80 ? '✓' : `(${Math.round(subPctDiam * 100)}%)`, reqD80 ? '#f471b5' : 'var(--accent)')}
-            ${miniBar(me.diamonds, subscriptionRequirements.minDiamonds, reqD80 ? 'linear-gradient(90deg,#f471b5,#ec4899)' : 'linear-gradient(90deg,rgba(244,113,181,0.4),#f471b5)')}
-
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);padding:0.55rem 0.75rem;margin-top:0.5rem;">
-                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.76rem;color:${subOk ? '#f471b5' : 'var(--text-muted)'};">
-                    <span>${subOk ? '✅' : '🔒'}</span>
-                    <span>${subOk ? '¡Elegible para la Suscripción Interactik App gratuita!' : 'Completa los requisitos para obtener el acceso.'}</span>
-                </div>
-                ${subAlmostThere ? `<div style="background:rgba(244,113,181,0.18);border:1px solid rgba(244,113,181,0.4);border-radius:999px;padding:0.15rem 0.6rem;font-size:0.65rem;font-weight:800;color:#f471b5;flex-shrink:0;">¡CASI LISTO!</div>` : ''}
-            </div>
-        </div>`;
-
+    // La tarjeta "Suscripción Interactik App" (umbral fijo 15 días+80K 💎,
+    // sin conexión real a ningún backend) se retiró — reemplazada por la
+    // integración real con Magic By Loxhias (ver app/dashboard/perfiles de
+    // Magic y creatorGoals.js#renderMagicSection acá), que sí otorga/revoca
+    // una suscripción de verdad según nivel de diamantes mes a mes.
 
     const urgencyBanner = dLeft<=7?`
         <div style="background:linear-gradient(135deg,rgba(255,181,71,0.15),rgba(244,113,181,0.1));border:1px solid rgba(255,181,71,0.35);border-radius:var(--radius-md);padding:0.9rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:0.75rem;">
@@ -537,17 +504,17 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
             <div class="text-sm" style="color:var(--text-secondary);">Revisa los requisitos pendientes y actúa ahora.</div></div>
         </div>`:'';
 
-    return urgencyBanner + levelCard + cashCard + diamCard + subCard;
+    return urgencyBanner + levelCard + cashCard + diamCard;
 }
 
 
-function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashIdx) {
+function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, trendLast, meetsCashLast, meetsDiamLast, lastCashIdx) {
     // hLast y dyLast no existen en la BD — se ignoran y se infiere desde diamondsLastMonth
     const now = new Date();
     const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthName = lastMonthDate.toLocaleString('es', { month: 'long', year: 'numeric' });
 
-    const noBenefits = cashAmtLast === 0 && diamAmtLast === 0 && !hasSubLast;
+    const noBenefits = cashAmtLast === 0 && diamAmtLast === 0;
 
     function benefitRow(icon, label, value, earned, note = '') {
         return `
@@ -600,10 +567,6 @@ function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, hasSubLast, 
                     <div class="text-xs text-muted">Premio Diamantes</div>
                     <div style="font-weight:800;color:${diamAmtLast>0?'var(--primary-light)':'var(--text-muted)'};">${diamAmtLast>0?'+'+fmt(diamAmtLast):'0'} 💎</div>
                 </div>
-                <div>
-                    <div class="text-xs text-muted">Suscripción App</div>
-                    <div style="font-weight:800;color:${hasSubLast?'#f471b5':'var(--text-muted)'};">${hasSubLast?'✓ Gratis':'No activa'}</div>
-                </div>
             </div>
         </div>
 
@@ -624,14 +587,6 @@ function tabBenefits(me, _hLast, _dyLast, cashAmtLast, diamAmtLast, hasSubLast, 
             diamAmtLast > 0
                 ? `Base + bonus por batallas incluido`
                 : 'No se alcanzaron 90h de LIVE y 22 días activos'
-        )}
-
-        ${benefitRow('🎟️', 'Suscripción Interactik App',
-            hasSubLast ? '✓ Gratis' : 'No activa',
-            hasSubLast,
-            hasSubLast
-                ? 'Elegiste la suscripción gratuita este mes'
-                : 'No se alcanzaron los 15 días activos o 80K 💎'
         )}
 
         <div style="margin-top:0.75rem;padding:0.65rem 0.9rem;background:rgba(255,255,255,0.03);border-radius:var(--radius-sm);border-left:3px solid rgba(124,110,247,0.4);">
@@ -1012,9 +967,6 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         }
     }
 
-    // Subscription: dy >= 15 AND current diamonds >= 80,000
-    const hasSub = dy >= subscriptionRequirements.minDays && me.diamonds >= subscriptionRequirements.minDiamonds;
-
     const dLeft = daysLeft();
 
     const profile = store.getProfile?.();
@@ -1219,7 +1171,6 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         const extra = Math.round(base * (Math.floor(battlesLast / 100) * 0.1));
         diamAmtLast = base + extra;
     }
-    const hasSubLast = dLast >= subscriptionRequirements.minDiamonds;
     const meetsCashLast = cashAmtLast > 0;
     const meetsDiamLast = diamAmtLast > 0;
 
@@ -1244,7 +1195,7 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
         if (!tabs[name]) {
             if (name === 'metrics')   tabs[name] = tabMetrics(me, curTier, pace, dLeft);
             if (name === 'goals')     tabs[name] = tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, dLeft, pace.proj, pace.status, cashAmt);
-            if (name === 'benefits')  tabs[name] = tabBenefits(me, null, null, cashAmtLast, diamAmtLast, hasSubLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
+            if (name === 'benefits')  tabs[name] = tabBenefits(me, null, null, cashAmtLast, diamAmtLast, trendLast, meetsCashLast, meetsDiamLast, lastCashTierIdx);
             if (name === 'missions')  tabs[name] = tabMissions(me);
             if (name === 'challenge') tabs[name] = tabChallenge90(me, h, dy);
         }
@@ -1502,7 +1453,7 @@ function renderSubmitMetricsView(container, prefill = null) {
 
         try {
             await metrics.submitSelf(days, hours, diamonds, periodDate);
-            await store.refreshMetrics();
+            await store.refreshMetrics(true);
             const mainContainer = container.closest('#dashboard-content') || container;
             renderCreatorDashboard(mainContainer);
         } catch (err) {

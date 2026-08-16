@@ -115,7 +115,7 @@ export function renderNormas(container) {
                         <div style="flex:1;min-width:0;">
                             <h3 style="margin:0 0 0.4rem;font-size:0.95rem;font-weight:700;">Acceso a Beneficios</h3>
                             <p style="margin:0 0 0.6rem;font-size:0.82rem;color:var(--text-secondary);line-height:1.6;">
-                                Los bonos en efectivo, premios en diamantes y la suscripción a Interactik App están sujetos al cumplimiento de métricas mensuales. Revisa la sección <strong style="color:var(--text-primary);">Objetivos</strong> en tu panel para ver el progreso en tiempo real.
+                                Los bonos en efectivo, premios en diamantes y la suscripción a Magic están sujetos al cumplimiento de métricas mensuales. Revisa la sección <strong style="color:var(--text-primary);">Objetivos</strong> en tu panel para ver el progreso en tiempo real.
                             </p>
                             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0.6rem;">
                                 <div style="background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.15);border-radius:var(--radius-sm);padding:0.6rem 0.75rem;text-align:center;">

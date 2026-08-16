@@ -16,6 +16,24 @@ const state = {
     managerCreators: {},   // cache { [managerId]: { usernames: Set, expiresAt: number } }
 };
 
+// Bug real de performance, mismo patrón que ya se corrigió en Magic By
+// Loxhias (dashboard de la otra app): refreshMetrics()/refreshAdminLists()
+// se llamaban SIN CONDICIÓN al montar casi cada vista (creatorDashboard,
+// creatorGoals, managerDashboard, managerEarnings, partes de
+// adminDashboard) — cada cambio de pestaña volvía a bajar la tabla
+// COMPLETA de métricas de toda la agencia (o la lista completa de
+// profiles), aunque `store.init()` ya la hubiera cargado hace instantes.
+// Con la agencia creciendo, esto se sentía cada vez más lento. Ahora estas
+// dos funciones son "cache-first con vencimiento": si ya se pidió hace
+// menos de STALE_MS, no vuelven a pegarle a Supabase — salvo que el
+// llamador pase `force:true` (después de publicar el Excel, guardar el
+// perfil propio, marcar/desmarcar un referente, etc., donde el dato SÍ
+// cambió de verdad en el servidor).
+const METRICS_STALE_MS = 90 * 1000;
+const ADMIN_LISTS_STALE_MS = 90 * 1000;
+let metricsFetchedAt = 0;
+let adminListsFetchedAt = 0;
+
 export const store = {
     // ── compat con código viejo ────────────────────────────────────────────
     get: (key) => {
@@ -106,18 +124,30 @@ export const store = {
             if (metricsResult.status === 'fulfilled' && metricsResult.value) {
                 state.period = metricsResult.value.period;
                 state.metricsRows = metricsResult.value.rows.length ? metricsResult.value.rows : null;
+                // Marca el momento del fetch inicial — si no, la primera vista
+                // que el usuario abre después de este init() vería
+                // metricsFetchedAt en 0 y dispararía un refetch redundante
+                // pese a que estos datos tienen segundos de antigüedad.
+                metricsFetchedAt = Date.now();
             }
         } catch (e) {
             console.warn('Error en la inicialización paralela:', e);
         }
     },
 
-    /** Recarga las métricas (ej. tras un upload de admin). */
-    async refreshMetrics() {
+    /**
+     * Recarga las métricas. Cache-first con vencimiento (ver STALE_MS más
+     * arriba) — pasar `force:true` cuando el dato SÍ cambió en el servidor
+     * (ej. tras un upload de admin o que el propio creador cargue sus
+     * métricas manuales).
+     */
+    async refreshMetrics(force = false) {
         if (!isSupabaseConfigured) return;
+        if (!force && state.metricsRows && Date.now() - metricsFetchedAt < METRICS_STALE_MS) return;
         const { period, rows } = await metrics.getLatest();
         state.period = period;
         state.metricsRows = rows;
+        metricsFetchedAt = Date.now();
     },
 
     /** Recarga el perfil (ej. tras login). */
@@ -149,12 +179,18 @@ export const store = {
         delete state.managerCreators[managerId];
     },
 
-    /** Carga managers + perfiles (panel admin). */
-    async refreshAdminLists() {
+    /**
+     * Carga managers + perfiles (panel admin). Mismo criterio cache-first
+     * que refreshMetrics — `force:true` cuando algo realmente cambió (ej.
+     * marcar/desmarcar un referente, reasignar un creador).
+     */
+    async refreshAdminLists(force = false) {
         if (!isSupabaseConfigured) return;
+        if (!force && state.profiles.length && Date.now() - adminListsFetchedAt < ADMIN_LISTS_STALE_MS) return;
         const { profiles } = await import('./api.js');
         state.profiles = await profiles.listAll();
         state.managers = state.profiles.filter(p => p.role === 'manager');
+        adminListsFetchedAt = Date.now();
     },
 
     async clear() {

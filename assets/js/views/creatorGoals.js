@@ -7,6 +7,8 @@
 // siempre con lo que el creador ve en su dashboard principal.
 import { store } from '../store.js';
 import { isSupabaseConfigured } from '../supabase.js';
+import { appState } from '../main.js';
+import { magic } from '../api.js';
 import {
     visualTiers, diamondRewards,
     subscriptionRequirements, requirements, getCashBonuses
@@ -50,13 +52,13 @@ export async function renderCreatorGoalsView(container, targetUsername = null) {
             );
             return;
         }
-        renderContent(container, me);
+        renderContent(container, me, isAuditing);
     } catch (err) {
         container.innerHTML = `<div class="glass-panel" style="padding:2rem;color:var(--danger);">Error: ${err.message}</div>`;
     }
 }
 
-function renderContent(container, me) {
+function renderContent(container, me, isAuditing = false) {
     const h = parseHours(me.liveDuration);
     const dy = Number(me.validDays || 0);
     const dLast = Number(me.diamondsLastMonth || 0);
@@ -96,6 +98,8 @@ function renderContent(container, me) {
 
             ${renderTodayGoal({ dailyGoal, dLeft, missing, nextCashTier, pace })}
 
+            ${!isAuditing ? renderMagicSection() : ''}
+
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-bottom:1.25rem;">
                 ${renderCashGoalCard({ currCashIdx, lastMonthIdx, agencyCashBonuses, h, dy })}
                 ${renderFanClubCard({ me, dy, reqDy, reqDiam, hasSub })}
@@ -111,6 +115,65 @@ function renderContent(container, me) {
 
             ${renderClosingSection()}
         </div>`;
+
+    if (!isAuditing) wireMagicSection(container);
+}
+
+// "Activar Magic" — mes de prueba gratis por desempeño, ver
+// CLAUDE.md de Magic ("Integración con Creator Elevate"). Nunca se muestra
+// en modo auditoría (un manager viendo el panel de OTRO creador) — es una
+// acción exclusiva del propio creador sobre su propia cuenta.
+const MAGIC_STATUS_COPY = {
+    trialing: { label: 'Prueba activa', color: 'var(--primary-light)', desc: 'Tu mes de prueba de Magic está activo. Mantené o subí tu nivel de diamantes el próximo mes para conservarla.' },
+    active:   { label: 'Activa', color: 'var(--accent)', desc: 'Tu suscripción de Magic sigue activa — mantuviste o subiste tu nivel el mes pasado.' },
+    revoked:  { label: 'Perdida', color: 'var(--danger)', desc: 'Perdiste tu suscripción de Magic por bajar de nivel — no hay una segunda prueba gratis, pero podés recuperarla mejorando tu desempeño (consultá con tu manager).' },
+};
+
+function renderMagicSection() {
+    const magicStatus = store.getProfile?.()?.magic_status || null;
+    const statusInfo = magicStatus ? MAGIC_STATUS_COPY[magicStatus] : null;
+
+    return `
+        <div class="glass-panel section-card" style="margin-bottom:1.25rem;border-color:rgba(124,110,247,0.35);">
+            <div class="section-header">
+                <div class="section-icon" style="background:rgba(124,110,247,0.12);">✨</div>
+                <div><h3 style="font-size:0.92rem;">Magic By Loxhias</h3><p class="text-xs text-muted">Editor de alertas y overlays para tu stream</p></div>
+            </div>
+            ${statusInfo ? `
+                <p class="text-sm" style="margin-top:0.6rem;">
+                    <span style="font-weight:700;color:${statusInfo.color};">${statusInfo.label}</span> — ${statusInfo.desc}
+                </p>
+            ` : `
+                <p class="text-sm" style="color:var(--text-secondary);margin-top:0.6rem;">
+                    Activá 1 mes de prueba gratis de Magic By Loxhias. Después del mes de prueba, la mantenés mientras
+                    subas o mantengas tu nivel de diamantes — si bajás de nivel, la perdés. Es un único mes de prueba,
+                    no se puede volver a pedir.
+                </p>
+                <button id="magic-trial-btn" class="btn btn-primary" style="margin-top:0.75rem;padding:0.6rem 1.1rem;font-size:0.85rem;font-weight:700;">
+                    Activar prueba gratis de Magic
+                </button>
+            `}
+        </div>`;
+}
+
+function wireMagicSection(container) {
+    const btn = container.querySelector('#magic-trial-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Activando...';
+        try {
+            await magic.requestTrial();
+            appState.showToast('¡Magic activado! Revisá tu email para definir tu contraseña.', 'success');
+            const profile = store.getProfile?.();
+            if (profile) { profile.magic_status = 'trialing'; profile.magic_activated_at = new Date().toISOString(); }
+            btn.closest('.section-card').outerHTML = renderMagicSection();
+        } catch (err) {
+            appState.showToast('No se pudo activar: ' + err.message, 'danger');
+            btn.disabled = false;
+            btn.textContent = 'Activar prueba gratis de Magic';
+        }
+    });
 }
 
 function renderTodayGoal({ dailyGoal, dLeft, missing, nextCashTier, pace }) {

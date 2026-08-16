@@ -334,7 +334,7 @@ Multicuentas en LIVE (tolerancia cero): está estrictamente prohibido usar más 
 
 Conducta y representación: todo creador es embajador de la agencia. Se espera trato respetuoso con la audiencia y otros creadores, comunicar a su manager cualquier problema técnico o personal, y reportar actividades sospechosas o violaciones de normas que observe.
 
-Beneficios: bono en efectivo mensual, premio en diamantes, y suscripción gratis a Interactik App — todos sujetos a cumplir las métricas mensuales (días válidos, horas). El detalle de niveles y montos exactos está en la sección Objetivos del panel de cada creador.
+Beneficios: bono en efectivo mensual, premio en diamantes, y suscripción gratis a Magic (editor de alertas y animaciones para tu stream) — todos sujetos a cumplir las métricas mensuales (días válidos, horas). El detalle de niveles y montos exactos está en la sección Objetivos del panel de cada creador.
 
 Directrices de TikTok que aplican (resumen): prohibido contenido con menores en situaciones inapropiadas, contenido violento o peligroso, acoso o bullying, discurso de odio, manipulación de alcance con bots o cuentas falsas, compartir datos privados de terceros sin consentimiento (doxing), promover actividades ilegales, usar música o contenido con derechos de autor sin licencia (usar la biblioteca de sonidos de TikTok en su lugar). Específicamente en LIVE: prohibido contenido sexual explícito, pedir dinero de forma coercitiva o engañosa, transmitir bajo efectos de alcohol o sustancias, mostrar armas reales o conducir, y usar multicuentas.
 

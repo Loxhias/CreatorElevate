@@ -46,13 +46,30 @@ SELECT
 
 📚 Capacitación VIP: Te entrenamos para que domines las normas, funciones y herramientas que impulsarán tu carrera como creador.
 
-🎮 Herramientas de PC Gratis: Si transmites desde PC, tendrás el primer mes de Interactik Interactive completamente gratis. ¡Y podrás mantenerlo gratis alcanzando tus objetivos de días y diamantes!
-
-🪄 Magic sin costo: Muchos creadores pagan cientos de dólares por las animaciones y alertas en pantalla que nosotros te damos 100% gratis para potenciar tus directos.
+🪄 Magic sin costo: Muchos creadores pagan cientos de dólares por las animaciones y alertas en pantalla para su transmisión — nosotros te damos el primer mes de Magic 100% gratis, y podrás mantenerlo gratis alcanzando tus objetivos de días y diamantes.
 
 🚀 ¡No desaproveches esta oportunidad de llevar tu contenido al siguiente nivel! Estamos listos para impulsarte.$$,
     20
 WHERE NOT EXISTS (SELECT 1 FROM public.whatsapp_faq WHERE question_label = 'Beneficios de la agencia');
+
+-- El INSERT de arriba es idempotente (no pisa una fila que ya exista), así
+-- que si este seed ya corrió antes en producción con el texto viejo
+-- ("Interactik Interactive" / bullets duplicados de Magic), el INSERT solo
+-- no alcanza para corregirlo — este UPDATE lo hace explícito, sin duplicar
+-- la respuesta acá.
+UPDATE public.whatsapp_faq
+SET answer = $$✨ ¡En Interactik Agency tenemos los mejores beneficios para ti! ✨
+
+💰 0% Comisión: No te cobramos nada sobre tus ganancias. Te ayudamos a generar más ingresos y el 100% de lo que ganes será tuyo.
+
+💵 Bonificaciones mensuales: Según tu nivel mensual, podrás obtener bonos en dólares y regalos en diamantes en tus transmisiones.
+
+📚 Capacitación VIP: Te entrenamos para que domines las normas, funciones y herramientas que impulsarán tu carrera como creador.
+
+🪄 Magic sin costo: Muchos creadores pagan cientos de dólares por las animaciones y alertas en pantalla para su transmisión — nosotros te damos el primer mes de Magic 100% gratis, y podrás mantenerlo gratis alcanzando tus objetivos de días y diamantes.
+
+🚀 ¡No desaproveches esta oportunidad de llevar tu contenido al siguiente nivel! Estamos listos para impulsarte.$$
+WHERE question_label = 'Beneficios de la agencia' AND answer LIKE '%Interactik Interactive%';
 
 -- 3. REQUISITOS (DÍAS VÁLIDOS)
 INSERT INTO public.whatsapp_faq (keywords, question_label, answer, sort_order)
