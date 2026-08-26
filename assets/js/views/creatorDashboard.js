@@ -415,9 +415,11 @@ function tabGoals(me, h, dy, pct, curTier, nextTier, currCashIdx, lastMonthIdx, 
                             ${bonusIfNextTier ? tile('🚀 Si subís', bonusIfNextTier, true) : ''}
                         </div>`;
                     } else {
-                        // Below first tier — show first reachable bonus, highlighted (es la meta más cercana)
+                        // Below first tier — nunca estuvo en ese nivel (ni este mes ni
+                        // el pasado), así que alcanzarlo siempre es una SUBIDA, nunca
+                        // un "mantener" (no se puede mantener un nivel que no se tenía).
                         return `<div style="flex-shrink:0;">
-                            ${tile(`Al llegar a ${fmt(agencyCashBonuses[0].range)} 💎`, agencyCashBonuses[0].mantiene, true)}
+                            ${tile(`Al llegar a ${fmt(agencyCashBonuses[0].range)} 💎`, agencyCashBonuses[0].subio, true)}
                         </div>`;
                     }
                 })()}
