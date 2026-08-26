@@ -1003,7 +1003,13 @@ export async function renderCreatorDashboard(container, targetUsername = null) {
     const potentialTarget      = nextTier ? nextTier.range : curTier.range;
     const potentialOwnEarnings = potentialTarget / DIAMONDS_PER_USD;
     const nextTierIdxForBonus  = currCashIdx >= lastMonthIdx ? currCashIdx + 1 : lastMonthIdx + 1;
-    const potentialCashBonus   = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus].subio : null;
+    const nextCashTierForPotential = nextTierIdxForBonus < agencyCashBonuses.length ? agencyCashBonuses[nextTierIdxForBonus] : null;
+    // El bono solo cuenta si su umbral realmente se alcanza en potentialTarget
+    // (el próximo NIVEL de rango, ej. 40.000) — si el próximo bono en efectivo
+    // recién arranca más arriba (ej. 80.000), a ese nivel el bono es $0, no
+    // el valor del siguiente tramo de bono.
+    const potentialCashBonus   = (nextCashTierForPotential && nextCashTierForPotential.range <= potentialTarget)
+        ? nextCashTierForPotential.subio : null;
     const potentialTotal       = potentialOwnEarnings + (potentialCashBonus || 0);
     const potentialDiamIdx     = getIdx(potentialTarget, diamondRewards);
     const potentialDiamPrize   = potentialDiamIdx >= 0 ? diamondRewards[potentialDiamIdx].reward : null;
